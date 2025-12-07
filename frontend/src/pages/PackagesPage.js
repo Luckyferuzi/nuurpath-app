@@ -54,7 +54,7 @@ const PackagesPage = () => {
         };
 
         fetchPackages();
-    }, [searchParams]); // Re-fetch when search params change
+    }, [searchParams, destination, minPrice, maxPrice, type, startDate, endDate]); // Re-fetch when search params change
 
     const handleApplyFilters = (e) => {
         e.preventDefault();

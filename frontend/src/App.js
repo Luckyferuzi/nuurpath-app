@@ -3,55 +3,33 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import HomePage from './pages/HomePage';
 import PackagesPage from './pages/PackagesPage';
-import PackageDetailsPage from './pages/PackageDetailsPage';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import UserDashboard from './pages/UserDashboard';
+import ProfilePage from './pages/ProfilePage';
 import AdminDashboard from './pages/AdminDashboard';
-import PrivateRoute from './components/PrivateRoute'; // Import PrivateRoute
-import AdminRoute from './components/AdminRoute';     // Import AdminRoute
+import BackendTest from './components/BackendTest';
+import PrivateRoute from './components/PrivateRoute';
+import AdminRoute from './components/AdminRoute';
 
 function App() {
     return (
         <Router>
             <Navbar />
+            <BackendTest />
             <Routes>
                 {/* Public Routes */}
                 <Route path="/" element={<HomePage />} />
                 <Route path="/packages" element={<PackagesPage />} />
-                <Route path="/packages/:id" element={<PackageDetailsPage />} />
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/register" element={<RegisterPage />} />
 
-                {/* Protected Routes (requires any authenticated user) */}
-                <Route
-                    path="/dashboard"
-                    element={
-                        <PrivateRoute>
-                            <UserDashboard />
-                        </PrivateRoute>
-                    }
-                />
-                {/* Add other private routes here, e.g., ProfileSettings, MyBookings */}
-                {/* <Route
-                    path="/my-bookings"
-                    element={
-                        <PrivateRoute>
-                            <MyBookingsPage />
-                        </PrivateRoute>
-                    }
-                /> */}
+                {/* Protected Routes */}
+                <Route path="/profile" element={<PrivateRoute><ProfilePage /></PrivateRoute>} />
 
-                {/* Admin-Only Protected Routes (requires authenticated user with 'admin' role) */}
-                <Route
-                    path="/admin"
-                    element={
-                        <AdminRoute>
-                            <AdminDashboard />
-                        </AdminRoute>
-                    }
-                />
-                {/* Add other admin-only routes here, e.g., AdminPackageManagement, AdminUserManagement */}
+                {/* Admin Routes */}
+                <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+
+                {/* TODO: Add these routes when pages are created:
+                    - /packages/:id (PackageDetailsPage)
+                    - /login (LoginPage)
+                    - /register (RegisterPage)
+                */}
             </Routes>
         </Router>
     );

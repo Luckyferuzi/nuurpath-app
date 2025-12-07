@@ -54,4 +54,77 @@ exports.getAllPackages = async (req, res, next) => {
     }
 };
 
-// ... other package controller functions (getPackageById, createPackage, etc.) ...
+// @route   GET api/packages/:id
+// @desc    Get a single travel package by ID
+// @access  Public
+exports.getPackageById = async (req, res, next) => {
+    try {
+        const package = await TravelPackage.findById(req.params.id);
+        if (!package) {
+            return next(new AppError('Package not found', 404));
+        }
+        res.json(package);
+    } catch (err) {
+        console.error(err.message);
+        if (err.kind === 'ObjectId') {
+            return next(new AppError('Package not found', 404));
+        }
+        next(new AppError('Server Error', 500));
+    }
+};
+
+// @route   POST api/packages
+// @desc    Create a new travel package (Admin only)
+// @access  Private/Admin
+exports.createPackage = async (req, res, next) => {
+    try {
+        const newPackage = new TravelPackage(req.body);
+        const package = await newPackage.save();
+        res.status(201).json(package);
+    } catch (err) {
+        console.error(err.message);
+        next(new AppError('Server Error while creating package', 500));
+    }
+};
+
+// @route   PUT api/packages/:id
+// @desc    Update a travel package (Admin only)
+// @access  Private/Admin
+exports.updatePackage = async (req, res, next) => {
+    try {
+        const package = await TravelPackage.findByIdAndUpdate(
+            req.params.id,
+            req.body,
+            { new: true, runValidators: true }
+        );
+        if (!package) {
+            return next(new AppError('Package not found', 404));
+        }
+        res.json(package);
+    } catch (err) {
+        console.error(err.message);
+        if (err.kind === 'ObjectId') {
+            return next(new AppError('Package not found', 404));
+        }
+        next(new AppError('Server Error', 500));
+    }
+};
+
+// @route   DELETE api/packages/:id
+// @desc    Delete a travel package (Admin only)
+// @access  Private/Admin
+exports.deletePackage = async (req, res, next) => {
+    try {
+        const package = await TravelPackage.findByIdAndDelete(req.params.id);
+        if (!package) {
+            return next(new AppError('Package not found', 404));
+        }
+        res.json({ msg: 'Package removed' });
+    } catch (err) {
+        console.error(err.message);
+        if (err.kind === 'ObjectId') {
+            return next(new AppError('Package not found', 404));
+        }
+        next(new AppError('Server Error', 500));
+    }
+};
