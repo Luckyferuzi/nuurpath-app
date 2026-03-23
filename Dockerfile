@@ -3,16 +3,16 @@
 # Stage 1: Build frontend
 FROM node:18-alpine as frontend-builder
 
-WORKDIR /app/frontend
+WORKDIR /app/client
 
 # Copy package files
-COPY frontend/package.json frontend/package-lock.json ./
+COPY client/package*.json ./
 
 # Install dependencies
 RUN npm install
 
 # Copy frontend source
-COPY frontend/ .
+COPY client/ .
 
 # Build the frontend
 RUN npm run build
@@ -23,7 +23,7 @@ FROM node:18-alpine as backend-builder
 WORKDIR /app/backend
 
 # Copy package files
-COPY backend/package.json backend/package-lock.json ./
+COPY backend/package*.json ./
 
 # Install dependencies
 RUN npm install
@@ -37,19 +37,16 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Copy built frontend
-COPY --from=frontend-builder /app/frontend/build ./frontend/build
+COPY --from=frontend-builder /app/client/build ./client/build
 
 # Copy backend source
-COPY --from=backend-builder /app/backend .
+COPY --from=backend-builder /app/backend ./backend
 
-# Copy environment files
-COPY backend/.env .
-
-# Install production dependencies
-RUN npm install --production
+# Set working directory to backend
+WORKDIR /app/backend
 
 # Expose port
-EXPOSE 5000
+EXPOSE 5001
 
 # Start the application
 CMD ["node", "server.js"]

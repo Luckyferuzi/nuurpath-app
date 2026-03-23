@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Booking Confirmation</title>
+    <style>
+        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+        .container { max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+        .header { background-color: #0c1b33; padding: 40px 20px; text-align: center; }
+        .header h1 { color: #ffffff; margin: 0; font-size: 28px; text-transform: uppercase; letter-spacing: 2px; font-weight: 900; }
+        .header p { color: #D4AF37; margin: 5px 0 0; font-size: 12px; text-transform: uppercase; letter-spacing: 4px; font-weight: bold; }
+        .content { padding: 40px; color: #333333; line-height: 1.6; }
+        .greeting { font-size: 20px; font-weight: bold; margin-bottom: 20px; color: #0c1b33; }
+        .message { margin-bottom: 30px; color: #555; }
+        .card { background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 12px; padding: 25px; margin-bottom: 30px; border-left: 5px solid #D4AF37; }
+        .card-title { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #888; font-weight: bold; margin-bottom: 10px; }
+        .package-name { font-size: 18px; font-weight: bold; color: #0c1b33; margin: 0; }
+        .status-badge { display: inline-block; background-color: #d1fae5; color: #065f46; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-top: 10px; }
+        .footer { background-color: #f8f9fa; padding: 30px; text-align: center; font-size: 12px; color: #999; border-top: 1px solid #eee; }
+        .footer a { color: #D4AF37; text-decoration: none; }
+        .btn { display: inline-block; background-color: #D4AF37; color: #0c1b33; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; text-transform: uppercase; font-size: 12px; letter-spacing: 1px; margin-top: 10px; }
+        .btn:hover { background-color: #b5952f; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>NuurPath</h1>
+            <p>International Ltd</p>
+        </div>
+        <div class="content">
+            <div class="greeting">Marhaba, <%= user.name %></div>
+            <div class="message">
+                We are delighted to confirm your booking. Your journey to excellence has officially begun. Our team is now preparing your itinerary to ensure a seamless and spiritual experience.
+            </div>
+            
+            <div class="card">
+                <div class="card-title">Confirmed Package</div>
+                <p class="package-name"><%= package.title %></p>
+                <span class="status-badge">Booking Confirmed</span>
+            </div>
+
+            <p>You will receive a detailed itinerary and travel documents in a separate email shortly.</p>
+        </div>
+        <div class="footer">
+            <p>&copy; <%= new Date().getFullYear() %> NuurPath International Ltd. All rights reserved.</p>
+            <p>Dar Es Salaam, Tanzania</p>
+            <% if (typeof unsubscribeUrl !== 'undefined' && unsubscribeUrl) { %>
+                <p style="margin-top: 20px;"><a href="<%= unsubscribeUrl %>">Unsubscribe</a> from booking notifications.</p>
+            <% } %>
+        </div>
+    </div>
+</body>
+</html>

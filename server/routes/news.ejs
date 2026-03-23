@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="<%= lang %>" dir="<%= lang === 'ar' ? 'rtl' : 'ltr' %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= t.news %> - <%= t.title %></title>
+    <link rel="stylesheet" href="/css/modern.css">
+</head>
+<body>
+
+    <div class="lang-toggle">
+        <a href="?lang=en">English</a> | 
+        <a href="?lang=ar">العربية</a> | 
+        <a href="?lang=sw">Kiswahili</a>
+    </div>
+
+    <div class="news-container">
+        <h1><%= t.news %></h1>
+
+        <!-- Video Showcase -->
+        <div class="video-showcase">
+            <!-- Placeholder for Hajj/Umrah video -->
+            <video controls poster="/images/hajj-poster.jpg">
+                <source src="/uploads/hajj-umrah-highlights.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <div style="padding: 15px; color: white;">
+                <h3>Experience the Journey</h3>
+                <p>Highlights from our recent Hajj and Umrah groups.</p>
+            </div>
+        </div>
+
+        <!-- Upload Tool -->
+        <div class="upload-tool">
+            <h3><%= t.upload %></h3>
+            <form action="/upload-media" method="POST" enctype="multipart/form-data">
+                <div class="form-group">
+                    <input type="file" name="mediaFile" class="form-control" accept="image/*,video/*">
+                </div>
+                <button type="submit" class="btn-submit" style="width: auto;">Upload Video/Image</button>
+            </form>
+        </div>
+
+        <!-- News Grid -->
+        <div class="news-grid">
+            <% newsItems.forEach(function(item) { %>
+                <div class="news-card">
+                    <span style="color: #888; font-size: 0.9em;"><%= item.date %></span>
+                    <h3><%= item.title %></h3>
+                    <p><%= item.summary %></p>
+                </div>
+            <% }); %>
+        </div>
+    </div>
+</body>
+</html>

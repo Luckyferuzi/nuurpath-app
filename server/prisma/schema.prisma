@@ -1,0 +1,201 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                   Int       @id @default(autoincrement())
+  name                 String
+  email                String    @unique
+  username             String?   @unique
+  password             String?
+  role                 String    @default("user")
+  emailSubscriptions   Boolean   @default(true)
+  createdAt            DateTime  @default(now())
+  passwordResetToken   String?
+  passwordResetExpires DateTime?
+  passwordChangedAt    DateTime?
+  verificationToken    String?
+  isVerified           Boolean   @default(false)
+  bio                  String?
+  contactInfo          String?
+  profilePicture       String?
+  googleId             String?   @unique
+
+
+  privateConsultations PrivateConsultation[]
+  packageBookings      PackageBooking[]
+  flightBookings       FlightBooking[]
+  appointments         Appointment[]
+  reviews              Review[]
+  notifications        Notification[]
+  wishlist             Wishlist[]
+}
+
+model PrivateConsultation {
+  id          Int      @id @default(autoincrement())
+  name        String
+  email       String   // Add this line
+  phone       String
+  description String
+  date        String
+  time        String
+  status      String   @default("Pending")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User?    @relation(fields: [userId], references: [id])
+  userId      Int?
+}
+
+
+model Package {
+  id            Int      @id @default(autoincrement())
+  title         String
+  destination   String
+  duration      String
+  type          String
+  price         Float
+  description   String
+  itinerary     String?
+  isFeatured    Boolean  @default(false)
+  featuredOrder Int?
+  images        String[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  bookings PackageBooking[]
+  reviews  Review[]
+  wishlist Wishlist[]
+}
+
+model ChatMessage {
+  id        Int      @id @default(autoincrement())
+  room      String
+  author    String
+  email     String
+  message   String
+  time      String
+  createdAt DateTime @default(now())
+  read      Boolean  @default(false) // Add this line
+}
+
+model PackageBooking {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  packageId      Int
+  passengers     Int
+  locationFrom   String
+  travelDate     DateTime
+  prefClass      String   @default("Economy")
+  contactName    String
+  contactEmail   String
+  contactPhone   String
+  passportNumber String
+  passportExpiryDate DateTime?
+  passportCopy       String?
+  dateOfBirth    DateTime
+  nationality    String
+  specialRequests    String?
+  notes              String?
+  status         String   @default("Pending")
+  createdAt      DateTime @default(now())
+
+  user    User          @relation(fields: [userId], references: [id])
+  package Package       @relation(fields: [packageId], references: [id])
+}
+
+model FlightBooking {
+  id               Int       @id @default(autoincrement())
+  userId           Int?
+  from             String
+  to               String
+  departureDate    DateTime
+  returnDate       DateTime?
+  travelClass      String
+  contactName      String
+  contactEmail     String
+  contactPhone     String
+  passengers       Int       @default(1)
+  passengerDetails Json?
+  totalPrice       Float?
+  status           String    @default("pending")
+  createdAt        DateTime  @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+}
+
+model Appointment {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  serviceType     String
+  appointmentDate DateTime
+  notes           String?
+  contactName     String?
+  contactPhone    String?
+  status          String   @default("pending")
+  createdAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Review {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  packageId Int?
+  name      String?
+  rating    Int
+  comment   String?
+  images    String[]
+  videos    String[]
+  isVisible Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user    User          @relation(fields: [userId], references: [id])
+  package Package?      @relation(fields: [packageId], references: [id])
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  title     String
+  message   String
+  type      String   @default("info")
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  bookingId Int?
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model NewsletterSubscriber {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  createdAt DateTime @default(now())
+}
+
+model Wishlist {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  packageId Int
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  package Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, packageId])
+}
+
+model Service {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String
+  icon        String?
+  price       Float?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

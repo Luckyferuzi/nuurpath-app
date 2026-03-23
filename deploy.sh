@@ -17,8 +17,8 @@ if command -v docker &> /dev/null && command -v docker-compose &> /dev/null; the
     docker-compose up -d
 
     echo "✅ Docker deployment complete!"
-    echo "📊 Application will be available at http://localhost:5000"
-    echo "💾 MongoDB will be available at http://localhost:27017"
+    echo "📊 Application will be available at http://localhost:5001"
+    echo "� PostgreSQL will be available at http://localhost:5432"
 else
     echo "📦 Docker not found. Using traditional deployment..."
 
@@ -30,13 +30,13 @@ else
 
     # Step 2: Install frontend dependencies
     echo "📦 Installing frontend dependencies..."
-    cd frontend || exit
+    cd client || exit
     npm install
     cd ..
 
     # Step 3: Build frontend for production
     echo "🔨 Building frontend for production..."
-    cd frontend || exit
+    cd client || exit
     npm run build
     cd ..
 
@@ -45,8 +45,8 @@ else
     if [ ! -f "backend/.env" ]; then
         echo "Creating backend .env file..."
         cat > backend/.env << EOF
-PORT=5000
-MONGO_URI=mongodb://localhost:27017/nuurpath_travels
+PORT=5001
+DATABASE_URL=postgresql://user:password@localhost:5432/nuurpath_travels
 JWT_SECRET=Nuurpath2025
 NODE_ENV=production
 EOF
@@ -54,7 +54,7 @@ EOF
 
     # Step 5: Start the application
     echo "🚀 Starting NuurPath Travels application..."
-    echo "Backend will be available at http://localhost:5000"
+    echo "Application will be available at http://localhost:5001"
     echo "Frontend will be served by backend in production mode"
 
     # Start the backend server (which will serve the frontend in production)

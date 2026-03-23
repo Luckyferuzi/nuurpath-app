@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="<%= typeof lang !== 'undefined' ? lang : 'en' %>" dir="<%= (typeof lang !== 'undefined' && lang === 'ar') ? 'rtl' : 'ltr' %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login - NuurPath Travels</title>
+    <link rel="stylesheet" href="/css/modern.css">
+</head>
+<body>
+    <div class="booking-container" style="max-width: 400px; margin-top: 100px;">
+        <div style="text-align: right; margin-bottom: 1rem;">
+            <select onchange="const url = new URL(window.location); url.searchParams.set('lang', this.value); window.location = url;" style="padding: 8px; border-radius: 4px; border: 1px solid #d1d5db; background-color: white; cursor: pointer;">
+                <option value="en" <%= (typeof lang === 'undefined' || lang === 'en') ? 'selected' : '' %>>English</option>
+                <option value="sw" <%= (typeof lang !== 'undefined' && lang === 'sw') ? 'selected' : '' %>>Swahili</option>
+                <option value="ar" <%= (typeof lang !== 'undefined' && lang === 'ar') ? 'selected' : '' %>>Arabic</option>
+            </select>
+        </div>
+        <h2 style="text-align: center; margin-bottom: 30px;">Admin Login</h2>
+        
+        <% if (error) { %>
+            <div style="background-color: #f8d7da; color: #721c24; padding: 10px; margin-bottom: 20px; border-radius: 8px; text-align: center;">
+                <%= error %>
+            </div>
+        <% } %>
+
+        <form action="/login" method="POST">
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" class="form-control" required>
+            </div>
+            <button type="submit" class="btn-submit">Login</button>
+        </form>
+    </div>
+</body>
+</html>

@@ -1,85 +1,56 @@
 # NuurPath Travels - Full Stack Travel Booking Application
 
-A comprehensive travel booking platform with React frontend and Node.js/Express backend.
+A premium travel booking platform specializing in Hajj, Umrah, and Luxury Tourism, built with a modern React frontend and Node.js/Express backend.
 
 ## 🚀 Quick Start
+
+### Prerequisites
+- Node.js (v14+)
+- PostgreSQL
+- npm or yarn
 
 ### Development Mode
 
 1. **Start the backend server:**
-```bash
-cd backend
-npm install
-node server.js
-```
+   ```bash
+   cd server
+   npm install
+   node server.js
+   ```
+   The backend runs on `http://localhost:5001` by default.
 
 2. **Start the frontend development server:**
+   ```bash
+   cd client
+   npm install
+   npm start
+   ```
+   The frontend runs on `http://localhost:3000`.
+
+### Concurrent Start (Recommended)
+
+To run both client and server with a single command from the root directory:
+
 ```bash
-cd frontend
-npm install
-npm start
+npm run dev
 ```
 
-The application will be available at:
-- Frontend: `http://localhost:3000`
-- Backend API: `http://localhost:5000`
+### Environment Variables
 
-### Production Deployment
+Create a `.env` file in the root directory:
 
-1. **Build the frontend:**
-```bash
-cd frontend
-npm run build
-```
+```env
+PORT=5001
+DATABASE_URL=postgresql://user:password@localhost:5432/nuurpath_travels
+JWT_SECRET=Nuurpath2025
+NODE_ENV=development
 
-2. **Set up environment variables:**
-Create a `.env` file in the `backend` directory with:
-```
-PORT=5000
-MONGO_URI=mongodb://localhost:27017/nuurpath_travels
-JWT_SECRET=your_strong_secret_key
-NODE_ENV=production
-```
-
-3. **Start the production server:**
-```bash
-cd backend
-npm install
-node server.js
-```
-
-The production application will be available at: `http://localhost:5000`
-
-### Using the Deployment Script
-
-Run the deployment script to automate the process:
-```bash
-./deploy.sh
-```
-
-## 📁 Project Structure
-
-```
-nuurpath-travels/
-├── backend/              # Node.js/Express backend
-│   ├── config/           # Database configuration
-│   ├── controllers/      # Route controllers
-│   ├── middleware/        # Express middleware
-│   ├── models/           # Mongoose models
-│   ├── routes/           # API routes
-│   └── server.js         # Main server file
-├── frontend/             # React frontend
-│   ├── public/           # Static files
-│   ├── src/              # React source code
-│   │   ├── api/          # API service files
-│   │   ├── components/   # React components
-│   │   ├── contexts/      # React contexts
-│   │   ├── pages/        # Page components
-│   │   ├── __tests__/    # Unit tests
-│   │   └── App.js        # Main App component
-│   └── package.json      # Frontend dependencies
-├── deploy.sh             # Deployment script
-└── README.md             # Project documentation
+# Email Configuration (Optional)
+EMAIL_HOST=smtp.mailtrap.io
+EMAIL_PORT=2525
+EMAIL_USER=<your-mailtrap-user>
+EMAIL_PASS=<your-mailtrap-pass>
+EMAIL_FROM="NuurPath Travels <noreply@nuurpath.com>"
 ```
 
 ## 🧪 Testing
@@ -98,7 +69,6 @@ npm test
 - **Booking System**: Book travel packages
 - **Reviews**: Leave reviews for packages
 - **Admin Dashboard**: Comprehensive admin dashboard with user and booking management
-- **Real-time Chat**: Socket.IO based real-time messaging system
 - **Notification System**: User notifications with read/unread status
 - **Responsive Design**: Mobile-friendly interface
 
@@ -113,7 +83,7 @@ npm test
 
 ### Backend
 - Node.js with Express
-- MongoDB with Mongoose
+- PostgreSQL
 - JWT Authentication
 - CORS and Helmet for security
 - Express Validator for input validation
@@ -124,22 +94,18 @@ npm test
 
 ## 📝 API Endpoints
 
+- `GET /api` - API Health Check
 - `POST /api/auth/register` - User registration
 - `POST /api/auth/login` - User login
+- `GET /api/auth/me` - Get current user
 - `GET /api/packages` - Get all travel packages
+- `GET /api/packages/:id` - Get package details
 - `POST /api/bookings` - Create a booking
+- `GET /api/bookings` - Get user bookings
 - `GET /api/reviews` - Get reviews
-
-## 🎯 Environment Variables
-
-Create a `.env` file in the backend directory:
-
-```
-PORT=5000
-MONGO_URI=mongodb://localhost:27017/nuurpath_travels
-JWT_SECRET=Nuurpath2025 
-NODE_ENV=development
-```
+- `POST /api/newsletter` - Newsletter subscription
+- `POST /api/flights` - Flight booking requests
+- `POST /api/appointments` - Appointment booking
 
 ## 🔒 Security Features
 

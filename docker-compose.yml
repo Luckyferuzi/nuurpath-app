@@ -4,26 +4,27 @@ services:
   app:
     build: .
     ports:
-      - "5000:5000"
+      - "5001:5001"
     environment:
       - NODE_ENV=production
-      - PORT=5000
-      - MONGO_URI=mongodb://mongo:27017/nuurpath_travels
+      - PORT=5001
+      - DATABASE_URL=postgresql://user:password@postgres:5432/nuurpath_travels
       - JWT_SECRET=Nuurpath2025
     depends_on:
-      - mongo
+      - postgres
     restart: unless-stopped
 
-  mongo:
-    image: mongo:6.0
+  postgres:
+    image: postgres:15
     ports:
-      - "27017:27017"
+      - "5432:5432"
     volumes:
-      - mongo_data:/data/db
+      - postgres_data:/var/lib/postgresql/data
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=root
-      - MONGO_INITDB_ROOT_PASSWORD=example
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=nuurpath_travels
     restart: unless-stopped
 
 volumes:
-  mongo_data:
+  postgres_data:

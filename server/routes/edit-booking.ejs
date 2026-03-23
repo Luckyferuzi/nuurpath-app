@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="<%= typeof lang !== 'undefined' ? lang : 'en' %>" dir="<%= (typeof lang !== 'undefined' && lang === 'ar') ? 'rtl' : 'ltr' %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Booking - NuurPath Travels</title>
+    <link rel="stylesheet" href="/css/modern.css">
+</head>
+<body>
+    <div class="booking-container">
+        <div style="text-align: right; margin-bottom: 1rem;">
+            <select onchange="const url = new URL(window.location); url.searchParams.set('lang', this.value); window.location = url;" style="padding: 8px; border-radius: 4px; border: 1px solid #d1d5db; background-color: white; cursor: pointer;">
+                <option value="en" <%= (typeof lang === 'undefined' || lang === 'en') ? 'selected' : '' %>>English</option>
+                <option value="sw" <%= (typeof lang !== 'undefined' && lang === 'sw') ? 'selected' : '' %>>Swahili</option>
+                <option value="ar" <%= (typeof lang !== 'undefined' && lang === 'ar') ? 'selected' : '' %>>Arabic</option>
+            </select>
+        </div>
+        <h2 style="text-align: center; margin-bottom: 30px;">Edit Booking</h2>
+        
+        <form action="/admin/edit/<%= booking._id %>" method="POST">
+            <div class="form-group">
+                <label for="fullName">Full Name</label>
+                <input type="text" id="fullName" name="fullName" class="form-control" value="<%= booking.fullName %>" required>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" name="email" class="form-control" value="<%= booking.email %>" required>
+            </div>
+
+            <div class="form-group">
+                <label for="package">Select Package</label>
+                <select id="package" name="package" class="form-control">
+                    <% packages.forEach(function(pkg) { %>
+                        <option value="<%= pkg.id %>" <%= booking.package === pkg.id ? 'selected' : '' %>><%= pkg.name %></option>
+                    <% }); %>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="date">Preferred Date</label>
+                <!-- Format date to YYYY-MM-DD for input type="date" -->
+                <input type="date" id="date" name="date" class="form-control" value="<%= new Date(booking.date).toISOString().split('T')[0] %>">
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button type="submit" class="btn-submit">Update Booking</button>
+                <a href="/admin" class="btn-submit" style="background-color: #6c757d; text-align: center; text-decoration: none;">Cancel</a>
+            </div>
+        </form>
+    </div>
+</body>
+</html>
