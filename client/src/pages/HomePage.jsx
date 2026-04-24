@@ -7,6 +7,7 @@ import SEO from '../components/SEO';
 const HomePage = () => {
     const { t } = useContext(LanguageContext);
     const [featured, setFeatured] = useState([]);
+    const [error, setError] = useState(null);
     
     useEffect(() => {
         const fetchPackages = async () => {
@@ -14,6 +15,7 @@ const HomePage = () => {
                 const { data } = await api.packages.getAll({ featured: true, limit: 3 });
                 setFeatured(data.packages || data);
             } catch (error) {
+                setError('Failed to load featured packages. Please try again later.');
                 console.error("Could not fetch packages", error);
             }
         };
@@ -24,7 +26,7 @@ const HomePage = () => {
         <div className="bg-white">
             <SEO title="Home" />
             {/* UPDATED Hero Section: bg-[#006837] */}
-            <section className="relative h-[650px] flex items-center justify-center overflow-hidden bg-[#006837]">
+            <section className="relative h-162.5 flex items-center justify-center overflow-hidden bg-[#006837]">
                 <div className="relative z-10 text-center px-6 max-w-4xl">
                     <h2 className="text-[#D4AF37] font-bold tracking-[8px] uppercase mb-4 text-[10px]">{t('journeyToExcellence')}</h2>
                     <h1 className="text-white text-5xl md:text-7xl font-black mb-6 leading-tight tracking-tighter uppercase">{t('yourSacredLuxuryTravelPartner')}</h1>
@@ -35,6 +37,9 @@ const HomePage = () => {
             {/* Featured Packages */}
             <section className="container mx-auto px-4 py-24">
                  {/* UPDATED Text Color: text-[#006837] */}
+                 {error && (
+                    <div className="text-center text-red-500 mb-8">{error}</div>
+                 )}
                  <h2 className="text-4xl font-black tracking-tighter uppercase text-[#006837] leading-none mb-10">Featured Journeys</h2>
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
                     {featured.map(pkg => (

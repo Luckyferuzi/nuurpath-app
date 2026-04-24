@@ -14,6 +14,7 @@ const ManageUsers = () => {
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
+    username: '', // Assuming username might be a field
     email: '',
     password: '',
     role: 'user'
@@ -31,6 +32,7 @@ const ManageUsers = () => {
         setTotalPages(data.totalPages || 1);
         setCurrentPage(data.currentPage || 1);
       } else {
+        // Fallback for non-paginated responses, though API should be paginated
         setUsers(Array.isArray(data) ? data : []);
       }
     } catch (err) {
@@ -47,6 +49,7 @@ const ManageUsers = () => {
   const handleDelete = async (userId) => {
     if (currentUser && (currentUser._id === userId || currentUser.id === userId)) {
       alert("You cannot delete your own account.");
+      setError("You cannot delete your own account."); // User-facing error
       return;
     }
 
@@ -55,8 +58,9 @@ const ManageUsers = () => {
     try {
       await axios.delete(`${CONFIG.API_BASE_URL}/users/${userId}`);
 
-      setUsers(users.filter(user => (user._id || user.id) !== userId));
+      setUsers(users.filter(user => (user._id || user.id) !== userId)); // Optimistic update
     } catch (err) {
+      setError(err.response?.data?.msg || err.message || 'Failed to delete user.'); // User-facing error
       alert(err.message || 'Failed to delete user');
     }
   };
@@ -64,13 +68,14 @@ const ManageUsers = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      setError(null); // Clear previous errors
       if (editingId) {
         const data = { ...formData };
         if (!data.password) delete data.password; // Don't send empty password on update
         await axios.put(`${CONFIG.API_BASE_URL}/users/${editingId}`, data);
       } else {
         await axios.post(`${CONFIG.API_BASE_URL}/users`, formData);
-      }
+      } // Consider adding a success message here
       
       fetchUsers();
       resetForm();
@@ -82,6 +87,7 @@ const ManageUsers = () => {
   const handleEdit = (user) => {
     setFormData({
       name: user.name || '',
+      username: user.username || '',
       email: user.email || '',
       password: '', // Always blank on edit
       role: user.role || 'user'
@@ -92,7 +98,7 @@ const ManageUsers = () => {
   };
 
   const resetForm = () => {
-    setFormData({ name: '', email: '', password: '', role: 'user' });
+    setFormData({ name: '', username: '', email: '', password: '', role: 'user' });
     setEditingId(null);
     setShowForm(false);
   };
@@ -131,6 +137,9 @@ const ManageUsers = () => {
     <div style={containerStyle}>
       <h2 style={{ marginBottom: '20px' }}>Manage Users</h2>
 
+      {error && (
+        <div style={{ color: 'red', marginBottom: '20px', padding: '10px', backgroundColor: '#ffe0e0', borderRadius: '5px' }}>{error}</div>
+      )}
       <button 
         onClick={() => setShowForm(!showForm)} 
         style={{ marginBottom: '20px', padding: '10px 20px', backgroundColor: '#006837', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
@@ -145,6 +154,10 @@ const ManageUsers = () => {
             <div>
               <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Name</label>
               <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Username</label>
+              <input type="text" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
             </div>
             <div>
               <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Email</label>

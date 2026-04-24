@@ -55,7 +55,7 @@ export default function FlightBookingForm() {
       }, 2000);
     } catch (err) {
       setError(err.response?.data?.msg || err.message || 'Failed to submit booking request');
-    } finally {
+    } finally { // Ensure loading state is reset even if there's an error
       setLoading(false);
     }
   };

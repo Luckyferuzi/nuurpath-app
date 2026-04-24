@@ -38,7 +38,7 @@ const HomePage = () => {
         <div className="font-inter">
             {/* Hero Section */}
             <section
-                className="relative bg-cover bg-center h-[500px] flex items-center justify-center text-white"
+                className="relative bg-cover bg-center h-125 flex items-center justify-center text-white"
                 style={{ backgroundImage: "url('https://placehold.co/1920x500/007bff/ffffff?text=Your+Adventure+Awaits')" }}
             >
                 <div className="absolute inset-0 bg-black opacity-50"></div>

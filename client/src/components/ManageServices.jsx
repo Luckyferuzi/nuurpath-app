@@ -17,6 +17,7 @@ const ManageServices = () => {
         try {
             const res = await axios.get('/api/services');
             setServices(res.data);
+            setError(null); // Clear previous errors on success
             setLoading(false);
         } catch (err) {
             console.error('Error fetching services:', err);
@@ -34,12 +35,13 @@ const ManageServices = () => {
         setSubmitting(true);
         try {
             const res = await axios.post('/api/services', formData);
+            setError(null); // Clear previous errors on success
             setServices([...services, res.data]);
             setFormData({ title: '', description: '', icon: '' });
             setSubmitting(false);
         } catch (err) {
-            console.error('Error creating service:', err);
-            alert(err.response?.data?.msg || 'Failed to create service');
+            setError(err.response?.data?.msg || err.message || 'Failed to create service.'); // User-facing error
+            console.error('Error creating service:', err); // Log for debugging
             setSubmitting(false);
         }
     };
@@ -48,10 +50,11 @@ const ManageServices = () => {
         if (!window.confirm('Are you sure you want to delete this service?')) return;
         try {
             await axios.delete(`/api/services/${id}`);
+            setError(null); // Clear previous errors on success
             setServices(services.filter(s => s.id !== id));
         } catch (err) {
-            console.error('Error deleting service:', err);
-            alert('Failed to delete service');
+            setError(err.response?.data?.msg || err.message || 'Failed to delete service.'); // User-facing error
+            console.error('Error deleting service:', err); // Log for debugging
         }
     };
 

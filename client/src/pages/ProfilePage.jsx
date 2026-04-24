@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 const ProfilePage = () => {
-    const { user, logout } = useAuth();
+    const { logout } = useAuth();
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -67,13 +67,13 @@ const ProfilePage = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
+            const token = localStorage.getItem('token');
             if (!token) { // Added check for token before submitting
-                setError('Authentication token missing. Please log in.');
+                setError('Authentication token missing. Please log in.'); // User-facing error
                 logout();
                 navigate('/login');
                 return;
             }
-            const token = localStorage.getItem('token');
             const response = await axios.put('http://localhost:5000/api/profile', formData, {
                 headers: {
                     'Authorization': `Bearer ${token}`,

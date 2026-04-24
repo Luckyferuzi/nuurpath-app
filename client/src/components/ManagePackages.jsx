@@ -18,6 +18,8 @@ const ManagePackages = () => {
   const [editingId, setEditingId] = useState(null);
   const [itineraryItems, setItineraryItems] = useState([]);
   const [uploadingItineraryIndex, setUploadingItineraryIndex] = useState(null);
+  const [error, setError] = useState(null);
+  const [formError, setFormError] = useState(null); // Added for form-specific errors
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [draggedItemIndex, setDraggedItemIndex] = useState(null);
 
@@ -29,6 +31,7 @@ const ManagePackages = () => {
     try {
       const response = await axios.get(`${CONFIG.API_BASE_URL}/packages`);
       setPackages(Array.isArray(response.data) ? response.data : response.data.packages || []);
+      setError(null); // Clear general error on successful fetch
     } catch (error) {
       console.error('Error fetching packages:', error);
     } finally {
@@ -47,6 +50,7 @@ const ManagePackages = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setFormError(null); // Clear previous form errors
     try {
       const token = localStorage.getItem('token');
       const headers = { 'x-auth-token': token };
@@ -84,8 +88,8 @@ const ManagePackages = () => {
       setItineraryItems([]);
       fetchPackages();
     } catch (error) {
-      console.error('Error saving package:', error);
-      alert('Failed to save package');
+      setFormError(error.response?.data?.msg || error.message || 'Failed to save package.'); // User-facing error
+      console.error('Error saving package:', error); // Log for debugging
     } finally {
       setIsSubmitting(false);
     }
@@ -175,10 +179,11 @@ const ManagePackages = () => {
       });
       updateItineraryDay(index, 'image', res.data.url);
     } catch (err) {
+      setFormError(err.response?.data?.msg || err.message || 'Failed to upload image for itinerary day.'); // User-facing error
       console.error("Error uploading image:", err);
-      alert("Failed to upload image");
     } finally {
       setUploadingItineraryIndex(null);
+      e.target.value = null; // Clear the file input
     }
   };
 
@@ -191,8 +196,8 @@ const ManagePackages = () => {
         });
         fetchPackages();
       } catch (error) {
-        console.error('Error deleting package:', error);
-        alert('Failed to delete package');
+        setError(error.response?.data?.msg || error.message || 'Failed to delete package.'); // User-facing error
+        console.error('Error deleting package:', error); // Log for debugging
       }
     }
   };
@@ -208,8 +213,15 @@ const ManagePackages = () => {
     <div className="container mx-auto px-4 py-10 max-w-4xl">
       <h2 className="text-3xl font-bold text-[#0B1C3E] mb-8">Manage Packages</h2>
 
+      {error && (
+        <div className="p-3 mb-4 text-red-700 bg-red-100 rounded-lg">{error}</div>
+      )}
+
       <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100 mb-10">
         <h3 className="text-xl font-bold text-[#0B1C3E] mb-4">{editingId ? 'Edit Package' : 'Add New Package'}</h3>
+        {formError && (
+          <div className="p-3 mb-4 text-red-700 bg-red-100 rounded-lg">{formError}</div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <input name="title" value={formData.title} onChange={handleChange} placeholder="Package Title" className="p-3 border rounded-lg w-full" required />

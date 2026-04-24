@@ -15,6 +15,7 @@ const Home = () => {
   const [loadingServices, setLoadingServices] = useState(true);
   const [loadingTrips, setLoadingTrips] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
+  const [error, setError] = useState(null); // Added error state for general errors
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
   const minSwipeDistance = 50;
@@ -42,6 +43,7 @@ const Home = () => {
         }));
         setUpcomingTrips(trips);
       } catch (error) {
+        setError('Failed to fetch upcoming trips.');
         console.error("Failed to fetch upcoming trips", error);
       } finally {
         setLoadingTrips(false);
@@ -53,6 +55,7 @@ const Home = () => {
         const response = await axios.get(`${CONFIG.API_BASE_URL}/services`);
         setServices(response.data);
       } catch (error) {
+        setError('Failed to fetch services.');
         console.error("Failed to fetch services", error);
       } finally {
         setLoadingServices(false);
@@ -171,6 +174,9 @@ const Home = () => {
           <div className="w-24 h-1 bg-[#D4AF37] mx-auto"></div>
         </div>
         
+        {error && ( // Display general error for this section
+            <div className="text-center text-red-500 mb-8">{error}</div>
+        )}
         <div 
           className="relative max-w-5xl mx-auto overflow-hidden rounded-2xl shadow-2xl aspect-video group bg-gray-200"
           onMouseEnter={() => setIsPaused(true)}

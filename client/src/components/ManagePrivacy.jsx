@@ -13,6 +13,7 @@ const ManagePrivacy = () => {
       try {
         const response = await axios.get(`${CONFIG.API_BASE_URL}/content/privacy`);
         setContent(response.data.content || '');
+        setMessage(null); // Clear previous messages on successful fetch
       } catch (error) {
         console.error('Error fetching privacy policy:', error);
       } finally {
@@ -31,7 +32,7 @@ const ManagePrivacy = () => {
       await axios.post(`${CONFIG.API_BASE_URL}/content/privacy`, { content }, {
         headers: { 'x-auth-token': token }
       });
-      setMessage({ type: 'success', text: 'Privacy Policy updated successfully!' });
+      setMessage({ type: 'success', text: 'Privacy Policy updated successfully!' }); // User-facing success
     } catch (error) {
       setMessage({ type: 'error', text: 'Failed to update Privacy Policy.' });
     } finally {

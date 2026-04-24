@@ -86,14 +86,13 @@ const PackageDetails = () => {
       setIsWishlisted(!isWishlisted);
     } catch (err) {
       console.error('Wishlist error:', err);
+      setError('Failed to update wishlist. Please try again.'); // User-facing error
     }
   };
 
   const handleDownloadItinerary = async () => {
     try {
-      const response = await axios.get(`${CONFIG.API_BASE_URL}/itinerary/${id}/pdf`, {
-        responseType: 'blob'
-      });
+      const response = await axios.get(`${CONFIG.API_BASE_URL}/itinerary/${id}/pdf`, { responseType: 'blob' });
       
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
@@ -101,7 +100,7 @@ const PackageDetails = () => {
       link.setAttribute('download', `${pkg.title.replace(/[^a-zA-Z0-9]/g, '_')}_Itinerary.pdf`);
       document.body.appendChild(link);
       link.click();
-      link.remove();
+      link.remove(); // Clean up the temporary link
     } catch (err) {
       console.error("Error downloading itinerary:", err);
       alert('Failed to download itinerary');

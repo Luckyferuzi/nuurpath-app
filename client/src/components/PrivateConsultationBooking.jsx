@@ -95,7 +95,7 @@ const PrivateConsultationBooking = () => {
       }
     } catch (err) {
       const errorMessage = err.response?.data?.msg || err.message || 'Failed to book consultation';
-      setStatus({ loading: false, error: errorMessage, success: false });
+      setStatus({ loading: false, error: errorMessage, success: false }); // User-facing error
     }
   };
 

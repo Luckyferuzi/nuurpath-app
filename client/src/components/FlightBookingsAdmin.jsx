@@ -18,6 +18,7 @@ const FlightBookingsAdmin = () => {
         headers: { 'x-auth-token': token }
       });
       setBookings(response.data);
+      setError(null); // Clear previous errors on success
       setLoading(false);
     } catch (err) {
       console.error('Error fetching flight bookings:', err);
@@ -29,16 +30,16 @@ const FlightBookingsAdmin = () => {
   const handleStatusChange = async (id, newStatus) => {
     try {
       const token = localStorage.getItem('token');
+      setError(null); // Clear previous errors
       await axios.put(`${CONFIG.API_BASE_URL}/flights/${id}`, 
         { status: newStatus },
         { headers: { 'x-auth-token': token } }
       );
-      
       setBookings(bookings.map(b => 
         b.id === id ? { ...b, status: newStatus } : b
       ));
     } catch (err) {
-      alert('Failed to update status');
+      setError(err.response?.data?.msg || err.message || 'Failed to update booking status.'); // User-facing error
     }
   };
 
@@ -46,12 +47,13 @@ const FlightBookingsAdmin = () => {
     if (!window.confirm('Are you sure you want to delete this booking?')) return;
     try {
       const token = localStorage.getItem('token');
+      setError(null); // Clear previous errors
       await axios.delete(`${CONFIG.API_BASE_URL}/flights/${id}`, {
         headers: { 'x-auth-token': token }
       });
       setBookings(bookings.filter(b => b.id !== id));
     } catch (err) {
-      alert('Failed to delete booking');
+      setError(err.response?.data?.msg || err.message || 'Failed to delete booking.'); // User-facing error
     }
   };
 
@@ -131,6 +133,9 @@ const FlightBookingsAdmin = () => {
     <div style={containerStyle}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h2 style={{ margin: 0 }}>Flight Bookings</h2>
+        {error && (
+          <div style={{ color: 'red', padding: '10px', backgroundColor: '#ffe0e0', borderRadius: '5px' }}>{error}</div>
+        )}
         <button 
           onClick={exportCSV} 
           style={{ padding: '10px 20px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}

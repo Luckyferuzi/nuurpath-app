@@ -67,6 +67,7 @@ export const RegisterPage = () => {
 export const UserDashboard = () => {
     const { user } = useAuth();
     const [bookings, setBookings] = useState([]);
+    const [error, setError] = useState(null);
     
     useEffect(() => {
         const fetchBookings = async () => {
@@ -74,6 +75,7 @@ export const UserDashboard = () => {
                const { data } = await api.bookings.getMy();
                setBookings(data);
             } catch (error) { console.error(error); }
+            setError('Failed to load bookings.');
         };
         if(user) fetchBookings();
     }, [user]);
@@ -86,6 +88,9 @@ export const UserDashboard = () => {
                     <h2 className="text-4xl font-black uppercase tracking-tighter text-[#0B1C3E]">My Dashboard</h2>
                     <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px] mt-1">Welcome, {user?.name}</p>
                 </div>
+                {error && (
+                    <div className="text-center text-red-500 mb-8">{error}</div>
+                )}
                 <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border border-gray-100">
                     <h3 className="text-2xl font-black uppercase text-[#0B1C3E] mb-6">My Bookings</h3>
                     {bookings.length === 0 ? <p>No bookings yet.</p> : (
@@ -108,6 +113,7 @@ export const UserDashboard = () => {
 export const PackagesPage = () => {
     const [packages, setPackages] = useState([]);
     
+    const [error, setError] = useState(null);
     useEffect(() => {
         const fetch = async () => {
             try {
@@ -115,6 +121,7 @@ export const PackagesPage = () => {
                 setPackages(data.packages || data);
             } catch (err) {
                  console.error("Failed to load packages");
+                 setError('Failed to load packages. Please try again later.');
             }
         };
         fetch();
@@ -124,6 +131,9 @@ export const PackagesPage = () => {
         <div className="bg-gray-50 min-h-screen py-24">
             <SEO title="Packages" />
             <div className="container mx-auto px-4">
+                {error && (
+                    <div className="text-center text-red-500 mb-8">{error}</div>
+                )}
                 <h1 className="text-4xl font-black uppercase text-[#0B1C3E] mb-12">Available Packages</h1>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
                     {packages.map(pkg => (

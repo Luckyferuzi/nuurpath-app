@@ -39,26 +39,27 @@ const PrivateConsultationsAdmin = () => {
     if (!window.confirm('Are you sure you want to delete this consultation request?')) return;
 
     try {
+      setError(null); // Clear previous errors
       await axios.delete(`${CONFIG.API_BASE_URL}/appointments/private/${id}`);
       fetchConsultations();
     } catch (err) {
-      alert(err.message);
+      setError(err.response?.data?.msg || err.message || 'Failed to delete consultation request.'); // User-facing error
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      setError(null); // Clear previous errors
       if (editingId) {
         await axios.put(`${CONFIG.API_BASE_URL}/appointments/private/${editingId}`, formData);
       } else {
         await axios.post(`${CONFIG.API_BASE_URL}/appointments/private`, formData);
       }
-      
       fetchConsultations();
       resetForm();
     } catch (err) {
-      alert('Failed to save consultation: ' + (err.response?.data?.msg || err.message));
+      setError(err.response?.data?.msg || err.message || 'Failed to save consultation.'); // User-facing error
     }
   };
 
@@ -135,6 +136,9 @@ const PrivateConsultationsAdmin = () => {
     <div style={containerStyle}>
       <h2 style={{ marginBottom: '20px' }}>Private Consultation Requests</h2>
 
+      {error && (
+        <div style={{ color: 'red', marginBottom: '20px', padding: '10px', backgroundColor: '#ffe0e0', borderRadius: '5px' }}>{error}</div>
+      )}
       <button 
         onClick={() => setShowForm(!showForm)} 
         style={{ marginBottom: '20px', padding: '10px 20px', backgroundColor: '#006837', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}

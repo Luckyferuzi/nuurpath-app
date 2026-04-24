@@ -29,7 +29,9 @@ const NotificationPage = () => {
                 id: user.id, 
                 email: user.email, 
                 role: user.role 
-            });
+            }); // Register user with socket
+            setError(null); // Clear any previous errors
+
         }).catch(err => console.error("Socket auth error:", err));
 
         // Listen for real-time notifications
@@ -51,6 +53,7 @@ const NotificationPage = () => {
       setNotifications(data);
       setLoading(false);
     } catch (err) {
+      setError('Failed to load notifications.'); // User-facing error
       console.error('Error fetching notifications:', err);
       setError('Failed to load notifications.');
       setLoading(false);
@@ -60,10 +63,12 @@ const NotificationPage = () => {
   const markAsRead = async (id) => {
     try {
       await axios.put(`${CONFIG.API_BASE_URL}/notifications/${id}/read`);
+      setError(null); // Clear any previous errors
       setNotifications(prev => prev.map(n => 
         (n.id === id || n._id === id) ? { ...n, read: true } : n
       ));
     } catch (err) {
+      setError('Failed to mark notification as read.'); // User-facing error
       console.error('Error marking notification as read:', err);
     }
   };
@@ -71,8 +76,10 @@ const NotificationPage = () => {
   const markAllAsRead = async () => {
     try {
       await axios.put(`${CONFIG.API_BASE_URL}/notifications/read-all`);
+      setError(null); // Clear any previous errors
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     } catch (err) {
+      setError('Failed to mark all notifications as read.'); // User-facing error
       console.error('Error marking all as read:', err);
     }
   };
@@ -80,9 +87,11 @@ const NotificationPage = () => {
   const deleteNotification = async (id) => {
     if (!window.confirm('Are you sure you want to delete this notification?')) return;
     try {
+      setError(null); // Clear any previous errors
       await axios.delete(`${CONFIG.API_BASE_URL}/notifications/${id}`);
       setNotifications(prev => prev.filter(n => (n.id !== id && n._id !== id)));
     } catch (err) {
+      setError('Failed to delete notification.'); // User-facing error
       console.error('Error deleting notification:', err);
     }
   };

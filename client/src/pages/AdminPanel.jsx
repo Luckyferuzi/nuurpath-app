@@ -57,20 +57,22 @@ const AdminPanel = () => {
 
     const handleRoleChange = async (userId, newRole) => {
         try {
+            setError(null); // Clear previous errors
             await axios.put(`/api/admin/users/${userId}/role`, { role: newRole });
             setUsers(users.map(u => u._id === userId ? { ...u, role: newRole } : u));
         } catch (err) {
-            alert('Failed to update role');
+            setError(err.response?.data?.message || 'Failed to update user role.');
         }
     };
 
     const handleDeleteUser = async (userId) => {
         if (!window.confirm('Are you sure you want to delete this user?')) return;
         try {
+            setError(null); // Clear previous errors
             await axios.delete(`/api/admin/users/${userId}`);
             setUsers(users.filter(u => u._id !== userId));
         } catch (err) {
-            alert('Failed to delete user');
+            setError(err.response?.data?.message || 'Failed to delete user.');
         }
     };
 

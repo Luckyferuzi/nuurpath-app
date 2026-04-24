@@ -29,6 +29,7 @@ const PackageBookingsAdmin = () => {
         setBookings(response.data.bookings);
         setTotalPages(response.data.totalPages || 1);
         setCurrentPage(response.data.currentPage || 1);
+        setError(null); // Clear previous errors on success
       } else {
         setBookings(Array.isArray(response.data) ? response.data : []);
       }
@@ -51,6 +52,7 @@ const PackageBookingsAdmin = () => {
     try {
       const response = await axios.get(`${CONFIG.API_BASE_URL}/packages`);
       setPackages(Array.isArray(response.data) ? response.data : response.data.packages || []);
+      setError(null); // Clear previous errors on success
     } catch (err) {
       console.error("Failed to fetch packages", err);
     }
@@ -59,16 +61,16 @@ const PackageBookingsAdmin = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      setError(null); // Clear previous errors
       if (editingId) {
         await axios.put(`${CONFIG.API_BASE_URL}/package-bookings/${editingId}`, formData);
       } else {
         await axios.post(`${CONFIG.API_BASE_URL}/package-bookings`, formData);
       }
-      
       fetchBookings();
       resetForm();
     } catch (err) {
-      alert('Failed to save booking: ' + (err.response?.data?.msg || err.message));
+      setError(err.response?.data?.msg || err.message || 'Failed to save booking.'); // User-facing error
     }
   };
 
@@ -77,8 +79,8 @@ const PackageBookingsAdmin = () => {
       try {
         await axios.delete(`${CONFIG.API_BASE_URL}/package-bookings/${id}`);
         fetchBookings();
-      } catch (err) {
-        alert('Failed to delete booking');
+      } catch (err) { // User-facing error
+        setError(err.response?.data?.msg || err.message || 'Failed to delete booking.');
       }
     }
   };
@@ -187,6 +189,9 @@ const PackageBookingsAdmin = () => {
     <div style={containerStyle}>
       <h2 style={{ marginBottom: '20px' }}>All Package Bookings</h2>
 
+      {error && (
+        <div style={{ color: 'red', marginBottom: '20px', padding: '10px', backgroundColor: '#ffe0e0', borderRadius: '5px' }}>{error}</div>
+      )}
       <div style={{ marginBottom: '20px', display: 'flex', gap: '10px' }}>
         <button 
           onClick={() => setShowForm(!showForm)} 

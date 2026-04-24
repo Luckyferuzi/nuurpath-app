@@ -8,6 +8,7 @@ const NotificationBell = () => {
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
+    const [error, setError] = useState(null); // Added error state
     const dropdownRef = useRef(null);
 
     // Close dropdown when clicking outside
@@ -34,7 +35,7 @@ const NotificationBell = () => {
                 setNotifications(res.data);
                 setUnreadCount(res.data.filter(n => !n.read).length);
             }
-        } catch (err) {
+        } catch (err) { // Error fetching notifications is logged, but not displayed in the bell itself.
             console.error("Error fetching notifications:", err);
         }
     };
@@ -63,7 +64,9 @@ const NotificationBell = () => {
                     email: user.email, 
                     role: user.role 
                 });
-            }).catch(err => console.error("Socket auth error:", err));
+            }).catch(err => {
+                console.error("Socket auth error:", err); // Log socket auth errors
+            });
 
             // Listen for real-time notifications
             socket.on("receive_notification", (newNotification) => {
@@ -91,7 +94,8 @@ const NotificationBell = () => {
                 headers: { 'x-auth-token': token }
             });
         } catch (err) {
-            console.error("Error marking notification as read:", err);
+            setError('Failed to mark notification as read.'); // Set user-facing error
+            console.error("Error marking notification as read:", err); // Log for debugging
         }
     };
 
@@ -122,6 +126,9 @@ const NotificationBell = () => {
                                 <span className="text-xs font-normal text-brand-primary bg-blue-50 px-2 py-0.5 rounded-full">
                                     {unreadCount} New
                                 </span>
+                            )}
+                            {error && ( // Display error message
+                                <span className="text-xs font-normal text-red-500">{error}</span>
                             )}
                         </div>
                         <div className="max-h-[20rem] overflow-y-auto">

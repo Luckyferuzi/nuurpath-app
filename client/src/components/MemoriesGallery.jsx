@@ -12,16 +12,20 @@ const getMediaUrl = (path) => {
 const MemoriesGallery = () => {
     const [memories, setMemories] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     useEffect(() => {
         const fetchMemories = async () => {
             try {
                 const res = await axios.get('/api/reviews');
                 setMemories(res.data);
+                setError(null);
             } catch (err) {
+                setError('Failed to load traveler memories.');
                 console.error("Error fetching memories:", err);
             } finally {
                 setLoading(false);
+
             }
         };
         fetchMemories();
@@ -29,6 +33,7 @@ const MemoriesGallery = () => {
 
     if (loading) return <div className="py-20 text-center text-gray-500">Loading traveler memories...</div>;
     if (memories.length === 0) return null;
+    if (error) return <div className="py-20 text-center text-red-500">{error}</div>;
 
     return (
         <section className="py-20 bg-white border-t border-gray-100">

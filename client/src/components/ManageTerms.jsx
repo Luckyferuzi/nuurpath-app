@@ -13,6 +13,7 @@ const ManageTerms = () => {
       try {
         const response = await axios.get(`${CONFIG.API_BASE_URL}/content/terms`);
         setContent(response.data.content || '');
+        setMessage(null); // Clear previous messages on successful fetch
       } catch (error) {
         console.error('Error fetching terms of use:', error);
       } finally {
@@ -31,7 +32,7 @@ const ManageTerms = () => {
       await axios.post(`${CONFIG.API_BASE_URL}/content/terms`, { content }, {
         headers: { 'x-auth-token': token }
       });
-      setMessage({ type: 'success', text: 'Terms of Use updated successfully!' });
+      setMessage({ type: 'success', text: 'Terms of Use updated successfully!' }); // User-facing success
     } catch (error) {
       setMessage({ type: 'error', text: 'Failed to update Terms of Use.' });
     } finally {

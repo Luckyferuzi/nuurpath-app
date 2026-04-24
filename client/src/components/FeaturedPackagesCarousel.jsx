@@ -6,6 +6,7 @@ const FeaturedPackagesCarousel = () => {
   const [packages, setPackages] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchPackages = async () => {
@@ -16,8 +17,10 @@ const FeaturedPackagesCarousel = () => {
           const allPackages = Array.isArray(data) ? data : (data.packages || []);
           const featured = allPackages.filter(pkg => pkg.isFeatured);
           setPackages(featured);
+          setError(null);
         }
       } catch (error) {
+        setError('Failed to load featured packages.');
         console.error("Error fetching featured packages:", error);
       } finally {
         setLoading(false);
@@ -47,6 +50,10 @@ const FeaturedPackagesCarousel = () => {
     <div className="w-full h-[500px] bg-gray-100 rounded-2xl animate-pulse flex items-center justify-center">
       <span className="text-gray-400">Loading featured packages...</span>
     </div>
+  );
+
+  if (error) return (
+    <div className="text-center text-red-500 p-4">{error}</div>
   );
 
   if (packages.length === 0) return null;

@@ -168,13 +168,13 @@ const PackageList = () => {
 
   const toggleWishlist = async (pkgId) => {
     if (!isAuthenticated) {
-      alert('Please login to save favorites.');
+      setError('Please login to save favorites.'); // User-facing error
       return;
     }
     try {
       await axios.post(`${CONFIG.API_BASE_URL}/wishlist/${pkgId}`);
       setWishlist(prev => {
-        const newSet = new Set(prev);
+        const newSet = new Set(prev); // Optimistic update
         if (newSet.has(pkgId)) newSet.delete(pkgId);
         else newSet.add(pkgId);
         return newSet;
@@ -196,7 +196,7 @@ const PackageList = () => {
         return prev.filter(p => (p._id || p.id) !== (pkg._id || pkg.id));
       } else {
         if (prev.length >= 3) {
-          alert("You can compare up to 3 packages at a time.");
+          setError("You can compare up to 3 packages at a time."); // User-facing error
           return prev;
         }
         return [...prev, pkg];
