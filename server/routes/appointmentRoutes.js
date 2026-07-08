@@ -3,9 +3,9 @@ const router = express.Router();
 const prisma = require('../db');
 const auth = require('../middleware/auth');
 const adminAuth = require('../middleware/adminAuth');
+const { privateConsultationLimiter } = require('../middleware/rateLimitMiddleware');
 const softAuth = require('../middleware/softAuth');
 const { notifyAdmins } = require('../utils/adminNotifier');
-const { verifyRecaptchaToken } = require('../utils/recaptcha');
 const {
     isNonEmptyString,
     isValidDate,
@@ -59,9 +59,9 @@ router.get('/private', auth, async (req, res) => {
 // @route   POST api/appointments/private
 // @desc    Book a private consultation (Public)
 // @access  Public
-router.post('/private', softAuth, async (req, res) => {
+router.post('/private', privateConsultationLimiter, softAuth, async (req, res) => {
     try {
-        const { name, email, phone, description, date, time, status, captchaToken } = req.body;
+        const { name, email, phone, description, date, time, status } = req.body;
 
         if (!isNonEmptyString(name) || !isNonEmptyString(description) || !isNonEmptyString(phone)) {
             return sendValidationError(res, 'Please enter all required fields.');
@@ -78,8 +78,6 @@ router.post('/private', softAuth, async (req, res) => {
         if (!isValidTimeString(time)) {
             return sendValidationError(res, 'A valid time is required.');
         }
-
-        await verifyRecaptchaToken(captchaToken, req.ip);
 
         const normalizedStatus = status === undefined || status === null || status === ''
             ? 'Pending'
@@ -123,11 +121,6 @@ router.post('/private', softAuth, async (req, res) => {
         res.json(consultation);
     } catch (err) {
         console.error("Error creating consultation:", err);
-
-        if (err.statusCode) {
-            return res.status(err.statusCode).json({ msg: err.message });
-        }
-
         res.status(500).send('Server Error');
     }
 });

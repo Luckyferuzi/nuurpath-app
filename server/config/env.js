@@ -72,7 +72,6 @@ const env = {
   DATABASE_URL: process.env.DATABASE_URL,
   JWT_SECRET: process.env.JWT_SECRET,
   ALLOWED_ORIGINS,
-  RECAPTCHA_SECRET_KEY: optionalEnv('RECAPTCHA_SECRET_KEY', ''),
   UPLOAD_ROOT: optionalEnv('UPLOAD_ROOT', ''),
 };
 

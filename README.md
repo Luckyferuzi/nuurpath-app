@@ -44,13 +44,11 @@ Do not commit real secrets. Keep production values in your host platform or priv
 - `EMAIL_FROM=<from-address>`
 - `ADMIN_EMAIL=<admin-inbox>`
 - `GOOGLE_CLIENT_ID=<google-oauth-client-id>`
-- `RECAPTCHA_SECRET_KEY=<recaptcha-secret>`
 
 ### Frontend production variables
 
 - `REACT_APP_API_URL=https://api.nuurpath.com/api`
 - `REACT_APP_GOOGLE_CLIENT_ID=<google-oauth-client-id>`
-- `REACT_APP_RECAPTCHA_SITE_KEY=<recaptcha-site-key>`
 
 ## Local Development
 

@@ -1,12 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import ReCAPTCHA from 'react-google-recaptcha';
-import axios from 'axios'; // Import axios
+import axios from 'axios';
 import { CONFIG } from '../config';
 
-const RECAPTCHA_SITE_KEY = (process.env.REACT_APP_RECAPTCHA_SITE_KEY || '').trim();
-
 const ContactUs = () => {
-  // ... (state variables remain the same)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -16,12 +12,9 @@ const ContactUs = () => {
   const [status, setStatus] = useState({ loading: false, error: null, success: false });
   const [activeIndex, setActiveIndex] = useState(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState(null);
   const [attachment, setAttachment] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
-  const recaptchaRef = useRef(null);
   const fileInputRef = useRef(null);
 
   const faqData = [
@@ -45,7 +38,6 @@ const ContactUs = () => {
 
   const { name, email, subject, message } = formData;
   const MAX_MESSAGE_LENGTH = 1000;
-  const isRecaptchaConfigured = Boolean(RECAPTCHA_SITE_KEY);
 
   useEffect(() => {
     if (status.success) {
@@ -55,10 +47,6 @@ const ContactUs = () => {
       return () => clearTimeout(timer);
     }
   }, [status.success]);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   useEffect(() => {
     return () => {
@@ -106,16 +94,6 @@ const ContactUs = () => {
       return;
     }
 
-    if (!isRecaptchaConfigured) {
-      setStatus({ loading: false, error: 'Contact form is temporarily unavailable. Please try again later.', success: false });
-      return;
-    }
-
-    if (!captchaToken) {
-      setStatus({ loading: false, error: 'Please complete the reCAPTCHA check.', success: false });
-      return;
-    }
-
     setShowConfirmation(true);
   };
 
@@ -129,13 +107,11 @@ const ContactUs = () => {
       formDataToSend.append('email', email);
       formDataToSend.append('subject', subject);
       formDataToSend.append('message', message);
-      formDataToSend.append('captchaToken', captchaToken);
       
       if (attachment) {
         formDataToSend.append('attachment', attachment);
       }
 
-      // Use axios instead of fetch to leverage the baseURL configuration
       await axios.post(`${CONFIG.API_BASE_URL}/contact`, formDataToSend, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -147,10 +123,6 @@ const ContactUs = () => {
       setAgreedToTerms(false);
       setAttachment(null);
       setPreviewUrl(null);
-      setCaptchaToken(null);
-      if (recaptchaRef.current) {
-        recaptchaRef.current.reset();
-      }
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -276,21 +248,6 @@ const ContactUs = () => {
           <label htmlFor="terms" style={{ margin: 0, fontWeight: 'normal', fontSize: '14px', color: '#333', cursor: 'pointer' }}>
             I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: '#0B1C3E', textDecoration: 'underline' }}>Terms and Conditions</a>
           </label>
-        </div>
-
-        <div style={{ marginBottom: '20px' }}>
-          {isMounted && isRecaptchaConfigured && (
-            <ReCAPTCHA
-              ref={recaptchaRef}
-              sitekey={RECAPTCHA_SITE_KEY}
-              onChange={(token) => setCaptchaToken(token)}
-            />
-          )}
-          {isMounted && !isRecaptchaConfigured && (
-            <div style={{ padding: '12px', borderRadius: '4px', backgroundColor: '#fff3cd', color: '#856404', border: '1px solid #ffeeba' }}>
-              reCAPTCHA is currently unavailable. Please try again later.
-            </div>
-          )}
         </div>
 
         <button type="submit" style={{ ...buttonStyle, opacity: status.loading ? 0.7 : 1 }} disabled={status.loading}>

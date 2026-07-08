@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { check } = require('express-validator');
 const contactController = require('../controllers/contactController');
+const { contactFormLimiter } = require('../middleware/rateLimitMiddleware');
 const multer = require('multer');
 
 const storage = multer.memoryStorage();
@@ -26,7 +27,7 @@ const upload = multer({ storage: storage, limits: { fileSize: 5 * 1024 * 1024 },
 // @route   POST api/contact
 // @desc    Submit contact form
 // @access  Public
-router.post('/', (req, res, next) => {
+router.post('/', contactFormLimiter, (req, res, next) => {
     upload.single('attachment')(req, res, (err) => {
         if (err) {
             return res.status(400).json({

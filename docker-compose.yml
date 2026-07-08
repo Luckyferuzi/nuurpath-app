@@ -5,7 +5,6 @@ services:
       args:
         REACT_APP_API_URL: ${REACT_APP_API_URL}
         REACT_APP_GOOGLE_CLIENT_ID: ${REACT_APP_GOOGLE_CLIENT_ID:-}
-        REACT_APP_RECAPTCHA_SITE_KEY: ${REACT_APP_RECAPTCHA_SITE_KEY:-}
     ports:
       - "${PORT:-5001}:5001"
     environment:
@@ -24,7 +23,6 @@ services:
       EMAIL_FROM: ${EMAIL_FROM}
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      RECAPTCHA_SECRET_KEY: ${RECAPTCHA_SECRET_KEY}
     depends_on:
       - postgres
     restart: unless-stopped

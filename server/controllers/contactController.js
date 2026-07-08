@@ -1,6 +1,5 @@
 const sendEmail = require('../utils/emailService');
 const { validationResult } = require('express-validator');
-const { verifyRecaptchaToken } = require('../utils/recaptcha');
 
 exports.submitContactForm = async (req, res) => {
     const errors = validationResult(req);
@@ -8,11 +7,9 @@ exports.submitContactForm = async (req, res) => {
         return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, email, subject, message, captchaToken } = req.body;
+    const { name, email, subject, message } = req.body;
 
     try {
-        await verifyRecaptchaToken(captchaToken, req.ip);
-
         const emailContent = `
             <h3>New Contact Form Submission</h3>
             <p><strong>Name:</strong> ${name}</p>
@@ -40,11 +37,6 @@ exports.submitContactForm = async (req, res) => {
         res.json({ msg: 'Message sent successfully' });
     } catch (err) {
         console.error('Contact form error:', err.message);
-
-        if (err.statusCode) {
-            return res.status(err.statusCode).json({ msg: err.message });
-        }
-
         res.status(500).send('Server Error');
     }
 };

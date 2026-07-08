@@ -18,7 +18,6 @@ const requiredKeys = [
   'EMAIL_PASS',
   'EMAIL_FROM',
   'ADMIN_EMAIL',
-  'RECAPTCHA_SECRET_KEY',
   'GOOGLE_CLIENT_ID',
 ];
 

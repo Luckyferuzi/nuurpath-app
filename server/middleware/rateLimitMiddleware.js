@@ -39,3 +39,15 @@ exports.resendVerificationLimiter = createJsonRateLimiter({
     max: 3,
     message: 'Too many verification email requests from this IP. Please try again after an hour.',
 });
+
+exports.contactFormLimiter = createJsonRateLimiter({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    message: 'Too many contact form submissions from this IP. Please try again later.',
+});
+
+exports.privateConsultationLimiter = createJsonRateLimiter({
+    windowMs: 60 * 60 * 1000,
+    max: 5,
+    message: 'Too many consultation requests from this IP. Please try again later.',
+});

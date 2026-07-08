@@ -1,12 +1,9 @@
-import React, { useState, useRef, forwardRef, useEffect } from 'react';
-import ReCAPTCHA from 'react-google-recaptcha';
+import React, { useState, forwardRef, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import axios from 'axios';
 import { CONFIG } from '../config';
 import { useAuth } from '../contexts/AuthContext.jsx';
-
-const RECAPTCHA_SITE_KEY = (process.env.REACT_APP_RECAPTCHA_SITE_KEY || '').trim();
 
 const DateCustomInput = forwardRef(({ value, onClick, onChange, ...props }, ref) => (
   <input
@@ -31,10 +28,7 @@ const PrivateConsultationBooking = () => {
   });
   const [status, setStatus] = useState({ loading: false, error: null, success: false });
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const recaptchaRef = useRef(null);
-  const isRecaptchaConfigured = Boolean(RECAPTCHA_SITE_KEY);
 
   useEffect(() => {
     if (user) {
@@ -62,16 +56,6 @@ const PrivateConsultationBooking = () => {
       return;
     }
 
-    if (!isRecaptchaConfigured) {
-      setStatus({ loading: false, error: 'Booking is temporarily unavailable. Please try again later.', success: false });
-      return;
-    }
-
-    if (!captchaToken) {
-      setStatus({ loading: false, error: 'Please complete the reCAPTCHA check.', success: false });
-      return;
-    }
-
     setShowConfirmation(true);
   };
 
@@ -88,7 +72,6 @@ const PrivateConsultationBooking = () => {
         ...formData,
         date: formattedDate,
         time: formattedTime,
-        captchaToken,
         userId: isAuthenticated ? user.id : null
       };
 
@@ -97,10 +80,6 @@ const PrivateConsultationBooking = () => {
       setStatus({ loading: false, error: null, success: true });
       setFormData({ name: '', email: '', description: '', phone: '', date: null, time: null });
       setAgreedToTerms(false);
-      setCaptchaToken(null);
-      if (recaptchaRef.current) {
-        recaptchaRef.current.reset();
-      }
     } catch (err) {
       const errorMessage = err.response?.data?.msg || err.message || 'Failed to book consultation';
       setStatus({ loading: false, error: errorMessage, success: false }); // User-facing error
@@ -251,20 +230,6 @@ const PrivateConsultationBooking = () => {
           <label htmlFor="terms" style={{ margin: 0, fontWeight: 'normal', fontSize: '14px', color: '#333', cursor: 'pointer' }}>
             I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: '#007bff' }}>Terms and Conditions</a>
           </label>
-        </div>
-
-        <div style={{ marginBottom: '20px' }}>
-          {isRecaptchaConfigured ? (
-            <ReCAPTCHA
-              ref={recaptchaRef}
-              sitekey={RECAPTCHA_SITE_KEY}
-              onChange={(token) => setCaptchaToken(token)}
-            />
-          ) : (
-            <div style={{ padding: '12px', borderRadius: '4px', backgroundColor: '#fff3cd', color: '#856404', border: '1px solid #ffeeba' }}>
-              reCAPTCHA is currently unavailable. Please try again later.
-            </div>
-          )}
         </div>
 
         <button type="submit" style={{ ...buttonStyle, opacity: status.loading ? 0.7 : 1 }} disabled={status.loading}>
