@@ -3,21 +3,16 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const prisma = require('../db');
 const auth = require('../middleware/auth');
+const adminAuth = require('../middleware/adminAuth');
 
 // @route   GET api/users
 // @desc    Get all users with pagination
 // @access  Private (Admin/Manager)
-router.get('/', auth, async (req, res) => {
+router.get('/', auth, adminAuth, async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = 10;
         const skip = (page - 1) * limit;
-
-        // Check role
-        const requestor = await prisma.user.findUnique({ where: { id: parseInt(req.user.id) } });
-        if (!requestor || !['admin', 'manager'].includes(requestor.role)) {
-             return res.status(403).json({ msg: 'Access denied' });
-        }
 
         const [users, totalUsers] = await prisma.$transaction([
             prisma.user.findMany({
@@ -42,15 +37,10 @@ router.get('/', auth, async (req, res) => {
 
 // @route   POST api/users
 // @desc    Create a new user
-// @access  Private (Admin)
-router.post('/', auth, async (req, res) => {
+// @access  Private (Admin/Manager)
+router.post('/', auth, adminAuth, async (req, res) => {
     try {
         const { name, email, password, role } = req.body;
-
-        const requestor = await prisma.user.findUnique({ where: { id: parseInt(req.user.id) } });
-        if (requestor.role !== 'admin') {
-            return res.status(403).json({ msg: 'Access denied' });
-        }
 
         const userExists = await prisma.user.findUnique({ where: { email } });
         if (userExists) {
@@ -79,21 +69,17 @@ router.post('/', auth, async (req, res) => {
 
 // @route   PUT api/users/:id
 // @desc    Update user
-// @access  Private (Admin)
-router.put('/:id', auth, async (req, res) => {
+// @access  Private (Admin/Manager)
+router.put('/:id', auth, adminAuth, async (req, res) => {
     try {
         const { name, email, role, password } = req.body;
         const id = parseInt(req.params.id);
-
-        const requestor = await prisma.user.findUnique({ where: { id: parseInt(req.user.id) } });
-        if (requestor.role !== 'admin') {
-            return res.status(403).json({ msg: 'Access denied' });
-        }
 
         const updateData = { name, email, role };
         if (password) {
             const salt = await bcrypt.genSalt(10);
             updateData.password = await bcrypt.hash(password, salt);
+            updateData.passwordChangedAt = new Date();
         }
 
         const updatedUser = await prisma.user.update({
@@ -111,16 +97,11 @@ router.put('/:id', auth, async (req, res) => {
 
 // @route   DELETE api/users/:id
 // @desc    Delete user
-// @access  Private (Admin)
-router.delete('/:id', auth, async (req, res) => {
+// @access  Private (Admin/Manager)
+router.delete('/:id', auth, adminAuth, async (req, res) => {
     try {
         const id = parseInt(req.params.id);
         const requestorId = parseInt(req.user.id);
-
-        const requestor = await prisma.user.findUnique({ where: { id: requestorId } });
-        if (requestor.role !== 'admin') {
-            return res.status(403).json({ msg: 'Access denied' });
-        }
 
         if (requestorId === id) {
             return res.status(400).json({ msg: 'Cannot delete yourself' });

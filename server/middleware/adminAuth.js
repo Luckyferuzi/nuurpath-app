@@ -1,19 +1,26 @@
-const prisma = require('../db');
+const allowedRoles = new Set(['admin', 'manager']);
 
-module.exports = async function (req, res, next) {
-    try {
-        // req.user is set by the auth middleware
-        const user = await prisma.user.findUnique({
-            where: { id: req.user.id }
-        });
+function adminAuth(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({
+      msg: 'Authentication required',
+      message: 'Authentication required',
+    });
+  }
 
-        if (!user || (user.role !== 'admin' && user.role !== 'manager')) {
-            return res.status(403).json({ msg: 'Access denied. Admin privileges required.' });
-        }
+  const role = String(req.user.role || '').toLowerCase();
 
-        next();
-    } catch (err) {
-        console.error('Admin Auth Error:', err.message);
-        res.status(500).send('Server Error');
-    }
-};
+  if (!allowedRoles.has(role)) {
+    return res.status(403).json({
+      msg: 'Admin access required',
+      message: 'Admin access required',
+    });
+  }
+
+  req.user.role = role;
+
+  return next();
+}
+
+module.exports = adminAuth;
+module.exports.adminAuth = adminAuth;

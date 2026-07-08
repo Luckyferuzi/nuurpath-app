@@ -1,52 +1,69 @@
-# Dockerfile for NuurPath Travels Application
-
-# Stage 1: Build frontend
-FROM node:18-alpine as frontend-builder
+FROM node:18-alpine AS client-builder
 
 WORKDIR /app/client
 
-# Copy package files
 COPY client/package*.json ./
+RUN npm ci
 
-# Install dependencies
-RUN npm install
+COPY client/public ./public
+COPY client/src ./src
+COPY client/postcss.config.js ./
+COPY client/tailwind.config.cjs ./
 
-# Copy frontend source
-COPY client/ .
+ARG REACT_APP_API_URL=https://api.nuurpath.com/api
+ARG REACT_APP_GOOGLE_CLIENT_ID=
+ARG REACT_APP_RECAPTCHA_SITE_KEY=
 
-# Build the frontend
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
+ENV REACT_APP_GOOGLE_CLIENT_ID=$REACT_APP_GOOGLE_CLIENT_ID
+ENV REACT_APP_RECAPTCHA_SITE_KEY=$REACT_APP_RECAPTCHA_SITE_KEY
+
 RUN npm run build
 
-# Stage 2: Build backend
-FROM node:18-alpine as backend-builder
+FROM node:18-alpine AS server-builder
 
-WORKDIR /app/backend
+WORKDIR /app/server
 
-# Copy package files
-COPY backend/package*.json ./
+COPY server/package*.json ./
+RUN npm ci
 
-# Install dependencies
-RUN npm install
+COPY server/config ./config
+COPY server/controllers ./controllers
+COPY server/middleware ./middleware
+COPY server/prisma ./prisma
+COPY server/routes ./routes
+COPY server/utils ./utils
+COPY server/check-db.js ./
+COPY server/create-admin.js ./
+COPY server/create-package-table.js ./
+COPY server/db.js ./
+COPY server/fix-env.js ./
+COPY server/mainRoutes.js ./
+COPY server/restart-db.sh ./
+COPY server/seed-packages.js ./
+COPY server/seed-services.js ./
+COPY server/seed.js ./
+COPY server/seedPackages.js ./
+COPY server/server.js ./
+COPY server/settings.json ./
+COPY server/test-endpoints.js ./
+COPY server/test-login.js ./
+COPY server/verify-admin.js ./
+COPY server/verify-table.js ./
 
-# Copy backend source
-COPY backend/ .
+RUN npx prisma generate --schema=prisma/schema.prisma \
+    && npm prune --omit=dev
 
-# Stage 3: Final image
 FROM node:18-alpine
+
+ENV NODE_ENV=production
 
 WORKDIR /app
 
-# Copy built frontend
-COPY --from=frontend-builder /app/client/build ./client/build
+COPY --from=server-builder /app/server ./server
 
-# Copy backend source
-COPY --from=backend-builder /app/backend ./backend
+WORKDIR /app/server
 
-# Set working directory to backend
-WORKDIR /app/backend
-
-# Expose port
 EXPOSE 5001
 
-# Start the application
 CMD ["node", "server.js"]

@@ -4,23 +4,44 @@ const prisma = require('../db');
 const auth = require('../middleware/auth');
 const adminAuth = require('../middleware/adminAuth');
 const { sendNotification } = require('../utils/notificationService');
+const {
+    isNonEmptyString,
+    sendInvalidId,
+    sendValidationError,
+    toPositiveInteger,
+    toTrimmedString,
+} = require('../utils/validation');
 
 // @route   GET api/notifications
 // @desc    Get notifications (Admin sees all/filtered, User sees theirs)
 // @access  Private
 router.get('/', auth, async (req, res) => {
     try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 20;
+        const page = req.query.page === undefined ? 1 : toPositiveInteger(req.query.page);
+        const limit = req.query.limit === undefined ? 20 : toPositiveInteger(req.query.limit);
         const filter = req.query.filter; // 'unread' or 'all'
+
+        if (page === null || limit === null) {
+            return sendValidationError(res, 'Page and limit must be positive integers.');
+        }
+
+        if (filter !== undefined && filter !== 'unread' && filter !== 'all') {
+            return sendValidationError(res, 'Filter must be either unread or all.');
+        }
+
         const skip = (page - 1) * limit;
 
         const where = {};
         
         // Check if user is admin
-        const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+        const userId = toPositiveInteger(req.user.id);
+        if (userId === null) {
+            return sendValidationError(res, 'Invalid user id.');
+        }
+
+        const user = await prisma.user.findUnique({ where: { id: userId } });
         if (user.role !== 'admin' && user.role !== 'manager') {
-            where.userId = req.user.id;
+            where.userId = userId;
         }
 
         if (filter === 'unread') {
@@ -35,7 +56,7 @@ router.get('/', auth, async (req, res) => {
                 take: limit
             }),
             prisma.notification.count({ where }),
-            prisma.notification.count({ where: { read: false } })
+            prisma.notification.count({ where: { ...where, read: false } })
         ]);
 
         res.json({
@@ -52,15 +73,48 @@ router.get('/', auth, async (req, res) => {
 });
 
 // @route   PUT api/notifications/read-all
-// @desc    Mark all notifications as read
-// @access  Private (Admin)
-router.put('/read-all', auth, adminAuth, async (req, res) => {
+// @desc    Mark notifications as read (user scoped for normal users, global for admins)
+// @access  Private
+router.put('/read-all', auth, async (req, res) => {
     try {
+        const userId = toPositiveInteger(req.user.id);
+        if (userId === null) {
+            return sendValidationError(res, 'Invalid user id.');
+        }
+
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        const where = { read: false };
+
+        if (user.role !== 'admin' && user.role !== 'manager') {
+            where.userId = userId;
+        }
+
         await prisma.notification.updateMany({
-            where: { read: false },
+            where,
             data: { read: true }
         });
         res.json({ msg: 'All notifications marked as read' });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   DELETE api/notifications/clear-all
+// @desc    Clear all notifications for the current user
+// @access  Private
+router.delete('/clear-all', auth, async (req, res) => {
+    try {
+        const userId = toPositiveInteger(req.user.id);
+        if (userId === null) {
+            return sendValidationError(res, 'Invalid user id.');
+        }
+
+        const result = await prisma.notification.deleteMany({
+            where: { userId }
+        });
+
+        res.json({ msg: 'Notifications cleared', count: result.count });
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');
@@ -72,14 +126,23 @@ router.put('/read-all', auth, adminAuth, async (req, res) => {
 // @access  Private
 router.put('/:id/read', auth, async (req, res) => {
     try {
-        const id = parseInt(req.params.id);
+        const id = toPositiveInteger(req.params.id);
+        if (id === null) {
+            return sendInvalidId(res);
+        }
+
+        const userId = toPositiveInteger(req.user.id);
+        if (userId === null) {
+            return sendValidationError(res, 'Invalid user id.');
+        }
+
         const notification = await prisma.notification.findUnique({ where: { id } });
 
         if (!notification) return res.status(404).json({ msg: 'Notification not found' });
 
         // Check ownership if not admin
-        const user = await prisma.user.findUnique({ where: { id: req.user.id } });
-        if (user.role !== 'admin' && user.role !== 'manager' && notification.userId !== req.user.id) {
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (user.role !== 'admin' && user.role !== 'manager' && notification.userId !== userId) {
             return res.status(403).json({ msg: 'Not authorized' });
         }
 
@@ -99,15 +162,26 @@ router.put('/:id/read', auth, async (req, res) => {
 // @access  Private
 router.delete('/:id', auth, async (req, res) => {
     try {
-        const id = parseInt(req.params.id);
+        const id = toPositiveInteger(req.params.id);
+        if (id === null) {
+            return sendInvalidId(res);
+        }
+
+        const userId = toPositiveInteger(req.user.id);
+        if (userId === null) {
+            return sendValidationError(res, 'Invalid user id.');
+        }
+
         const notification = await prisma.notification.findUnique({ where: { id } });
 
         if (!notification) {
             return res.status(404).json({ msg: 'Notification not found' });
         }
 
-        // Check ownership
-        if (notification.userId !== req.user.id) {
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+
+        // Check ownership for non-admin users
+        if (user.role !== 'admin' && user.role !== 'manager' && notification.userId !== userId) {
             return res.status(401).json({ msg: 'User not authorized' });
         }
 
@@ -123,16 +197,49 @@ router.delete('/:id', auth, async (req, res) => {
 
 // @route   POST api/notifications
 // @desc    Create a notification and emit real-time event
-// @access  Private
-router.post('/', auth, async (req, res) => {
+// @access  Private (Admin/Manager)
+router.post('/', auth, adminAuth, async (req, res) => {
     try {
-        const { userId, message, type, bookingId } = req.body;
+        const { userId, title, message, type, bookingId } = req.body;
+        const normalizedUserId = toPositiveInteger(userId);
+        if (normalizedUserId === null) {
+            return sendValidationError(res, 'userId must be a positive integer.');
+        }
+
+        if (title !== undefined && title !== null && title !== '' && !isNonEmptyString(title)) {
+            return sendValidationError(res, 'Title must be a non-empty string.');
+        }
+
+        if (!isNonEmptyString(message)) {
+            return sendValidationError(res, 'Message is required.');
+        }
+
+        const targetUser = await prisma.user.findUnique({
+            where: { id: normalizedUserId },
+            select: { id: true },
+        });
+        if (!targetUser) {
+            return sendValidationError(res, 'Target user does not exist.');
+        }
+
+        let normalizedBookingId = null;
+        if (bookingId !== undefined && bookingId !== null && bookingId !== '') {
+            normalizedBookingId = toPositiveInteger(bookingId);
+            if (normalizedBookingId === null) {
+                return sendValidationError(res, 'bookingId must be a positive integer.');
+            }
+        }
+
+        if (type !== undefined && type !== null && type !== '' && !isNonEmptyString(type)) {
+            return sendValidationError(res, 'Type must be a non-empty string.');
+        }
         
         const notification = await sendNotification(req.app, {
-            userId,
-            message,
-            type,
-            bookingId
+            userId: normalizedUserId,
+            title: isNonEmptyString(title) ? toTrimmedString(title) : 'Notification',
+            message: toTrimmedString(message),
+            type: isNonEmptyString(type) ? toTrimmedString(type) : type,
+            bookingId: normalizedBookingId
         });
 
         res.json(notification);

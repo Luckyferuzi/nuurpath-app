@@ -3,27 +3,62 @@ const router = express.Router();
 const prisma = require('../db');
 const auth = require('../middleware/auth');
 const adminAuth = require('../middleware/adminAuth');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const {
+    isNonEmptyString,
+    sendInvalidId,
+    sendValidationError,
+    toNonNegativeNumber,
+    toPositiveInteger,
+    toTrimmedString,
+} = require('../utils/validation');
+const {
+    packageImageUpload,
+    removeUploadedFiles,
+    runUpload,
+    sendUploadError,
+    toPublicUploadUrl,
+} = require('../utils/upload');
 
-// Configure Multer for package images
-const uploadDir = path.join(__dirname, '../public/uploads/packages');
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
+function getValidatedPackagePayload(body) {
+    const { title, description, price, destination, duration, type, itinerary } = body;
 
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, uploadDir);
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + '-' + file.originalname);
+    if (!isNonEmptyString(title)) {
+        return { error: 'Package title is required.' };
     }
-});
 
-const upload = multer({ storage: storage });
+    if (!isNonEmptyString(description)) {
+        return { error: 'Package description is required.' };
+    }
+
+    if (!isNonEmptyString(destination)) {
+        return { error: 'Package destination is required.' };
+    }
+
+    if (!isNonEmptyString(duration)) {
+        return { error: 'Package duration is required.' };
+    }
+
+    if (!isNonEmptyString(type)) {
+        return { error: 'Package type is required.' };
+    }
+
+    const parsedPrice = toNonNegativeNumber(price);
+    if (parsedPrice === null) {
+        return { error: 'Price must be a valid non-negative number.' };
+    }
+
+    return {
+        data: {
+            title: toTrimmedString(title),
+            description: toTrimmedString(description),
+            price: parsedPrice,
+            destination: toTrimmedString(destination),
+            duration: toTrimmedString(duration),
+            type: toTrimmedString(type),
+            itinerary: typeof itinerary === 'string' ? itinerary.trim() : itinerary,
+        },
+    };
+}
 
 // @route   GET api/packages
 // @desc    Get all packages
@@ -34,8 +69,13 @@ router.get('/', async (req, res) => {
         const hasPagination = page !== undefined || limit !== undefined;
 
         if (hasPagination) {
-            const pageNum = parseInt(page) || 1;
-            const limitNum = parseInt(limit) || 10;
+            const pageNum = page === undefined ? 1 : toPositiveInteger(page);
+            const limitNum = limit === undefined ? 10 : toPositiveInteger(limit);
+
+            if (pageNum === null || limitNum === null) {
+                return sendValidationError(res, 'Page and limit must be positive integers.');
+            }
+
             const skip = (pageNum - 1) * limitNum;
 
             // Build filter object
@@ -46,11 +86,26 @@ router.get('/', async (req, res) => {
                     { title: { contains: search, mode: 'insensitive' } }
                 ];
             }
-            if (minPrice && !isNaN(parseFloat(minPrice))) {
-                where.price = { ...where.price, gte: parseFloat(minPrice) };
+            if (minPrice !== undefined) {
+                const parsedMinPrice = toNonNegativeNumber(minPrice);
+                if (parsedMinPrice === null) {
+                    return sendValidationError(res, 'Minimum price must be a valid non-negative number.');
+                }
+
+                where.price = { ...where.price, gte: parsedMinPrice };
             }
-            if (maxPrice && !isNaN(parseFloat(maxPrice))) {
-                where.price = { ...where.price, lte: parseFloat(maxPrice) };
+
+            if (maxPrice !== undefined) {
+                const parsedMaxPrice = toNonNegativeNumber(maxPrice);
+                if (parsedMaxPrice === null) {
+                    return sendValidationError(res, 'Maximum price must be a valid non-negative number.');
+                }
+
+                where.price = { ...where.price, lte: parsedMaxPrice };
+            }
+
+            if (where.price && where.price.gte !== undefined && where.price.lte !== undefined && where.price.gte > where.price.lte) {
+                return sendValidationError(res, 'Minimum price cannot be greater than maximum price.');
             }
 
             const [packages, total] = await prisma.$transaction([
@@ -86,8 +141,13 @@ router.get('/', async (req, res) => {
 // @access  Public
 router.get('/:id', async (req, res) => {
     try {
+        const id = toPositiveInteger(req.params.id);
+        if (id === null) {
+            return sendInvalidId(res);
+        }
+
         const pkg = await prisma.package.findUnique({
-            where: { id: parseInt(req.params.id) }
+            where: { id }
         });
         if (!pkg) return res.status(404).json({ msg: 'Package not found' });
         res.json(pkg);
@@ -100,24 +160,23 @@ router.get('/:id', async (req, res) => {
 // @route   POST api/packages
 // @desc    Create a package
 // @access  Private (Admin)
-router.post('/', auth, adminAuth, upload.single('image'), async (req, res) => {
+router.post('/', auth, adminAuth, async (req, res) => {
     try {
-        const { title, description, price, destination, duration, type, itinerary } = req.body;
-        
-        const parsedPrice = parseFloat(price);
-        if (isNaN(parsedPrice)) {
-            return res.status(400).json({ msg: 'Price must be a valid number' });
+        await runUpload(packageImageUpload.single('image'), req, res);
+    } catch (error) {
+        return sendUploadError(res, error, 'File too large. Maximum size allowed is 5 MB.');
+    }
+
+    try {
+        const { error, data } = getValidatedPackagePayload(req.body);
+        if (error) {
+            removeUploadedFiles(req.file);
+            return sendValidationError(res, error);
         }
 
         const packageData = {
-            title,
-            description,
-            price: parsedPrice,
-            destination,
-            duration,
-            type,
-            itinerary,
-            images: req.file ? [`/uploads/packages/${req.file.filename}`] : []
+            ...data,
+            images: req.file ? [toPublicUploadUrl('packages', req.file.filename)] : []
         };
 
         const newPackage = await prisma.package.create({
@@ -126,6 +185,7 @@ router.post('/', auth, adminAuth, upload.single('image'), async (req, res) => {
 
         res.json(newPackage);
     } catch (err) {
+        removeUploadedFiles(req.file);
         console.error('Error in POST /api/packages:', err);
         res.status(500).send('Server Error');
     }
@@ -134,28 +194,30 @@ router.post('/', auth, adminAuth, upload.single('image'), async (req, res) => {
 // @route   PUT api/packages/:id
 // @desc    Update a package
 // @access  Private (Admin)
-router.put('/:id', auth, adminAuth, upload.single('image'), async (req, res) => {
+router.put('/:id', auth, adminAuth, async (req, res) => {
     try {
-        const { title, description, price, destination, duration, type, itinerary } = req.body;
-        const id = parseInt(req.params.id);
+        await runUpload(packageImageUpload.single('image'), req, res);
+    } catch (error) {
+        return sendUploadError(res, error, 'File too large. Maximum size allowed is 5 MB.');
+    }
 
-        const parsedPrice = parseFloat(price);
-        if (isNaN(parsedPrice)) {
-            return res.status(400).json({ msg: 'Price must be a valid number' });
+    try {
+        const id = toPositiveInteger(req.params.id);
+        if (id === null) {
+            removeUploadedFiles(req.file);
+            return sendInvalidId(res);
         }
 
-        const updateData = {
-            title,
-            description,
-            price: parsedPrice,
-            destination,
-            duration,
-            type,
-            itinerary
-        };
+        const { error, data } = getValidatedPackagePayload(req.body);
+        if (error) {
+            removeUploadedFiles(req.file);
+            return sendValidationError(res, error);
+        }
+
+        const updateData = { ...data };
 
         if (req.file) {
-            updateData.images = [`/uploads/packages/${req.file.filename}`];
+            updateData.images = [toPublicUploadUrl('packages', req.file.filename)];
         }
 
         const updatedPackage = await prisma.package.update({
@@ -165,6 +227,7 @@ router.put('/:id', auth, adminAuth, upload.single('image'), async (req, res) => 
 
         res.json(updatedPackage);
     } catch (err) {
+        removeUploadedFiles(req.file);
         console.error('Error in PUT /api/packages:', err);
         res.status(500).send('Server Error');
     }
@@ -175,8 +238,13 @@ router.put('/:id', auth, adminAuth, upload.single('image'), async (req, res) => 
 // @access  Private (Admin)
 router.delete('/:id', auth, adminAuth, async (req, res) => {
     try {
+        const id = toPositiveInteger(req.params.id);
+        if (id === null) {
+            return sendInvalidId(res);
+        }
+
         await prisma.package.delete({
-            where: { id: parseInt(req.params.id) }
+            where: { id }
         });
         res.json({ msg: 'Package removed' });
     } catch (err) {

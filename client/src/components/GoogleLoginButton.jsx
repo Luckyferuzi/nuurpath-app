@@ -3,6 +3,8 @@ import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
+const GOOGLE_CLIENT_ID = (process.env.REACT_APP_GOOGLE_CLIENT_ID || '').trim();
+
 const GoogleLoginButton = () => {
     const { googleLogin } = useAuth();
     const navigate = useNavigate();
@@ -17,6 +19,14 @@ const GoogleLoginButton = () => {
     const onError = () => {
         console.log('Google Login Failed');
     };
+
+    if (!GOOGLE_CLIENT_ID) {
+        return (
+            <div className="mt-4 text-center text-sm text-red-600">
+                Google sign-in is temporarily unavailable.
+            </div>
+        );
+    }
 
     return (
         <div className="flex justify-center mt-4">

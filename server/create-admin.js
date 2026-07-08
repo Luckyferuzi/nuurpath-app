@@ -1,42 +1,50 @@
+const path = require('path');
+const dotenv = require('dotenv');
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
+
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+dotenv.config({ path: path.resolve(__dirname, '../.env'), override: false });
 
 const prisma = new PrismaClient();
 
 async function main() {
-    const email = 'admin@nuurpath.com';
-    const password = 'admin123';
-    
-    console.log(`Creating admin user...`);
+    const email = process.env.ADMIN_BOOTSTRAP_EMAIL || 'admin@example.com';
+    const password = process.env.ADMIN_BOOTSTRAP_PASSWORD;
 
-    // Hash the password
+    if (!password || String(password).startsWith('replace-with-')) {
+        throw new Error('Set ADMIN_BOOTSTRAP_PASSWORD to a real value before running create-admin.js.');
+    }
+
+    console.log('Creating admin user...');
+
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    const user = await prisma.user.upsert({
-        where: { email: email },
+    await prisma.user.upsert({
+        where: { email },
         update: {
-            role: 'admin', // Ensure existing user becomes admin
-            password: hashedPassword, // Force update password
-            isVerified: true // Mark email as verified
+            role: 'admin',
+            password: hashedPassword,
+            isVerified: true,
         },
         create: {
-            email: email,
+            email,
             name: 'Super Admin',
             password: hashedPassword,
             role: 'admin',
-            isVerified: true // Mark email as verified
+            isVerified: true,
         },
     });
 
-    console.log('✅ Admin user ready:');
-    console.log(`   Email: ${email}`);
-    console.log(`   Password: ${password}`);
+    console.log('Admin user ready.');
+    console.log(`Email: ${email}`);
+    console.log('Password: sourced from ADMIN_BOOTSTRAP_PASSWORD');
 }
 
 main()
-    .catch((e) => {
-        console.error(e);
+    .catch((error) => {
+        console.error(error);
         process.exit(1);
     })
     .finally(async () => {

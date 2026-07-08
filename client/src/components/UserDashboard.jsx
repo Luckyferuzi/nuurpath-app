@@ -13,7 +13,7 @@ import DestinationMap from './DestinationMap';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const UserDashboard = () => {
-    const { user, isAuthenticated, loading: authLoading, logout } = useAuth();
+    const { user, isAuthenticated, loading: authLoading } = useAuth();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState('bookings');
@@ -87,13 +87,11 @@ const UserDashboard = () => {
 
                 if (bookingsRes.status === 'fulfilled') {
                     const data = bookingsRes.value.data;
-                    const myBookings = Array.isArray(data) ? data.filter(b => b.user === user.id || b.user?._id === user.id || b.email === user.email) : [];
-                    setBookings(myBookings);
+                    setBookings(Array.isArray(data) ? data : []);
                 }
                 if (consultationsRes.status === 'fulfilled') {
                     const data = consultationsRes.value.data;
-                    const myConsultations = Array.isArray(data) ? data.filter(c => c.email === user.email) : [];
-                    setConsultations(myConsultations);
+                    setConsultations(Array.isArray(data) ? data : []);
                 }
                 if (flightsRes.status === 'fulfilled') setFlights(flightsRes.value.data);
                 if (wishlistRes.status === 'fulfilled') setWishlist(wishlistRes.value.data);
@@ -209,26 +207,6 @@ const UserDashboard = () => {
         }
     };
 
-    const handleDownloadReceipt = async (id) => {
-        try {
-            const response = await axios.get(`${CONFIG.API_BASE_URL}/bookings/${id}/receipt`, {
-                responseType: 'blob'
-            });
-            
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `receipt-${id}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            a.remove();
-        } catch (error) {
-            console.error("Error downloading receipt:", error);
-            alert('Failed to download receipt');
-        }
-    };
-
     const handlePasswordChange = async (e) => {
         e.preventDefault();
         setPasswordMessage(null);
@@ -279,19 +257,7 @@ const UserDashboard = () => {
     const handleDeleteAccount = async () => {
         if (!window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) return;
 
-        try {
-            const response = await axios.delete(`${CONFIG.API_BASE_URL}/profile`);
-
-            if (response.status === 200) {
-                logout();
-                navigate('/');
-            } else {
-                alert(response.data.msg || 'Failed to delete account');
-            }
-        } catch (err) {
-            console.error('Error deleting account:', err);
-            alert('An error occurred.');
-        }
+        alert('Account deletion is not available from this screen.');
     };
 
     const handleOpenReview = (booking) => {
@@ -551,7 +517,7 @@ const UserDashboard = () => {
 
                     {spendingData.length > 0 && (
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
-                            <h3 className="text-lg font-bold text-[#0B1C3E] mb-4">Spending Breakdown by Package Type</h3>
+                            <h3 className="text-lg font-bold text-[#0B1C3E] mb-4">Estimated Value by Package Type</h3>
                             <div className="h-64 w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
@@ -601,17 +567,6 @@ const UserDashboard = () => {
                                             }`}>
                                                 {booking.status || 'Pending'}
                                             </span>
-                                            {booking.status === 'Confirmed' && (
-                                                <button
-                                                    onClick={() => handleDownloadReceipt(booking.id || booking._id)}
-                                                    className="text-xs text-[#0B1C3E] hover:text-[#D4AF37] font-medium underline flex items-center gap-1"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                                    </svg>
-                                                    Receipt
-                                                </button>
-                                            )}
                                             {booking.status === 'Confirmed' && new Date(booking.travelDate) < new Date() && (
                                                 hasReviewed ? (
                                                     <span className="text-xs text-gray-500 font-medium flex items-center gap-1">

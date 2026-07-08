@@ -2,6 +2,14 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../db');
 const auth = require('../middleware/auth');
+const {
+    isNonEmptyString,
+    sendValidationError,
+    toPositiveInteger,
+    toTrimmedString,
+} = require('../utils/validation');
+
+const ALLOWED_CONTENT_TYPES = ['privacy', 'terms'];
 
 // @route   GET api/content/:type
 // @desc    Get privacy or terms content
@@ -10,8 +18,8 @@ router.get('/:type', async (req, res) => {
     try {
         const { type } = req.params;
         
-        if (!['privacy', 'terms'].includes(type)) {
-            return res.status(400).json({ msg: 'Invalid content type' });
+        if (!ALLOWED_CONTENT_TYPES.includes(type)) {
+            return sendValidationError(res, 'Invalid content type.');
         }
 
         const result = await prisma.siteContent.findUnique({
@@ -34,19 +42,28 @@ router.post('/:type', auth, async (req, res) => {
         const { type } = req.params;
         const { content } = req.body;
 
-        if (!['privacy', 'terms'].includes(type)) {
-            return res.status(400).json({ msg: 'Invalid content type' });
+        if (!ALLOWED_CONTENT_TYPES.includes(type)) {
+            return sendValidationError(res, 'Invalid content type.');
         }
 
-        const requestor = await prisma.user.findUnique({ where: { id: req.user.id } });
+        if (!isNonEmptyString(content)) {
+            return sendValidationError(res, 'Content is required.');
+        }
+
+        const requestorId = toPositiveInteger(req.user.id);
+        if (requestorId === null) {
+            return sendValidationError(res, 'Invalid user id.');
+        }
+
+        const requestor = await prisma.user.findUnique({ where: { id: requestorId } });
         if (!requestor || requestor.role !== 'admin') {
              return res.status(403).json({ msg: 'Access denied. Admin only.' });
         }
 
         const result = await prisma.siteContent.upsert({
             where: { key: type },
-            update: { content, updatedAt: new Date() },
-            create: { key: type, content }
+            update: { content: toTrimmedString(content), updatedAt: new Date() },
+            create: { key: type, content: toTrimmedString(content) }
         });
         
         res.json(result);

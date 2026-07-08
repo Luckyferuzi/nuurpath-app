@@ -5,6 +5,8 @@ import { useAuth } from '../contexts/AuthContext';
 const AdminRoute = () => {
     const auth = useAuth();
     const { user, isAuthenticated, loading } = auth || {};
+    const role = String(user?.role || '').toLowerCase();
+    const allowedRoles = new Set(['admin', 'manager']);
 
     if (loading) {
         return (
@@ -14,7 +16,7 @@ const AdminRoute = () => {
         );
     }
 
-    if (isAuthenticated && user?.role === 'admin') {
+    if (isAuthenticated && allowedRoles.has(role)) {
         return <Outlet />;
     }
 

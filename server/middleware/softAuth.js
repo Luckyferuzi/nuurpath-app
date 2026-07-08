@@ -1,21 +1,21 @@
-const jwt = require('jsonwebtoken');
+const env = require('../config/env');
+const auth = require('./auth');
 
-module.exports = function (req, res, next) {
-    // Get token from header
-    const token = req.header('x-auth-token');
+async function softAuth(req, res, next) {
+  const token = auth.getTokenFromRequest(req);
 
-    // If no token, just continue as a guest
-    if (!token) {
-        return next();
-    }
+  if (!token || !env.JWT_SECRET) {
+    return next();
+  }
 
-    // Verify token
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
-        req.user = decoded.user;
-        next();
-    } catch (err) {
-        // If token is invalid, we still continue as a guest
-        next();
-    }
-};
+  try {
+    req.user = await auth.getVerifiedUserFromToken(token);
+  } catch (err) {
+    // Optional auth should never block guest flows.
+  }
+
+  return next();
+}
+
+module.exports = softAuth;
+module.exports.softAuth = softAuth;

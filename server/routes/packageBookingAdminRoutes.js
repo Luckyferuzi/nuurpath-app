@@ -3,16 +3,27 @@ const router = express.Router();
 const prisma = require('../db');
 const auth = require('../middleware/auth');
 const adminAuth = require('../middleware/adminAuth');
-const { check, validationResult } = require('express-validator');
 const { generateReceiptDoc } = require('../utils/receiptGenerator');
 const { sendBookingConfirmationEmail } = require('../utils/emailService');
+const {
+  isNonEmptyString,
+  isValidDate,
+  isValidEmail,
+  normalizeStatus,
+  sendInvalidId,
+  sendValidationError,
+  toPositiveInteger,
+  toTrimmedString,
+} = require('../utils/validation');
+
+const BOOKING_STATUSES = ['Pending', 'Confirmed', 'Cancelled'];
 
 // Note: These routes should be protected by admin middleware in a real application.
 
 // @route   GET /api/package-bookings
 // @desc    Get ALL Package Bookings (for Admin)
-// @access  Public (for now)
-router.get('/', async (req, res) => {
+// @access  Private (Admin/Manager)
+router.get('/', auth, adminAuth, async (req, res) => {
   try {
     const bookings = await prisma.packageBooking.findMany({
       orderBy: { createdAt: 'desc' },
@@ -31,22 +42,54 @@ router.get('/', async (req, res) => {
 // @route   POST /api/package-bookings
 // @desc    Create a booking (Admin)
 // @access  Private (Admin)
-router.post('/', [auth, adminAuth, [
-    check('packageId', 'Package is required').not().isEmpty(),
-    check('contactName', 'Name is required').not().isEmpty(),
-    check('contactEmail', 'Email is required').isEmail()
-]], async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-    }
-
+router.post('/', auth, adminAuth, async (req, res) => {
     try {
         const { packageId, contactName, contactEmail, contactPhone, travelDate, passengers, status } = req.body;
+        const normalizedPackageId = toPositiveInteger(packageId);
+        if (normalizedPackageId === null) {
+            return sendValidationError(res, 'Package id must be a positive integer.');
+        }
+
+        if (!isNonEmptyString(contactName)) {
+            return sendValidationError(res, 'Contact name is required.');
+        }
+
+        if (!isValidEmail(contactEmail)) {
+            return sendValidationError(res, 'A valid contact email is required.');
+        }
+
+        if (!isValidDate(travelDate)) {
+            return sendValidationError(res, 'A valid travel date is required.');
+        }
+
+        const passengerCount = toPositiveInteger(passengers);
+        if (passengerCount === null) {
+            return sendValidationError(res, 'Passengers must be a positive integer.');
+        }
+
+        const normalizedStatus = status === undefined || status === null || status === ''
+            ? 'Pending'
+            : normalizeStatus(status, BOOKING_STATUSES);
+
+        if (!normalizedStatus) {
+            return sendValidationError(res, 'Status must be Pending, Confirmed, or Cancelled.');
+        }
 
         // Try to find user by email to link, otherwise link to admin (req.user.id)
         // In a real app, you might create a new user here.
-        let userId = req.user.id;
+        let userId = toPositiveInteger(req.user.id);
+        if (userId === null) {
+            return sendValidationError(res, 'Invalid user id.');
+        }
+
+        const selectedPackage = await prisma.package.findUnique({
+            where: { id: normalizedPackageId },
+            select: { id: true },
+        });
+        if (!selectedPackage) {
+            return sendValidationError(res, 'Selected package does not exist.');
+        }
+
         const existingUser = await prisma.user.findUnique({ where: { email: contactEmail } });
         if (existingUser) {
             userId = existingUser.id;
@@ -55,13 +98,13 @@ router.post('/', [auth, adminAuth, [
         const newBooking = await prisma.packageBooking.create({
             data: {
                 userId,
-                packageId: parseInt(packageId),
-                contactName,
-                contactEmail,
-                contactPhone: contactPhone || '',
+                packageId: normalizedPackageId,
+                contactName: toTrimmedString(contactName),
+                contactEmail: toTrimmedString(contactEmail),
+                contactPhone: typeof contactPhone === 'string' ? contactPhone.trim() : '',
                 travelDate: new Date(travelDate),
-                passengers: parseInt(passengers),
-                status: status || 'Pending'
+                passengers: passengerCount,
+                status: normalizedStatus
             },
             include: { user: true, package: true }
         });
@@ -74,25 +117,42 @@ router.post('/', [auth, adminAuth, [
 
 // @route   PUT /api/package-bookings/:id
 // @desc    Update Booking Status (for Admin)
-// @access  Public (for now)
-router.put('/:id', async (req, res) => {
+// @access  Private (Admin/Manager)
+router.put('/:id', auth, adminAuth, async (req, res) => {
   const { status } = req.body;
   try {
+    const id = toPositiveInteger(req.params.id);
+    if (id === null) {
+      return sendInvalidId(res);
+    }
+
+    const normalizedStatus = normalizeStatus(status, BOOKING_STATUSES);
+    if (!normalizedStatus) {
+      return sendValidationError(res, 'Status must be Pending, Confirmed, or Cancelled.');
+    }
+
     const updated = await prisma.packageBooking.update({
-      where: { id: parseInt(req.params.id) },
-      data: { status },
+      where: { id },
+      data: { status: normalizedStatus },
       include: { package: true, user: true }
     });
 
     // If status is Confirmed, generate receipt and send email
-    if (status === 'Confirmed') {
+    if (normalizedStatus === 'Confirmed') {
         try {
             const doc = generateReceiptDoc(updated);
             const buffers = [];
             doc.on('data', buffers.push.bind(buffers));
             doc.on('end', async () => {
-                const pdfBuffer = Buffer.concat(buffers);
-                await sendBookingConfirmationEmail(updated, pdfBuffer);
+                try {
+                    const pdfBuffer = Buffer.concat(buffers);
+                    await sendBookingConfirmationEmail(updated, pdfBuffer);
+                } catch (emailErr) {
+                    console.error('Failed to send booking confirmation email:', emailErr);
+                }
+            });
+            doc.on('error', (pdfError) => {
+                console.error('Failed to generate booking confirmation document:', pdfError);
             });
             doc.end();
         } catch (emailErr) {
@@ -103,6 +163,27 @@ router.put('/:id', async (req, res) => {
     res.json(updated);
   } catch (err) {
     console.error("Error updating booking status:", err);
+    res.status(500).send('Server Error');
+  }
+});
+
+// @route   DELETE /api/package-bookings/:id
+// @desc    Delete a package booking (for Admin)
+// @access  Private (Admin/Manager)
+router.delete('/:id', auth, adminAuth, async (req, res) => {
+  try {
+    const id = toPositiveInteger(req.params.id);
+    if (id === null) {
+      return sendInvalidId(res);
+    }
+
+    await prisma.packageBooking.delete({
+      where: { id }
+    });
+
+    res.json({ msg: 'Booking deleted successfully' });
+  } catch (err) {
+    console.error("Error deleting package booking:", err);
     res.status(500).send('Server Error');
   }
 });

@@ -7,10 +7,17 @@ const multer = require('multer');
 const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
-    if (file.mimetype === 'application/pdf' || file.mimetype.startsWith('image/')) {
+    const allowedMimeTypes = new Set([
+        'application/pdf',
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+    ]);
+
+    if (allowedMimeTypes.has(file.mimetype)) {
         cb(null, true);
     } else {
-        cb(new Error('Only PDF and image files are allowed'), false);
+        cb(new Error('Invalid file type. Only PDF, JPEG, PNG, and WebP files are allowed.'), false);
     }
 };
 
@@ -22,7 +29,11 @@ const upload = multer({ storage: storage, limits: { fileSize: 5 * 1024 * 1024 },
 router.post('/', (req, res, next) => {
     upload.single('attachment')(req, res, (err) => {
         if (err) {
-            return res.status(400).json({ msg: err.message });
+            return res.status(400).json({
+                success: false,
+                message: err.message,
+                msg: err.message,
+            });
         }
         next();
     });

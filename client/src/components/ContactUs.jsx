@@ -3,6 +3,8 @@ import ReCAPTCHA from 'react-google-recaptcha';
 import axios from 'axios'; // Import axios
 import { CONFIG } from '../config';
 
+const RECAPTCHA_SITE_KEY = (process.env.REACT_APP_RECAPTCHA_SITE_KEY || '').trim();
+
 const ContactUs = () => {
   // ... (state variables remain the same)
   const [formData, setFormData] = useState({
@@ -43,6 +45,7 @@ const ContactUs = () => {
 
   const { name, email, subject, message } = formData;
   const MAX_MESSAGE_LENGTH = 1000;
+  const isRecaptchaConfigured = Boolean(RECAPTCHA_SITE_KEY);
 
   useEffect(() => {
     if (status.success) {
@@ -100,6 +103,11 @@ const ContactUs = () => {
 
     if (!agreedToTerms) {
       setStatus({ loading: false, error: 'Please agree to the Terms and Conditions.', success: false });
+      return;
+    }
+
+    if (!isRecaptchaConfigured) {
+      setStatus({ loading: false, error: 'Contact form is temporarily unavailable. Please try again later.', success: false });
       return;
     }
 
@@ -271,12 +279,17 @@ const ContactUs = () => {
         </div>
 
         <div style={{ marginBottom: '20px' }}>
-          {isMounted && (
+          {isMounted && isRecaptchaConfigured && (
             <ReCAPTCHA
               ref={recaptchaRef}
-              sitekey={process.env.REACT_APP_RECAPTCHA_SITE_KEY || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"}
+              sitekey={RECAPTCHA_SITE_KEY}
               onChange={(token) => setCaptchaToken(token)}
             />
+          )}
+          {isMounted && !isRecaptchaConfigured && (
+            <div style={{ padding: '12px', borderRadius: '4px', backgroundColor: '#fff3cd', color: '#856404', border: '1px solid #ffeeba' }}>
+              reCAPTCHA is currently unavailable. Please try again later.
+            </div>
           )}
         </div>
 

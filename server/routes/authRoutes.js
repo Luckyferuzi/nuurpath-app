@@ -5,10 +5,27 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { check, validationResult } = require('express-validator');
 const prisma = require('../db');
+const env = require('../config/env');
 const auth = require('../middleware/auth');
+const {
+    forgotPasswordLimiter,
+    loginLimiter,
+    registerLimiter,
+    resendVerificationLimiter,
+} = require('../middleware/rateLimitMiddleware');
 const { OAuth2Client } = require('google-auth-library');
 const { sendEmail } = require('../utils/emailService');
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+function createAuthPayload(user) {
+    return {
+        user: {
+            id: user.id,
+            role: String(user.role || 'user').toLowerCase(),
+            email: user.email
+        }
+    };
+}
 
 // @route   GET api/auth/me
 // @desc    Get current user
@@ -51,6 +68,7 @@ router.get('/me', auth, async (req, res) => {
 // @access  Public
 router.post(
     '/login',
+    loginLimiter,
     [
         check('email', 'Please include a valid email').isEmail(),
         check('password', 'Password is required').exists()
@@ -86,18 +104,17 @@ router.post(
                 return res.status(400).json({ msg: 'Invalid Credentials' });
             }
 
-            const payload = {
-                user: {
-                    id: user.id,
-                    role: user.role
-                }
-            };
+            const payload = createAuthPayload(user);
 
             const expiresIn = rememberMe ? '30d' : '1d';
 
+            if (!env.JWT_SECRET) {
+                return res.status(500).json({ msg: 'Server authentication is not configured' });
+            }
+
             jwt.sign(
                 payload,
-                process.env.JWT_SECRET || 'secret',
+                env.JWT_SECRET,
                 { expiresIn },
                 (err, token) => {
                     if (err) throw err;
@@ -116,6 +133,7 @@ router.post(
 // @access  Public
 router.post(
     '/register',
+    registerLimiter,
     [
         check('name', 'Name is required').not().isEmpty(),
         check('email', 'Please include a valid email').isEmail(),
@@ -152,7 +170,7 @@ router.post(
                 }
             });
 
-            const verificationUrl = `${process.env.CLIENT_URL || 'http://localhost:3000'}/verify-email/${verificationToken}`;
+            const verificationUrl = `${env.CLIENT_URL}/verify-email/${verificationToken}`;
             
             const emailHtml = `
                 <h2>Verify Your Email</h2>
@@ -160,7 +178,11 @@ router.post(
                 <a href="${verificationUrl}">${verificationUrl}</a>
             `;
 
-            await sendEmail(email, 'Verify your email', emailHtml);
+            await sendEmail({
+                to: email,
+                subject: 'Verify your email',
+                html: emailHtml,
+            });
 
             res.json({ msg: 'Registration successful! Please check your email to verify your account.' });
 
@@ -174,7 +196,18 @@ router.post(
 // @route   POST api/auth/resend-verification
 // @desc    Resend verification email
 // @access  Public
-router.post('/resend-verification', async (req, res) => {
+router.post(
+    '/resend-verification',
+    resendVerificationLimiter,
+    [
+        check('email', 'Please include a valid email').isEmail()
+    ],
+    async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+
     const { email } = req.body;
     try {
         const user = await prisma.user.findUnique({
@@ -196,7 +229,7 @@ router.post('/resend-verification', async (req, res) => {
             data: { verificationToken }
         });
 
-        const verificationUrl = `${process.env.CLIENT_URL || 'http://localhost:3000'}/verify-email/${verificationToken}`;
+        const verificationUrl = `${env.CLIENT_URL}/verify-email/${verificationToken}`;
         
         const emailHtml = `
             <h2>Verify Your Email</h2>
@@ -204,7 +237,11 @@ router.post('/resend-verification', async (req, res) => {
             <a href="${verificationUrl}">${verificationUrl}</a>
         `;
 
-        await sendEmail(email, 'Verify your email', emailHtml);
+        await sendEmail({
+            to: email,
+            subject: 'Verify your email',
+            html: emailHtml,
+        });
 
         res.json({ msg: 'Verification email sent!' });
     } catch (err) {
@@ -281,16 +318,15 @@ router.post('/google', async (req, res) => {
             });
         }
 
-        const payload = {
-            user: {
-                id: user.id,
-                role: user.role
-            }
-        };
+        const payload = createAuthPayload(user);
+
+        if (!env.JWT_SECRET) {
+            return res.status(500).json({ msg: 'Server authentication is not configured' });
+        }
 
         jwt.sign(
             payload,
-            process.env.JWT_SECRET || 'secret',
+            env.JWT_SECRET,
             { expiresIn: '5d' },
             (err, token) => {
                 if (err) throw err;
@@ -306,7 +342,14 @@ router.post('/google', async (req, res) => {
 // @route   POST api/auth/forgot-password
 // @desc    Send password reset email
 // @access  Public
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', forgotPasswordLimiter, [
+    check('email', 'Please include a valid email').isEmail()
+], async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+
     const { email } = req.body;
     try {
         const user = await prisma.user.findUnique({ where: { email } });
@@ -325,7 +368,7 @@ router.post('/forgot-password', async (req, res) => {
             }
         });
 
-        const resetUrl = `${process.env.CLIENT_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
+        const resetUrl = `${env.CLIENT_URL}/reset-password/${resetToken}`;
 
         const emailHtml = `
             <h2>Password Reset Request</h2>
@@ -334,7 +377,11 @@ router.post('/forgot-password', async (req, res) => {
             <p>If you did not request this, please ignore this email.</p>
         `;
 
-        await sendEmail(user.email, 'Password Reset Request', emailHtml);
+        await sendEmail({
+            to: user.email,
+            subject: 'Password Reset Request',
+            html: emailHtml,
+        });
 
         res.json({ msg: 'Email sent' });
     } catch (err) {

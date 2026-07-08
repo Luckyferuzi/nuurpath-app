@@ -6,6 +6,8 @@ import axios from 'axios';
 import { CONFIG } from '../config';
 import { useAuth } from '../contexts/AuthContext.jsx';
 
+const RECAPTCHA_SITE_KEY = (process.env.REACT_APP_RECAPTCHA_SITE_KEY || '').trim();
+
 const DateCustomInput = forwardRef(({ value, onClick, onChange, ...props }, ref) => (
   <input
     style={{ width: '100%', padding: '8px', marginBottom: '15px', borderRadius: '4px', border: '1px solid #ccc', boxSizing: 'border-box' }}
@@ -32,6 +34,7 @@ const PrivateConsultationBooking = () => {
   const [captchaToken, setCaptchaToken] = useState(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const recaptchaRef = useRef(null);
+  const isRecaptchaConfigured = Boolean(RECAPTCHA_SITE_KEY);
 
   useEffect(() => {
     if (user) {
@@ -56,6 +59,11 @@ const PrivateConsultationBooking = () => {
 
     if (!agreedToTerms) {
       setStatus({ loading: false, error: 'Please agree to the Terms and Conditions.', success: false });
+      return;
+    }
+
+    if (!isRecaptchaConfigured) {
+      setStatus({ loading: false, error: 'Booking is temporarily unavailable. Please try again later.', success: false });
       return;
     }
 
@@ -246,11 +254,17 @@ const PrivateConsultationBooking = () => {
         </div>
 
         <div style={{ marginBottom: '20px' }}>
-          <ReCAPTCHA
-            ref={recaptchaRef}
-            sitekey={process.env.REACT_APP_RECAPTCHA_SITE_KEY || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"}
-            onChange={(token) => setCaptchaToken(token)}
-          />
+          {isRecaptchaConfigured ? (
+            <ReCAPTCHA
+              ref={recaptchaRef}
+              sitekey={RECAPTCHA_SITE_KEY}
+              onChange={(token) => setCaptchaToken(token)}
+            />
+          ) : (
+            <div style={{ padding: '12px', borderRadius: '4px', backgroundColor: '#fff3cd', color: '#856404', border: '1px solid #ffeeba' }}>
+              reCAPTCHA is currently unavailable. Please try again later.
+            </div>
+          )}
         </div>
 
         <button type="submit" style={{ ...buttonStyle, opacity: status.loading ? 0.7 : 1 }} disabled={status.loading}>

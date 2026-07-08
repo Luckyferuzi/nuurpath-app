@@ -1,48 +1,60 @@
+const path = require('path');
+const dotenv = require('dotenv');
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
+
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../.env'), override: false });
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Starting seeding...');
+  console.log('Starting seeding...');
 
-  // 1. Create Admin User
-  // Default password is 'password123'
-  const hashedPassword = await bcrypt.hash('password123', 10);
-  
+  const adminEmail = process.env.ADMIN_BOOTSTRAP_EMAIL || 'admin@example.com';
+  const adminPassword = process.env.ADMIN_BOOTSTRAP_PASSWORD;
+  const demoUserEmail = process.env.DEMO_USER_EMAIL || 'user@example.com';
+  const demoUserPassword = process.env.DEMO_USER_PASSWORD || adminPassword;
+
+  if (!adminPassword || String(adminPassword).startsWith('replace-with-')) {
+    throw new Error('Set ADMIN_BOOTSTRAP_PASSWORD to a real value before running prisma/seed.js.');
+  }
+
+  if (!demoUserPassword || String(demoUserPassword).startsWith('replace-with-')) {
+    throw new Error('Set DEMO_USER_PASSWORD to a real value before running prisma/seed.js.');
+  }
+
+  const hashedAdminPassword = await bcrypt.hash(adminPassword, 10);
+  const hashedDemoUserPassword = await bcrypt.hash(demoUserPassword, 10);
+
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@nuurpath.com' },
+    where: { email: adminEmail },
     update: {},
     create: {
       name: 'Admin User',
-      email: 'admin@nuurpath.com',
-      password: hashedPassword,
+      email: adminEmail,
+      password: hashedAdminPassword,
       role: 'admin',
       emailSubscriptions: true,
       isVerified: true
     },
   });
-  
-  console.log(`👤 Admin user created: ${admin.email} (Password: password123)`);
 
-  // Create Regular User
+  console.log(`Admin user created: ${admin.email} (Password sourced from ADMIN_BOOTSTRAP_PASSWORD)`);
+
   const user = await prisma.user.upsert({
-    where: { email: 'user@example.com' },
+    where: { email: demoUserEmail },
     update: {},
     create: {
       name: 'Guest Traveler',
-      email: 'user@example.com',
-      password: hashedPassword,
+      email: demoUserEmail,
+      password: hashedDemoUserPassword,
       role: 'user'
     },
   });
 
-  // Clear existing packages to prevent duplicates
-  // Note: We must delete dependent data (like bookings) first if they exist, 
-  // but for a fresh seed, deleting packages is usually enough if cascading is set up or DB is empty.
   await prisma.package.deleteMany({});
 
-  // 2. Create Packages
   const packages = [
     {
         title: 'Premium Umrah Holiday Package 24th Dec 2025 - 3rd Jan 2026',
@@ -81,28 +93,27 @@ async function main() {
       data: pkg
     });
   }
-  
-  console.log(`📦 ${packages.length} packages created.`);
 
-  // 3. Create Appointment
+  console.log(`${packages.length} packages created.`);
+
   await prisma.appointment.create({
     data: {
         userId: user.id,
         serviceType: 'Private Consultation',
-        appointmentDate: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000), // 1 week from now
+        appointmentDate: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000),
         notes: 'Interested in Hajj packages.',
         contactName: 'Guest Traveler',
         contactPhone: '+1234567890'
     }
   });
-  console.log('✅ Sample appointment created.');
+  console.log('Sample appointment created.');
 
-  console.log('✅ Seeding finished.');
+  console.log('Seeding finished.');
 }
 
 main()
-  .catch((e) => {
-    console.error(e);
+  .catch((error) => {
+    console.error(error);
     process.exit(1);
   })
   .finally(async () => {

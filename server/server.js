@@ -1,146 +1,193 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const dotenv = require('dotenv');
-const path = require('path');
+const env = require('./config/env');
 const prisma = require('./db');
 const { Server } = require('socket.io');
-const multer = require('multer');
-const fs = require('fs');
-
-
-// Load environment variables
-// Try loading from parent directory (root) first, as that's where .env usually is
-dotenv.config({ path: path.join(__dirname, '../.env') });
+const asyncHandler = require('./middleware/asyncHandler');
+const auth = require('./middleware/auth');
+const adminAuth = require('./middleware/adminAuth');
+const errorHandler = require('./middleware/errorHandler');
+const requestId = require('./middleware/requestId');
+const logger = require('./utils/logger');
+const {
+    bookingDocumentUpload,
+    chatUpload,
+    packageImageUpload,
+    publicUploadRoot,
+    runUpload,
+    sendUploadError,
+    toProtectedBookingDocumentUrl,
+    toPublicUploadUrl,
+} = require('./utils/upload');
 
 const app = express();
+const allowedOriginSet = new Set(env.ALLOWED_ORIGINS);
+const apiBaseUrl = env.API_BASE_URL.replace(/\/+$/, '');
+const apiSocketUrl = apiBaseUrl.startsWith('https://')
+    ? `wss://${apiBaseUrl.slice('https://'.length)}`
+    : apiBaseUrl.startsWith('http://')
+        ? `ws://${apiBaseUrl.slice('http://'.length)}`
+        : apiBaseUrl;
 
-// Middleware
+function normalizeOrigin(origin) {
+    return String(origin || '').trim().replace(/\/+$/, '');
+}
+
+function getRequestLogLevel(statusCode) {
+    if (statusCode >= 500) {
+        return 'error';
+    }
+
+    if (statusCode >= 400) {
+        return 'warn';
+    }
+
+    return 'info';
+}
+
+function handleFatalError(type, error) {
+    logger.error(type, { error });
+    process.exit(1);
+}
+
+const corsOptions = {
+    origin(origin, callback) {
+        if (!origin) {
+            return callback(null, true);
+        }
+
+        const normalizedOrigin = normalizeOrigin(origin);
+
+        if (allowedOriginSet.has(normalizedOrigin)) {
+            return callback(null, true);
+        }
+
+        const error = new Error(`Origin not allowed by CORS: ${normalizedOrigin}`);
+        error.statusCode = 403;
+        error.code = 'CORS_ORIGIN_NOT_ALLOWED';
+        error.isOperational = true;
+
+        return callback(error);
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token', 'X-Requested-With'],
+};
+
+app.use(requestId);
 app.use(helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "https://www.google.com", "https://www.gstatic.com"],
-            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-            imgSrc: ["'self'", "data:", "https:", "blob:"],
-            frameSrc: ["'self'", "https://www.google.com", "https://maps.google.com"],
-            connectSrc: ["'self'", "https://api.openweathermap.org", "https://maps.googleapis.com", "https://geocoding-api.open-meteo.com", "https://api.open-meteo.com"],
+            scriptSrc: ["'self'", "'unsafe-inline'", 'https://www.google.com', 'https://www.gstatic.com'],
+            styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+            imgSrc: ["'self'", 'data:', 'https:', 'blob:'],
+            frameSrc: ["'self'", 'https://www.google.com', 'https://maps.google.com'],
+            connectSrc: ["'self'", apiBaseUrl, apiSocketUrl, 'https://api.openweathermap.org', 'https://maps.googleapis.com', 'https://geocoding-api.open-meteo.com', 'https://api.open-meteo.com'],
         },
     },
 }));
-app.use(cors());
+app.use((req, res, next) => {
+    const start = Date.now();
+
+    res.on('finish', () => {
+        if (req.path === '/health' && res.statusCode < 400) {
+            return;
+        }
+
+        const logLevel = getRequestLogLevel(res.statusCode);
+        logger[logLevel]('request_completed', {
+            requestId: req.id,
+            method: req.method,
+            path: req.originalUrl,
+            statusCode: res.statusCode,
+            durationMs: Date.now() - start,
+            userId: req.user?.id,
+        });
+    });
+
+    next();
+});
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // Support form submissions
+app.use(express.urlencoded({ extended: true }));
 
-// Serve uploaded files
-app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+app.use('/uploads', express.static(publicUploadRoot));
 
-// Configure Multer for chat uploads
-const chatUploadDir = path.join(__dirname, 'public/uploads/chat');
-if (!fs.existsSync(chatUploadDir)) {
-    fs.mkdirSync(chatUploadDir, { recursive: true });
-}
+const PORT = env.PORT;
 
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, chatUploadDir);
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + '-' + file.originalname);
-    }
+process.on('uncaughtException', (error) => {
+    handleFatalError('uncaught_exception', error);
 });
 
-const upload = multer({ storage: storage });
-
-// Configure Multer for package itinerary uploads
-const packageUploadDir = path.join(__dirname, 'public/uploads/packages');
-if (!fs.existsSync(packageUploadDir)) {
-    fs.mkdirSync(packageUploadDir, { recursive: true });
-}
-
-const packageStorage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, packageUploadDir);
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + '-' + file.originalname);
-    }
-});
-
-const packageUpload = multer({ storage: packageStorage });
-
-// Configure Multer for booking documents (passports, etc.)
-const bookingUploadDir = path.join(__dirname, 'public/uploads/bookings');
-if (!fs.existsSync(bookingUploadDir)) {
-    fs.mkdirSync(bookingUploadDir, { recursive: true });
-}
-
-const bookingStorage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, bookingUploadDir);
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + '-' + file.originalname);
-    }
-});
-
-const bookingUpload = multer({ storage: bookingStorage });
-
-const PORT = process.env.PORT || 5001;
-
-// Handle uncaught exceptions to prevent silent crashes
-process.on('uncaughtException', (err) => {
-    console.error('UNCAUGHT EXCEPTION! 💥', err);
-    // process.exit(1); // Optional: restart via PM2/Docker
-});
-
-process.on('unhandledRejection', (err) => {
-    console.error('UNHANDLED REJECTION! 💥', err);
-    // process.exit(1);
+process.on('unhandledRejection', (error) => {
+    handleFatalError('unhandled_rejection', error);
 });
 
 async function startServer() {
-    // Connect to Database
-    const dbUrl = process.env.DATABASE_URL || "";
-    console.log(`🔌 Connecting to database... (URL length: ${dbUrl.length})`);
+    const dbUrl = env.DATABASE_URL || '';
+    logger.info('database_connecting', {
+        databaseUrlConfigured: Boolean(dbUrl),
+        databaseUrlLength: dbUrl.length,
+    });
 
     try {
         const url = new URL(dbUrl);
-        console.log(`👤 Database User: ${url.username}`);
-    } catch (e) {
-        console.log('⚠️ Could not parse DATABASE_URL to extract username');
+        logger.info('database_connection_target', {
+            databaseUser: url.username || undefined,
+        });
+    } catch (error) {
+        logger.warn('database_url_parse_failed', {
+            reason: error.message,
+        });
     }
 
     try {
         await prisma.$connect();
-        console.log('✅ Database connected successfully.');
+        logger.info('database_connected');
     } catch (error) {
-        console.error('❌ Database connection failed.');
-        console.error('   Error Code:', error.code);
-        console.error('   Message:', error.message);
-        console.error('   Tip: Ensure your DATABASE_URL in .env includes "?schema=public"');
+        logger.error('database_connection_failed', {
+            code: error.code,
+            message: error.message,
+            tip: 'Ensure your DATABASE_URL in .env includes "?schema=public"',
+        });
         process.exit(1);
     }
 
-    // Health Check Endpoint
-    app.get('/health', async (req, res) => {
+    app.get('/health', asyncHandler(async (req, res) => {
         try {
             await prisma.$queryRaw`SELECT 1`;
             res.status(200).json({ status: 'UP', database: 'connected', timestamp: new Date() });
         } catch (error) {
-            res.status(503).json({ status: 'DOWN', database: 'disconnected', error: error.message, timestamp: new Date() });
+            logger.warn('health_check_failed', { error });
+
+            const responseBody = {
+                status: 'DOWN',
+                database: 'disconnected',
+                timestamp: new Date(),
+            };
+
+            if (!env.isProduction) {
+                responseBody.error = error.message;
+            }
+
+            res.status(503).json(responseBody);
         }
+    }));
+
+    app.get('/', (req, res) => {
+        res.json({
+            service: 'NuurPath API',
+            status: 'running',
+            domain: 'https://api.nuurpath.com'
+        });
     });
 
-    // Define Routes
     app.use('/api', require('./routes/mainRoutes'));
     app.use('/api/package-bookings', require('./routes/packageBookingAdminRoutes'));
     app.use('/api/auth', require('./routes/authRoutes'));
-    // app.use('/api/auth', require('./routes/passwordResetRoutes'));
     app.use('/api/users', require('./routes/users'));
     app.use('/api/services', require('./routes/serviceRoutes'));
     app.use('/api/content', require('./routes/content'));
@@ -158,139 +205,162 @@ async function startServer() {
     app.use('/api/itinerary', require('./routes/itineraryRoutes'));
     app.use('/api/wishlist', require('./routes/wishlistRoutes'));
 
-    app.post('/api/chat/upload', upload.single('file'), (req, res) => {
-        if (!req.file) {
-            return res.status(400).json({ message: 'No file uploaded' });
+    app.post('/api/chat/upload', auth, asyncHandler(async (req, res) => {
+        try {
+            await runUpload(chatUpload.single('file'), req, res);
+        } catch (error) {
+            return sendUploadError(res, error, 'File too large. Maximum size allowed is 10 MB.');
         }
-        // Return the URL to the file
-        const fileUrl = `/uploads/chat/${req.file.filename}`;
-        res.json({ 
-            url: fileUrl, 
-            name: req.file.originalname, 
-            type: req.file.mimetype 
+
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'No file uploaded.', msg: 'No file uploaded.' });
+        }
+
+        const fileUrl = toPublicUploadUrl('chat', req.file.filename);
+
+        return res.json({
+            success: true,
+            url: fileUrl,
+            file: {
+                filename: req.file.filename,
+                url: fileUrl,
+                type: req.file.mimetype,
+            },
         });
-    });
+    }));
 
-    app.post('/api/packages/upload-image', packageUpload.single('image'), (req, res) => {
-        if (!req.file) {
-            return res.status(400).json({ message: 'No file uploaded' });
+    app.post('/api/packages/upload-image', auth, adminAuth, asyncHandler(async (req, res) => {
+        try {
+            await runUpload(packageImageUpload.single('image'), req, res);
+        } catch (error) {
+            return sendUploadError(res, error, 'File too large. Maximum size allowed is 5 MB.');
         }
-        const fileUrl = `/uploads/packages/${req.file.filename}`;
-        res.json({ url: fileUrl });
-    });
 
-    app.post('/api/bookings/upload', bookingUpload.single('passport'), (req, res) => {
         if (!req.file) {
-            return res.status(400).json({ message: 'No file uploaded' });
+            return res.status(400).json({ success: false, message: 'No file uploaded.', msg: 'No file uploaded.' });
         }
-        const fileUrl = `/uploads/bookings/${req.file.filename}`;
-        res.json({ url: fileUrl });
-    });
 
+        const fileUrl = toPublicUploadUrl('packages', req.file.filename);
 
-    // Serve Frontend in Production
-    if (process.env.NODE_ENV === 'production') {
-        app.use(express.static(path.join(__dirname, '../client/build')));
-
-        app.get('*', (req, res) => {
-            // Don't interfere with API routes or the pages router above
-            if (!req.path.startsWith('/api')) {
-                res.sendFile(path.resolve(__dirname, '../client/build', 'index.html'));
-            }
+        return res.json({
+            success: true,
+            url: fileUrl,
+            file: {
+                filename: req.file.filename,
+                url: fileUrl,
+            },
         });
-    }
+    }));
 
-    // Global Error handling middleware
-    app.use(require('./middleware/errorMiddleware'));
+    app.post('/api/bookings/upload', auth, asyncHandler(async (req, res) => {
+        try {
+            await runUpload(bookingDocumentUpload.single('passport'), req, res);
+        } catch (error) {
+            return sendUploadError(res, error, 'File too large. Maximum size allowed is 10 MB.');
+        }
+
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'No file uploaded.', msg: 'No file uploaded.' });
+        }
+
+        const protectedUrl = toProtectedBookingDocumentUrl(req.file.filename);
+
+        return res.json({
+            success: true,
+            url: protectedUrl,
+            file: {
+                filename: req.file.filename,
+                url: protectedUrl,
+                type: req.file.mimetype,
+            },
+        });
+    }));
+
+    app.use(errorHandler);
 
     const server = app.listen(PORT, '0.0.0.0', () => {
-        console.log(`🚀 Server running on port ${PORT}`);
-        console.log(`   Local: http://localhost:${PORT}`);
-        console.log(`   Health Check: http://localhost:${PORT}/api`);
-        console.log(`   System Status: http://localhost:${PORT}/health`);
+        logger.info('server_started', {
+            port: PORT,
+            localUrl: `http://localhost:${PORT}`,
+            apiHealthUrl: `http://localhost:${PORT}/api`,
+            systemStatusUrl: `http://localhost:${PORT}/health`,
+        });
     });
 
-    // Initialize Socket.IO
     const onlineUsers = new Map();
 
     const io = new Server(server, {
         cors: {
-            origin: process.env.CLIENT_URL || "http://localhost:3000",
-            methods: ["GET", "POST"]
-        }
+            origin: env.ALLOWED_ORIGINS,
+            methods: ['GET', 'POST'],
+        },
     });
-    
-    // Make io accessible to routes
+
     app.set('io', io);
 
-    io.on("connection", (socket) => {
-        console.log(`User Connected: ${socket.id}`);
+    io.on('connection', (socket) => {
+        logger.info('socket_connected', {
+            socketId: socket.id,
+        });
 
-        socket.on("register_user", (userData) => {
-            // Store user info with socket ID
-            // userData should include { name, email, role }
+        socket.on('register_user', (userData) => {
             const user = { ...userData, socketId: socket.id };
             onlineUsers.set(socket.id, user);
-            
-            // Join a room with their email for private notifications
+
             if (userData.email) {
                 socket.join(userData.email);
             }
 
-            // Broadcast updated user list to all clients
-            io.emit("active_users", Array.from(onlineUsers.values()));
+            io.emit('active_users', Array.from(onlineUsers.values()));
         });
 
-        socket.on("join_room", async (room) => {
+        socket.on('join_room', async (room) => {
             socket.join(room);
             try {
-                // Fetch last 50 messages for this room
                 const messages = await prisma.chatMessage.findMany({
                     where: { room },
                     orderBy: { createdAt: 'asc' },
-                    take: 50
+                    take: 50,
                 });
-                socket.emit("load_messages", messages);
+                socket.emit('load_messages', messages);
 
-                // If no messages exist, send a welcome message from the bot
                 if (messages.length === 0) {
                     const welcomeMsg = {
-                        room: room,
-                        author: "Support Bot",
-                        email: "bot@nuurpath.com",
-                        message: "Welcome to NuurPath Travels! How can we assist you today?",
-                        time: new Date().toISOString()
+                        room,
+                        author: 'Support Bot',
+                        email: 'bot@nuurpath.com',
+                        message: 'Welcome to NuurPath Travels! How can we assist you today?',
+                        time: new Date().toISOString(),
                     };
 
-                    // Save welcome message to database
                     await prisma.chatMessage.create({
-                        data: { ...welcomeMsg }
+                        data: { ...welcomeMsg },
                     });
 
-                    // Emit to the room so the user sees it immediately
-                    io.to(room).emit("receive_message", welcomeMsg);
+                    io.to(room).emit('receive_message', welcomeMsg);
                 }
-
-            } catch (err) {
-                console.error("Error fetching chat history:", err);
+            } catch (error) {
+                logger.error('chat_history_load_failed', {
+                    room,
+                    socketId: socket.id,
+                    error,
+                });
             }
         });
 
-        socket.on("typing", (data) => {
-            socket.to(data.room).emit("display_typing", data);
+        socket.on('typing', (data) => {
+            socket.to(data.room).emit('display_typing', data);
         });
 
-        socket.on("stop_typing", (data) => {
-            socket.to(data.room).emit("hide_typing", data);
+        socket.on('stop_typing', (data) => {
+            socket.to(data.room).emit('hide_typing', data);
         });
 
-        socket.on("send_message", async (data) => {
-            socket.to(data.room).emit("receive_message", data);
-            
-            // Persist message
+        socket.on('send_message', async (data) => {
+            socket.to(data.room).emit('receive_message', data);
+
             try {
-                // If it's a file message, ensure we have some text content for the DB
-                const messageContent = data.message || (data.file ? `Sent a file: ${data.file.name}` : "");
+                const messageContent = data.message || (data.file ? `Sent a file: ${data.file.name}` : '');
 
                 await prisma.chatMessage.create({
                     data: {
@@ -298,100 +368,113 @@ async function startServer() {
                         author: data.author,
                         email: data.email,
                         message: messageContent,
-                        time: data.time
-                    }
+                        time: data.time,
+                    },
                 });
 
-                // Automated Bot Responses
-                // Only reply if the sender is the customer (room owner) and not the bot itself
-                if (data.email === data.room && data.author !== "Support Bot") {
-                    const lowerMsg = (messageContent || "").toLowerCase();
+                if (data.email === data.room && data.author !== 'Support Bot') {
+                    const lowerMsg = (messageContent || '').toLowerCase();
                     let botResponseText = null;
 
-                    if (lowerMsg.includes("price") || lowerMsg.includes("cost")) {
-                        botResponseText = "Our packages vary in price. You can view details on the Packages page or contact us for a custom quote.";
-                    } else if (lowerMsg.includes("contact") || lowerMsg.includes("phone") || lowerMsg.includes("email")) {
-                        botResponseText = "You can reach us at +255 764 770 939 or via email at info@nuurpath.com.";
-                    } else if (lowerMsg.includes("location") || lowerMsg.includes("address") || lowerMsg.includes("office")) {
-                        botResponseText = "We are located at GSM PLAZA, 2nd Floor, Dar Es Salaam, Tanzania.";
-                    } else if (lowerMsg.includes("book") || lowerMsg.includes("reservation")) {
+                    if (lowerMsg.includes('price') || lowerMsg.includes('cost')) {
+                        botResponseText = 'Our packages vary in price. You can view details on the Packages page or contact us for a custom quote.';
+                    } else if (lowerMsg.includes('contact') || lowerMsg.includes('phone') || lowerMsg.includes('email')) {
+                        botResponseText = 'You can reach us at +255 764 770 939 or via email at info@nuurpath.com.';
+                    } else if (lowerMsg.includes('location') || lowerMsg.includes('address') || lowerMsg.includes('office')) {
+                        botResponseText = 'We are located at GSM PLAZA, 2nd Floor, Dar Es Salaam, Tanzania.';
+                    } else if (lowerMsg.includes('book') || lowerMsg.includes('reservation')) {
                         botResponseText = "You can book directly through our website by selecting a package, or let us know here what you're looking for!";
                     }
 
                     if (botResponseText) {
                         const botMsg = {
                             room: data.room,
-                            author: "Support Bot",
-                            email: "bot@nuurpath.com",
+                            author: 'Support Bot',
+                            email: 'bot@nuurpath.com',
                             message: botResponseText,
-                            time: new Date().toISOString()
+                            time: new Date().toISOString(),
                         };
 
-                        // Simulate typing delay
                         setTimeout(async () => {
-                            io.to(data.room).emit("receive_message", botMsg);
+                            io.to(data.room).emit('receive_message', botMsg);
                             try {
                                 await prisma.chatMessage.create({ data: botMsg });
-                            } catch (err) {
-                                console.error("Error saving bot response:", err);
+                            } catch (error) {
+                                logger.error('chat_bot_response_save_failed', {
+                                    room: data.room,
+                                    socketId: socket.id,
+                                    error,
+                                });
                             }
                         }, 1000);
                     }
                 }
-
-            } catch (err) {
-                console.error("Error saving message:", err);
+            } catch (error) {
+                logger.error('chat_message_save_failed', {
+                    room: data.room,
+                    socketId: socket.id,
+                    error,
+                });
             }
 
-            // Also send to specific recipient if provided (for notifications when they aren't in the room)
             if (data.recipientEmail) {
-                socket.to(data.recipientEmail).emit("receive_message", data);
+                socket.to(data.recipientEmail).emit('receive_message', data);
             }
         });
 
-        socket.on("mark_read", async (data) => {
+        socket.on('mark_read', async (data) => {
             const { room, readerEmail } = data;
             try {
-                // Update messages in DB where the current user is NOT the sender
                 await prisma.chatMessage.updateMany({
                     where: {
-                        room: room,
+                        room,
                         email: { not: readerEmail },
-                        read: false
+                        read: false,
                     },
-                    data: { read: true }
+                    data: { read: true },
                 });
-                
-                // Notify the room (specifically the sender) that messages are read
-                socket.to(room).emit("messages_read", { room });
-            } catch (err) {
-                console.error("Error marking messages read:", err);
+
+                socket.to(room).emit('messages_read', { room });
+            } catch (error) {
+                logger.error('chat_mark_read_failed', {
+                    room,
+                    socketId: socket.id,
+                    error,
+                });
             }
         });
 
-        socket.on("resolve_chat", async ({ room }) => {
+        socket.on('resolve_chat', async ({ room }) => {
             const systemMsg = {
                 room,
-                author: "System",
-                email: "system@nuurpath.com",
-                message: "This chat has been marked as resolved.",
-                time: new Date().toISOString()
+                author: 'System',
+                email: 'system@nuurpath.com',
+                message: 'This chat has been marked as resolved.',
+                time: new Date().toISOString(),
             };
 
             try {
                 await prisma.chatMessage.create({ data: systemMsg });
-                io.to(room).emit("receive_message", systemMsg);
-            } catch (err) {
-                console.error("Error resolving chat:", err);
+                io.to(room).emit('receive_message', systemMsg);
+            } catch (error) {
+                logger.error('chat_resolve_failed', {
+                    room,
+                    socketId: socket.id,
+                    error,
+                });
             }
         });
 
-        socket.on("disconnect", () => {
-            console.log("User Disconnected", socket.id);
+        socket.on('disconnect', () => {
+            logger.info('socket_disconnected', {
+                socketId: socket.id,
+            });
             onlineUsers.delete(socket.id);
-            io.emit("active_users", Array.from(onlineUsers.values()));
+            io.emit('active_users', Array.from(onlineUsers.values()));
         });
     });
 }
 
-startServer();
+startServer().catch((error) => {
+    handleFatalError('server_start_failed', error);
+});

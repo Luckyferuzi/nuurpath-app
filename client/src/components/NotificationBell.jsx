@@ -30,11 +30,10 @@ const NotificationBell = () => {
             const res = await axios.get(`${CONFIG.API_BASE_URL}/notifications`, {
                 headers: { 'x-auth-token': token }
             });
-            
-            if (Array.isArray(res.data)) {
-                setNotifications(res.data);
-                setUnreadCount(res.data.filter(n => !n.read).length);
-            }
+
+            const data = res.data.notifications || (Array.isArray(res.data) ? res.data : []);
+            setNotifications(data);
+            setUnreadCount(data.filter(n => !n.read).length);
         } catch (err) { // Error fetching notifications is logged, but not displayed in the bell itself.
             console.error("Error fetching notifications:", err);
         }

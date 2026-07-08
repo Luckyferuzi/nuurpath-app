@@ -1,65 +1,77 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Deployment script for NuurPath Travels application
+set -euo pipefail
 
-echo "🚀 Starting deployment of NuurPath Travels..."
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Check if Docker is available
-if command -v docker &> /dev/null && command -v docker-compose &> /dev/null; then
-    echo "🐳 Docker detected! Using Docker deployment..."
+find_compose_cmd() {
+  if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    echo "docker compose"
+    return 0
+  fi
 
-    # Step 1: Build Docker images
-    echo "🔨 Building Docker images..."
-    docker-compose build
+  if command -v docker-compose >/dev/null 2>&1; then
+    echo "docker-compose"
+    return 0
+  fi
 
-    # Step 2: Start containers
-    echo "🚀 Starting containers..."
-    docker-compose up -d
+  return 1
+}
 
-    echo "✅ Docker deployment complete!"
-    echo "📊 Application will be available at http://localhost:5001"
-    echo "� PostgreSQL will be available at http://localhost:5432"
-else
-    echo "📦 Docker not found. Using traditional deployment..."
+require_env_file() {
+  local target="$1"
 
-    # Step 1: Install backend dependencies
-    echo "📦 Installing backend dependencies..."
-    cd backend || exit
-    npm install
-    cd ..
+  if [[ ! -f "$target" ]]; then
+    echo "Missing $target."
+    echo "Copy the matching example file and provide real values before deploying."
+    exit 1
+  fi
+}
 
-    # Step 2: Install frontend dependencies
-    echo "📦 Installing frontend dependencies..."
-    cd client || exit
-    npm install
-    cd ..
+echo "Starting NuurPath deployment..."
 
-    # Step 3: Build frontend for production
-    echo "🔨 Building frontend for production..."
-    cd client || exit
-    npm run build
-    cd ..
+cd "$ROOT_DIR"
 
-    # Step 4: Set up environment variables
-    echo "🔧 Setting up environment variables..."
-    if [ ! -f "backend/.env" ]; then
-        echo "Creating backend .env file..."
-        cat > backend/.env << EOF
-PORT=5001
-DATABASE_URL=postgresql://user:password@localhost:5432/nuurpath_travels
-JWT_SECRET=Nuurpath2025
-NODE_ENV=production
-EOF
-    fi
+if COMPOSE_CMD="$(find_compose_cmd)"; then
+  echo "Docker Compose detected. Using container deployment."
+  require_env_file "$ROOT_DIR/.env"
 
-    # Step 5: Start the application
-    echo "🚀 Starting NuurPath Travels application..."
-    echo "Application will be available at http://localhost:5001"
-    echo "Frontend will be served by backend in production mode"
+  $COMPOSE_CMD build
+  $COMPOSE_CMD up -d
 
-    # Start the backend server (which will serve the frontend in production)
-    cd backend || exit
-    node server.js
-
-    echo "✅ Deployment complete!"
+  echo "Container deployment complete."
+  echo "Backend should be available on http://localhost:5001"
+  exit 0
 fi
+
+echo "Docker Compose not detected. Using direct Node.js deployment."
+
+if [[ ! -f "$ROOT_DIR/server/.env" && ! -f "$ROOT_DIR/.env" ]]; then
+  echo "Missing server/.env and root .env."
+  echo "Copy server/.env.example to server/.env for local deployment, or provide a root .env for shared orchestration."
+  exit 1
+fi
+
+echo "Installing server dependencies..."
+npm --prefix server install
+
+echo "Installing client dependencies..."
+npm --prefix client install
+
+echo "Generating Prisma client..."
+(
+  cd server
+  npx prisma generate --schema=prisma/schema.prisma
+)
+
+echo "Applying production-safe Prisma migrations..."
+(
+  cd server
+  npx prisma migrate deploy --schema=prisma/schema.prisma
+)
+
+echo "Building client..."
+npm --prefix client run build
+
+echo "Starting backend from server/server.js..."
+npm --prefix server start

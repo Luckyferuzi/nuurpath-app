@@ -2,36 +2,34 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../db');
 const auth = require('../middleware/auth');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 const bcrypt = require('bcryptjs');
-
-// Configure Multer for profile pictures
-const uploadDir = path.join(__dirname, '../public/uploads/profiles');
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, uploadDir);
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + '-' + file.originalname);
-    }
-});
-
-const upload = multer({ storage: storage });
+const {
+    isNonEmptyString,
+    sendInvalidId,
+    sendValidationError,
+    toPositiveInteger,
+    toTrimmedString,
+} = require('../utils/validation');
+const {
+    profileImageUpload,
+    removeUploadedFiles,
+    runUpload,
+    sendUploadError,
+    toPublicUploadUrl,
+} = require('../utils/upload');
 
 // @route   GET api/profile
 // @desc    Get current user's profile
 // @access  Private
 router.get('/', auth, async (req, res) => {
     try {
+        const userId = toPositiveInteger(req.user.id);
+        if (userId === null) {
+            return sendValidationError(res, 'Invalid user id.');
+        }
+
         const profile = await prisma.user.findUnique({
-            where: { id: req.user.id },
+            where: { id: userId },
             select: {
                 name: true,
                 email: true,
@@ -50,6 +48,52 @@ router.get('/', auth, async (req, res) => {
     }
 });
 
+// @route   GET api/profile/:id
+// @desc    Get a user profile by id (self or admin/manager)
+// @access  Private
+router.get('/:id', auth, async (req, res) => {
+    try {
+        const requestorId = toPositiveInteger(req.user.id);
+        if (requestorId === null) {
+            return sendValidationError(res, 'Invalid user id.');
+        }
+
+        const requestor = await prisma.user.findUnique({
+            where: { id: requestorId },
+            select: { role: true }
+        });
+
+        const targetUserId = toPositiveInteger(req.params.id);
+        if (targetUserId === null) {
+            return sendInvalidId(res);
+        }
+
+        if (requestor.role !== 'admin' && requestor.role !== 'manager' && targetUserId !== requestorId) {
+            return res.status(403).json({ msg: 'Not authorized' });
+        }
+
+        const profile = await prisma.user.findUnique({
+            where: { id: targetUserId },
+            select: {
+                name: true,
+                email: true,
+                bio: true,
+                contactInfo: true,
+                profilePicture: true
+            }
+        });
+
+        if (!profile) {
+            return res.status(404).json({ msg: 'Profile not found' });
+        }
+
+        res.json(profile);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
 // @route   PUT api/profile
 // @desc    Update user profile
 // @access  Private
@@ -57,12 +101,21 @@ router.put('/', auth, async (req, res) => {
     const { name, bio, contactInfo } = req.body;
 
     try {
+        const userId = toPositiveInteger(req.user.id);
+        if (userId === null) {
+            return sendValidationError(res, 'Invalid user id.');
+        }
+
+        if (!isNonEmptyString(name)) {
+            return sendValidationError(res, 'Name is required.');
+        }
+
         const updatedProfile = await prisma.user.update({
-            where: { id: req.user.id },
+            where: { id: userId },
             data: {
-                name,
-                bio,
-                contactInfo
+                name: toTrimmedString(name),
+                bio: typeof bio === 'string' ? bio.trim() : bio,
+                contactInfo: typeof contactInfo === 'string' ? contactInfo.trim() : contactInfo
             },
             select: {
                 name: true,
@@ -82,21 +135,34 @@ router.put('/', auth, async (req, res) => {
 // @route   POST api/profile/upload-picture
 // @desc    Upload profile picture
 // @access  Private
-router.post('/upload-picture', auth, upload.single('profilePicture'), async (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ msg: 'No file uploaded' });
+router.post('/upload-picture', auth, async (req, res) => {
+    try {
+        await runUpload(profileImageUpload.single('profilePicture'), req, res);
+    } catch (error) {
+        return sendUploadError(res, error, 'File too large. Maximum size allowed is 5 MB.');
     }
 
-    const fileUrl = `/uploads/profiles/${req.file.filename}`;
+    if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No file uploaded.', msg: 'No file uploaded.' });
+    }
+
+    const fileUrl = toPublicUploadUrl('profiles', req.file.filename);
 
     try {
+        const userId = toPositiveInteger(req.user.id);
+        if (userId === null) {
+            removeUploadedFiles(req.file);
+            return sendValidationError(res, 'Invalid user id.');
+        }
+
         const updatedUser = await prisma.user.update({
-            where: { id: req.user.id },
+            where: { id: userId },
             data: { profilePicture: fileUrl },
             select: { profilePicture: true }
         });
         res.json(updatedUser);
     } catch (err) {
+        removeUploadedFiles(req.file);
         console.error(err.message);
         res.status(500).send('Server Error');
     }
@@ -109,13 +175,26 @@ router.put('/change-password', auth, async (req, res) => {
     const { currentPassword, newPassword } = req.body;
 
     try {
-        const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+        const userId = toPositiveInteger(req.user.id);
+        if (userId === null) {
+            return sendValidationError(res, 'Invalid user id.');
+        }
+
+        if (!isNonEmptyString(newPassword) || newPassword.length < 6) {
+            return sendValidationError(res, 'New password must be at least 6 characters long.');
+        }
+
+        const user = await prisma.user.findUnique({ where: { id: userId } });
 
         if (!user) {
             return res.status(404).json({ msg: 'User not found' });
         }
 
         if (user.password) {
+            if (!isNonEmptyString(currentPassword)) {
+                return sendValidationError(res, 'Current password is required.');
+            }
+
             const isMatch = await bcrypt.compare(currentPassword, user.password);
             if (!isMatch) {
                 return res.status(400).json({ msg: 'Invalid current password' });
@@ -126,8 +205,11 @@ router.put('/change-password', auth, async (req, res) => {
         const hashedPassword = await bcrypt.hash(newPassword, salt);
 
         await prisma.user.update({
-            where: { id: req.user.id },
-            data: { password: hashedPassword }
+            where: { id: userId },
+            data: {
+                password: hashedPassword,
+                passwordChangedAt: new Date()
+            }
         });
 
         res.json({ msg: 'Password updated successfully' });

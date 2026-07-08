@@ -3,6 +3,14 @@ const router = express.Router();
 const prisma = require('../db');
 const auth = require('../middleware/auth');
 const adminAuth = require('../middleware/adminAuth');
+const {
+    isNonEmptyString,
+    sendInvalidId,
+    sendValidationError,
+    toNonNegativeNumber,
+    toPositiveInteger,
+    toTrimmedString,
+} = require('../utils/validation');
 
 // @route   GET api/services
 // @desc    Get all services
@@ -24,14 +32,22 @@ router.get('/', async (req, res) => {
 // @access  Private (Admin)
 router.post('/', auth, adminAuth, async (req, res) => {
     try {
-        const { title, description, icon } = req.body;
+        const { title, description, icon, price } = req.body;
 
-        if (!title || !description) {
-            return res.status(400).json({ msg: 'Title and description are required' });
+        if (!isNonEmptyString(title) || !isNonEmptyString(description)) {
+            return sendValidationError(res, 'Title and description are required.');
+        }
+
+        if (price !== undefined && price !== null && price !== '' && toNonNegativeNumber(price) === null) {
+            return sendValidationError(res, 'Price must be a valid non-negative number.');
         }
 
         const newService = await prisma.service.create({
-            data: { title, description, icon }
+            data: {
+                title: toTrimmedString(title),
+                description: toTrimmedString(description),
+                icon: typeof icon === 'string' ? icon.trim() : icon,
+            }
         });
 
         res.json(newService);
@@ -47,8 +63,16 @@ router.post('/', auth, adminAuth, async (req, res) => {
 router.put('/reorder', auth, adminAuth, async (req, res) => {
     try {
         const { orderedIds } = req.body;
+        if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+            return sendValidationError(res, 'orderedIds must be a non-empty array of ids.');
+        }
 
-        const updates = orderedIds.map((id, index) => 
+        const normalizedIds = orderedIds.map((id) => toPositiveInteger(id));
+        if (normalizedIds.some((id) => id === null)) {
+            return sendValidationError(res, 'orderedIds must contain only positive integer ids.');
+        }
+
+        const updates = normalizedIds.map((id, index) => 
             prisma.service.update({
                 where: { id },
                 data: { order: index }
@@ -68,12 +92,40 @@ router.put('/reorder', auth, adminAuth, async (req, res) => {
 // @access  Private (Admin)
 router.put('/:id', auth, adminAuth, async (req, res) => {
     try {
-        const { title, description, icon } = req.body;
-        const id = parseInt(req.params.id);
+        const { title, description, icon, price } = req.body;
+        const id = toPositiveInteger(req.params.id);
+        if (id === null) {
+            return sendInvalidId(res);
+        }
+
+        if (title !== undefined && !isNonEmptyString(title)) {
+            return sendValidationError(res, 'Title is required.');
+        }
+
+        if (description !== undefined && !isNonEmptyString(description)) {
+            return sendValidationError(res, 'Description is required.');
+        }
+
+        if (price !== undefined && price !== null && price !== '' && toNonNegativeNumber(price) === null) {
+            return sendValidationError(res, 'Price must be a valid non-negative number.');
+        }
+
+        const updateData = {};
+        if (title !== undefined) {
+            updateData.title = toTrimmedString(title);
+        }
+
+        if (description !== undefined) {
+            updateData.description = toTrimmedString(description);
+        }
+
+        if (icon !== undefined) {
+            updateData.icon = typeof icon === 'string' ? icon.trim() : icon;
+        }
 
         const updatedService = await prisma.service.update({
             where: { id },
-            data: { title, description, icon }
+            data: updateData
         });
 
         res.json(updatedService);
@@ -91,7 +143,11 @@ router.put('/:id', auth, adminAuth, async (req, res) => {
 // @access  Private (Admin)
 router.delete('/:id', auth, adminAuth, async (req, res) => {
     try {
-        const id = parseInt(req.params.id);
+        const id = toPositiveInteger(req.params.id);
+        if (id === null) {
+            return sendInvalidId(res);
+        }
+
         await prisma.service.delete({
             where: { id }
         });

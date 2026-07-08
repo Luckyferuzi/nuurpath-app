@@ -3,47 +3,34 @@ const router = express.Router();
 const prisma = require('../db');
 const auth = require('../middleware/auth');
 const adminAuth = require('../middleware/adminAuth');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const {
+    isNonEmptyString,
+    sendInvalidId,
+    sendValidationError,
+    toPositiveInteger,
+    toTrimmedString,
+} = require('../utils/validation');
+const {
+    removeUploadedFiles,
+    reviewMediaUpload,
+    runUpload,
+    sendUploadError,
+    toPublicUploadUrl,
+    validateReviewMediaSizes,
+} = require('../utils/upload');
 
-// Configure Multer for Memory/Testimonial images
-const uploadDir = path.join(__dirname, '../public/uploads/reviews');
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
+function requireAdminForAllReviews(req, res, next) {
+    if (req.query.all !== 'true') {
+        return next();
+    }
+
+    return auth(req, res, () => adminAuth(req, res, next));
 }
-
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, uploadDir),
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + '-' + file.originalname);
-    }
-});
-
-const fileFilter = (req, file, cb) => {
-    const allowedTypes = [
-        'image/jpeg', 'image/png', 'image/webp',
-        'video/mp4', 'video/mpeg', 'video/quicktime', 'video/webm'
-    ];
-
-    if (allowedTypes.includes(file.mimetype)) {
-        cb(null, true);
-    } else {
-        cb(new Error('Invalid file type. Only JPEG, PNG, WebP images and MP4, MPEG, MOV, WebM videos are allowed.'), false);
-    }
-};
-
-const upload = multer({ 
-    storage,
-    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit for videos
-    fileFilter: fileFilter
-});
 
 // @route   GET api/reviews
 // @desc    Get all visible reviews/testimonials (Memories)
 // @access  Public
-router.get('/', async (req, res) => {
+router.get('/', requireAdminForAllReviews, async (req, res) => {
     try {
         const { all } = req.query;
         const where = all === 'true' ? {} : { isVisible: true };
@@ -68,8 +55,13 @@ router.get('/', async (req, res) => {
 // @access  Private
 router.get('/user', auth, async (req, res) => {
     try {
+        const userId = toPositiveInteger(req.user.id);
+        if (userId === null) {
+            return sendValidationError(res, 'Invalid user id.');
+        }
+
         const reviews = await prisma.review.findMany({
-            where: { userId: req.user.id },
+            where: { userId },
             orderBy: { createdAt: 'desc' }
         });
         res.json(reviews);
@@ -82,49 +74,91 @@ router.get('/user', auth, async (req, res) => {
 // @route   POST api/reviews
 // @desc    Create a review/testimonial with optional images
 // @access  Private
-router.post('/', auth, (req, res) => {
-    upload.fields([
-        { name: 'images', maxCount: 5 },
-        { name: 'videos', maxCount: 2 }
-    ])(req, res, async (err) => {
-        if (err instanceof multer.MulterError) {
-            if (err.code === 'LIMIT_FILE_SIZE') {
-                return res.status(400).json({ msg: 'File too large. Maximum size allowed is 50MB.' });
-            }
-            return res.status(400).json({ msg: `Upload error: ${err.message}` });
-        } else if (err) {
-            return res.status(400).json({ msg: err.message });
+router.post('/', auth, async (req, res) => {
+    try {
+        await runUpload(reviewMediaUpload.fields([
+            { name: 'images', maxCount: 5 },
+            { name: 'videos', maxCount: 2 }
+        ]), req, res);
+    } catch (error) {
+        return sendUploadError(res, error, 'File too large. Maximum size allowed is 25 MB.');
+    }
+
+    const reviewMediaSizeError = validateReviewMediaSizes(req.files);
+    if (reviewMediaSizeError) {
+        removeUploadedFiles(req.files);
+        return res.status(400).json({ success: false, message: reviewMediaSizeError, msg: reviewMediaSizeError });
+    }
+
+    try {
+        const { rating, comment, packageId } = req.body;
+        const userId = toPositiveInteger(req.user.id);
+        if (userId === null) {
+            removeUploadedFiles(req.files);
+            return sendValidationError(res, 'Invalid user id.');
         }
 
-        try {
-            const { rating, comment, packageId } = req.body;
-            const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+        const parsedRating = toPositiveInteger(rating);
+        if (parsedRating === null || parsedRating < 1 || parsedRating > 5) {
+            removeUploadedFiles(req.files);
+            return sendValidationError(res, 'Rating must be an integer between 1 and 5.');
+        }
 
-            if (!user) {
-                return res.status(404).json({ msg: 'User not found' });
+        if (!isNonEmptyString(comment)) {
+            removeUploadedFiles(req.files);
+            return sendValidationError(res, 'Comment is required.');
+        }
+
+        let normalizedPackageId = null;
+        if (packageId !== undefined && packageId !== null && packageId !== '') {
+            normalizedPackageId = toPositiveInteger(packageId);
+            if (normalizedPackageId === null) {
+                removeUploadedFiles(req.files);
+                return sendValidationError(res, 'Package id must be a positive integer.');
             }
 
-            const imageUrls = req.files['images'] ? req.files['images'].map(file => `/uploads/reviews/${file.filename}`) : [];
-            const videoUrls = req.files['videos'] ? req.files['videos'].map(file => `/uploads/reviews/${file.filename}`) : [];
-            
-            const review = await prisma.review.create({
-                data: {
-                    userId: req.user.id,
-                    packageId: packageId ? parseInt(packageId) : null,
-                    name: user.name,
-                    rating: parseInt(rating) || 5,
-                    comment,
-                    images: imageUrls,
-                    videos: videoUrls,
-                    isVisible: false
-                }
+            const selectedPackage = await prisma.package.findUnique({
+                where: { id: normalizedPackageId },
+                select: { id: true },
             });
-            res.json(review);
-        } catch (dbErr) {
-            console.error(dbErr.message);
-            res.status(500).send('Server Error');
+            if (!selectedPackage) {
+                removeUploadedFiles(req.files);
+                return sendValidationError(res, 'Selected package does not exist.');
+            }
         }
-    });
+
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+
+        if (!user) {
+            removeUploadedFiles(req.files);
+            return res.status(404).json({ msg: 'User not found' });
+        }
+
+        const imageUrls = req.files?.images
+            ? req.files.images.map((file) => toPublicUploadUrl('reviews', file.filename))
+            : [];
+        const videoUrls = req.files?.videos
+            ? req.files.videos.map((file) => toPublicUploadUrl('reviews', file.filename))
+            : [];
+        
+        const review = await prisma.review.create({
+            data: {
+                userId,
+                packageId: normalizedPackageId,
+                name: user.name,
+                rating: parsedRating,
+                comment: toTrimmedString(comment),
+                images: imageUrls,
+                videos: videoUrls,
+                isVisible: false
+            }
+        });
+        res.json(review);
+    } catch (dbErr) {
+        removeUploadedFiles(req.files);
+        console.error(dbErr.message);
+        res.status(500).send('Server Error');
+    }
 });
 
 // @route   PUT api/reviews/:id/toggle
@@ -132,7 +166,11 @@ router.post('/', auth, (req, res) => {
 // @access  Private (Admin)
 router.put('/:id/toggle', auth, adminAuth, async (req, res) => {
     try {
-        const id = parseInt(req.params.id);
+        const id = toPositiveInteger(req.params.id);
+        if (id === null) {
+            return sendInvalidId(res);
+        }
+
         const review = await prisma.review.findUnique({ where: { id } });
         
         if (!review) return res.status(404).json({ msg: 'Review not found' });
@@ -153,7 +191,12 @@ router.put('/:id/toggle', auth, adminAuth, async (req, res) => {
 // @access  Private (Admin)
 router.delete('/:id', auth, adminAuth, async (req, res) => {
     try {
-        await prisma.review.delete({ where: { id: parseInt(req.params.id) } });
+        const id = toPositiveInteger(req.params.id);
+        if (id === null) {
+            return sendInvalidId(res);
+        }
+
+        await prisma.review.delete({ where: { id } });
         res.json({ msg: 'Review deleted' });
     } catch (err) {
         console.error(err.message);

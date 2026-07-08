@@ -1,15 +1,30 @@
-version: '3.8'
-
 services:
   app:
-    build: .
+    build:
+      context: .
+      args:
+        REACT_APP_API_URL: ${REACT_APP_API_URL}
+        REACT_APP_GOOGLE_CLIENT_ID: ${REACT_APP_GOOGLE_CLIENT_ID:-}
+        REACT_APP_RECAPTCHA_SITE_KEY: ${REACT_APP_RECAPTCHA_SITE_KEY:-}
     ports:
-      - "5001:5001"
+      - "${PORT:-5001}:5001"
     environment:
-      - NODE_ENV=production
-      - PORT=5001
-      - DATABASE_URL=postgresql://user:password@postgres:5432/nuurpath_travels
-      - JWT_SECRET=Nuurpath2025
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 5001
+      CLIENT_URL: ${CLIENT_URL}
+      API_BASE_URL: ${API_BASE_URL}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      UPLOAD_ROOT: ${UPLOAD_ROOT:-}
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      EMAIL_HOST: ${EMAIL_HOST}
+      EMAIL_PORT: ${EMAIL_PORT}
+      EMAIL_USER: ${EMAIL_USER}
+      EMAIL_PASS: ${EMAIL_PASS}
+      EMAIL_FROM: ${EMAIL_FROM}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      RECAPTCHA_SECRET_KEY: ${RECAPTCHA_SECRET_KEY}
     depends_on:
       - postgres
     restart: unless-stopped
@@ -17,13 +32,13 @@ services:
   postgres:
     image: postgres:15
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=nuurpath_travels
+      POSTGRES_USER: ${POSTGRES_USER:-nuurpath}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-local-only}
+      POSTGRES_DB: ${POSTGRES_DB:-nuurpath_travels}
     restart: unless-stopped
 
 volumes:

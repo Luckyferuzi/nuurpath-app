@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { CONFIG } from '../config';
-import AdminNotificationBell from './AdminNotificationBell';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const AdminDashboard = () => {
@@ -67,13 +66,12 @@ const AdminDashboard = () => {
         <div style={containerStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>
                 <h2 style={{ margin: 0 }}>Admin Dashboard</h2>
-                <AdminNotificationBell />
             </div>
             
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginTop: '20px' }}>
                 <div style={statCardStyle}>
                     <h3 style={{ fontSize: '36px', color: '#006837', margin: '0 0 10px 0' }}>{loading ? '...' : `$${(stats.totalRevenue || 0).toLocaleString()}`}</h3>
-                    <p style={{ color: '#666', margin: 0, fontWeight: 'bold' }}>Total Revenue</p>
+                    <p style={{ color: '#666', margin: 0, fontWeight: 'bold' }}>Estimated Package Value</p>
                 </div>
                 <div style={statCardStyle}>
                     <h3 style={{ fontSize: '36px', color: '#0B1C3E', margin: '0 0 10px 0' }}>{loading ? '...' : stats.totalUsers}</h3>
@@ -108,7 +106,7 @@ const AdminDashboard = () => {
                 </div>
 
                 <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #e0e0e0', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                    <h3 style={{ color: '#0B1C3E', marginBottom: '20px' }}>Revenue Trends</h3>
+                    <h3 style={{ color: '#0B1C3E', marginBottom: '20px' }}>Estimated Package Value Trends</h3>
                     <div style={{ width: '100%', height: 300 }}>
                         <ResponsiveContainer>
                             <LineChart data={stats.trends}>
@@ -117,7 +115,7 @@ const AdminDashboard = () => {
                                 <YAxis />
                                 <Tooltip formatter={(value) => `$${value.toLocaleString()}`} />
                                 <Legend />
-                                <Line type="monotone" dataKey="Revenue" stroke="#D4AF37" strokeWidth={2} activeDot={{ r: 8 }} />
+                                <Line type="monotone" dataKey="Revenue" name="Estimated Package Value" stroke="#D4AF37" strokeWidth={2} activeDot={{ r: 8 }} />
                             </LineChart>
                         </ResponsiveContainer>
                     </div>
@@ -189,15 +187,6 @@ const AdminDashboard = () => {
                     <p style={{ color: '#555' }}>View and manage registered users.</p>
                 </Link>
                 <Link
-                    to="/admin/wishlists"
-                    style={cardStyle}
-                    onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 5px 15px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-5px)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.boxShadow = cardStyle.boxShadow; e.currentTarget.style.transform = 'none'; }}
-                >
-                    <h3 style={{ color: '#0056b3', marginBottom: '10px' }}>Manage Wishlists</h3>
-                    <p style={{ color: '#555' }}>View and manage user wishlist items.</p>
-                </Link>
-                <Link
                     to="/admin/services"
                     style={cardStyle}
                     onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 5px 15px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-5px)'; }}
@@ -223,33 +212,6 @@ const AdminDashboard = () => {
                 >
                     <h3 style={{ color: '#0056b3', marginBottom: '10px' }}>Manage Reviews</h3>
                     <p style={{ color: '#555' }}>Moderate customer reviews and testimonials.</p>
-                </Link>
-                <Link
-                    to="/admin/privacy"
-                    style={cardStyle}
-                    onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 5px 15px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-5px)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.boxShadow = cardStyle.boxShadow; e.currentTarget.style.transform = 'none'; }}
-                >
-                    <h3 style={{ color: '#0056b3', marginBottom: '10px' }}>Privacy Policy</h3>
-                    <p style={{ color: '#555' }}>Edit Privacy Policy content.</p>
-                </Link>
-                <Link
-                    to="/admin/terms"
-                    style={cardStyle}
-                    onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 5px 15px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-5px)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.boxShadow = cardStyle.boxShadow; e.currentTarget.style.transform = 'none'; }}
-                >
-                    <h3 style={{ color: '#0056b3', marginBottom: '10px' }}>Terms of Use</h3>
-                    <p style={{ color: '#555' }}>Edit Terms of Use content.</p>
-                </Link>
-                <Link
-                    to="/admin/notifications"
-                    style={cardStyle}
-                    onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 5px 15px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-5px)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.boxShadow = cardStyle.boxShadow; e.currentTarget.style.transform = 'none'; }}
-                >
-                    <h3 style={{ color: '#0056b3', marginBottom: '10px' }}>Notifications</h3>
-                    <p style={{ color: '#555' }}>View system alerts and updates.</p>
                 </Link>
                 {/* You can add more admin links here in the future */}
             </div>

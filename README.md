@@ -1,132 +1,159 @@
-# NuurPath Travels - Full Stack Travel Booking Application
+# NuurPath Travels
 
-A premium travel booking platform specializing in Hajj, Umrah, and Luxury Tourism, built with a modern React frontend and Node.js/Express backend.
+NuurPath is a full-stack travel management platform for package discovery, booking requests, consultations, flights, reviews, and admin follow-up. The current product is an inquiry and operations workflow, not an online payment system.
 
-## 🚀 Quick Start
+## Project Structure
 
-### Prerequisites
-- Node.js (v14+)
-- PostgreSQL
-- npm or yarn
+- `client/` - React frontend
+- `server/` - Express + Prisma backend
+- `server/server.js` - active backend entrypoint
+- `server/prisma/schema.prisma` - canonical Prisma schema
+- `server/config/env.js` - canonical backend env loader and production validation
 
-### Development Mode
+## Production Domains
 
-1. **Start the backend server:**
-   ```bash
-   cd server
-   npm install
-   node server.js
-   ```
-   The backend runs on `http://localhost:5001` by default.
+- Frontend: `https://nuurpath.com`
+- Frontend alias: `https://www.nuurpath.com`
+- Backend: `https://api.nuurpath.com`
+- Frontend API env: `REACT_APP_API_URL=https://api.nuurpath.com/api`
 
-2. **Start the frontend development server:**
-   ```bash
-   cd client
-   npm install
-   npm start
-   ```
-   The frontend runs on `http://localhost:3000`.
+The backend does not serve `client/build/` in production. Frontend and backend should be deployed separately.
 
-### Concurrent Start (Recommended)
+## Environment Files
 
-To run both client and server with a single command from the root directory:
+- Root orchestration example: `.env.example`
+- Backend example: `server/.env.example`
+- Frontend example: `client/.env.example`
+
+Do not commit real secrets. Keep production values in your host platform or private `.env` files only.
+
+### Backend production variables
+
+- `NODE_ENV=production`
+- `PORT=5001`
+- `CLIENT_URL=https://nuurpath.com`
+- `API_BASE_URL=https://api.nuurpath.com`
+- `ALLOWED_ORIGINS=https://nuurpath.com,https://www.nuurpath.com`
+- `UPLOAD_ROOT=/var/data/nuurpath/uploads`
+- `DATABASE_URL=<real-value>`
+- `JWT_SECRET=<strong-real-value>`
+- `EMAIL_HOST=<smtp-host>`
+- `EMAIL_PORT=<smtp-port>`
+- `EMAIL_USER=<smtp-user>`
+- `EMAIL_PASS=<smtp-password>`
+- `EMAIL_FROM=<from-address>`
+- `ADMIN_EMAIL=<admin-inbox>`
+- `GOOGLE_CLIENT_ID=<google-oauth-client-id>`
+- `RECAPTCHA_SECRET_KEY=<recaptcha-secret>`
+
+### Frontend production variables
+
+- `REACT_APP_API_URL=https://api.nuurpath.com/api`
+- `REACT_APP_GOOGLE_CLIENT_ID=<google-oauth-client-id>`
+- `REACT_APP_RECAPTCHA_SITE_KEY=<recaptcha-site-key>`
+
+## Local Development
+
+1. Copy example env files and fill in local values.
 
 ```bash
+cp server/.env.example server/.env
+cp client/.env.example client/.env.local
+```
+
+2. Start the backend.
+
+```bash
+cd server
+npm ci
+npm start
+```
+
+3. Start the frontend in another terminal.
+
+```bash
+cd client
+npm ci
+npm start
+```
+
+4. Optional root helper for parallel local work.
+
+```bash
+npm ci
 npm run dev
 ```
 
-### Environment Variables
+## Prisma Commands
 
-Create a `.env` file in the root directory:
+Run Prisma commands from `server/` so they use `server/prisma/schema.prisma`.
 
-```env
-PORT=5001
-DATABASE_URL=postgresql://user:password@localhost:5432/nuurpath_travels
-JWT_SECRET=Nuurpath2025
-NODE_ENV=development
-
-# Email Configuration (Optional)
-EMAIL_HOST=smtp.mailtrap.io
-EMAIL_PORT=2525
-EMAIL_USER=<your-mailtrap-user>
-EMAIL_PASS=<your-mailtrap-pass>
-EMAIL_FROM="NuurPath Travels <noreply@nuurpath.com>"
-```
-
-## 🧪 Testing
-
-Run unit tests:
 ```bash
-cd frontend
-npm test
+cd server
+npx prisma generate --schema=prisma/schema.prisma
+npx prisma migrate deploy --schema=prisma/schema.prisma
 ```
 
-## 🔧 Features
+For local schema iteration only:
 
-- **User Authentication**: JWT-based authentication system
-- **User Profile Management**: Complete profile management with bio, contact info, and preferences
-- **Travel Packages**: Browse and search travel packages
-- **Booking System**: Book travel packages
-- **Reviews**: Leave reviews for packages
-- **Admin Dashboard**: Comprehensive admin dashboard with user and booking management
-- **Notification System**: User notifications with read/unread status
-- **Responsive Design**: Mobile-friendly interface
+```bash
+cd server
+npx prisma migrate dev --schema=prisma/schema.prisma
+```
 
-## 🛠 Technologies
+Do not use `prisma migrate reset` in deployment flows.
 
-### Frontend
-- React 18
-- React Router DOM
-- Axios for API calls
-- Bootstrap for styling
-- React Datepicker for date selection
+## Docker
+
+The included `Dockerfile` builds the frontend as a validation step and packages the backend runtime separately. The runtime container starts the API from `server/server.js`; it does not serve the React build.
+
+For local container deployment:
+
+```bash
+cp .env.example .env
+docker compose build
+docker compose up -d
+```
+
+Set real values in `.env` before deploying. The compose file uses environment interpolation instead of hardcoded secrets.
+
+## Render Deployment
 
 ### Backend
-- Node.js with Express
-- PostgreSQL
-- JWT Authentication
-- CORS and Helmet for security
-- Express Validator for input validation
 
-### Testing
-- Jest
-- React Testing Library
+- Service name: `nuurpath-app`
+- Type: `Web Service`
+- Root directory: `server`
+- Build command: `npm ci && npx prisma generate --schema=prisma/schema.prisma && npx prisma migrate deploy`
+- Start command: `npm start`
+- Health check path: `/health`
+- Custom domain: `https://api.nuurpath.com`
+- Auto deploy: `Off`
+- Persistent disk: required while uploads remain on the filesystem
+- Disk mount path: `/var/data/nuurpath`
+- Required upload env: `UPLOAD_ROOT=/var/data/nuurpath/uploads`
 
-## 📝 API Endpoints
+### Frontend
 
-- `GET /api` - API Health Check
-- `POST /api/auth/register` - User registration
-- `POST /api/auth/login` - User login
-- `GET /api/auth/me` - Get current user
-- `GET /api/packages` - Get all travel packages
-- `GET /api/packages/:id` - Get package details
-- `POST /api/bookings` - Create a booking
-- `GET /api/bookings` - Get user bookings
-- `GET /api/reviews` - Get reviews
-- `POST /api/newsletter` - Newsletter subscription
-- `POST /api/flights` - Flight booking requests
-- `POST /api/appointments` - Appointment booking
+- Service name: `nuurpath-web`
+- Type: `Static Site`
+- Root directory: `client`
+- Build command: `npm ci && npm run build`
+- Publish directory: `build`
+- Custom domains: `https://nuurpath.com` and `https://www.nuurpath.com`
+- Auto deploy: `Off` during backend phase
+- Required env: `REACT_APP_API_URL=https://api.nuurpath.com/api`
 
-## 🔒 Security Features
+## Storage Notes
 
-- Helmet for security headers
-- CORS configuration
-- JWT authentication
-- Input validation
-- Error handling middleware
+- Local development falls back to `server/public/uploads/` and `server/private/uploads/`.
+- Production filesystem uploads should use `UPLOAD_ROOT=/var/data/nuurpath/uploads`.
+- Public assets are served from `${UPLOAD_ROOT}/public`.
+- Protected booking documents are stored under `${UPLOAD_ROOT}/private` and remain behind authenticated API access.
 
-## 🚀 Deployment Options
+## Repository Hygiene
 
-1. **Local Deployment**: Use the provided `deploy.sh` script
-2. **Cloud Deployment**: Deploy to platforms like Heroku, Vercel, or AWS
-3. **Containerization**: Use Docker for containerized deployment
-
-## 📈 Future Enhancements
-
-- Add flight booking functionality
-- Implement payment gateway integration
-- Add user profile management
-- Implement admin dashboard
-- Add real-time chat support
-- Implement notification system
-# nuurpath-travels
+- Do not commit `client/build/`
+- Do not commit `server/public/uploads/`
+- Do not commit `server/private/uploads/`
+- Do not commit `.env` files or other real secrets

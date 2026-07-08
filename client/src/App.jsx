@@ -39,11 +39,10 @@ import Team from './components/Team.jsx';
 import VerifyEmail from './components/VerifyEmail.jsx';
 import './App.css';
 
-const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || "";
+const GOOGLE_CLIENT_ID = (process.env.REACT_APP_GOOGLE_CLIENT_ID || '').trim();
 
 function App() {
-  return (
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID || "fallback-id"}>
+  const appContent = (
     <AuthProvider>
       <LanguageProvider>
         <ThemeProvider>
@@ -95,6 +94,15 @@ function App() {
         </ThemeProvider>
       </LanguageProvider>
     </AuthProvider>
+  );
+
+  if (!GOOGLE_CLIENT_ID) {
+    return appContent;
+  }
+
+  return (
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      {appContent}
     </GoogleOAuthProvider>
   );
 }

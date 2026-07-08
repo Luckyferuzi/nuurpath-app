@@ -1,44 +1,63 @@
 const prisma = require('../db');
+const { createNotification } = require('./notificationService');
 
-/**
- * Notifies all admins and managers about a new system event
- * @param {Object} app - Express app instance (to access Socket.IO)
- * @param {Object} data - Notification details { title, message, type, bookingId }
- */
-const notifyAdmins = async (app, data) => {
+function requireNotificationText(value, fieldName) {
+    if (typeof value !== 'string' || !value.trim()) {
+        throw new Error(`${fieldName} is required.`);
+    }
+
+    return value.trim();
+}
+
+async function notifyAdmins(app, data) {
     try {
-        // 1. Find all admins and managers
+        const title = requireNotificationText(data?.title, 'Admin notification title');
+        const message = requireNotificationText(data?.message, 'Admin notification message');
+        const type = typeof data?.type === 'string' && data.type.trim() ? data.type.trim() : undefined;
+        const bookingId = data?.bookingId;
+
         const admins = await prisma.user.findMany({
             where: { role: { in: ['admin', 'manager'] } },
-            select: { id: true, email: true }
+            select: { id: true, email: true },
         });
 
-        const io = app.get('io');
-
-        // 2. Create notifications in parallel
-        const notifications = await Promise.all(admins.map(async (admin) => {
-            const notification = await prisma.notification.create({
-                data: {
-                    userId: admin.id,
-                    title: data.title,
-                    message: data.message,
-                    type: data.type || 'ADMIN_ALERT',
-                    bookingId: data.bookingId || null
-                }
+        const io = app && typeof app.get === 'function' ? app.get('io') : null;
+        const results = await Promise.allSettled(admins.map(async (admin) => {
+            const notification = await createNotification({
+                userId: admin.id,
+                title,
+                message,
+                type,
+                bookingId,
             });
 
-            // 3. Emit real-time event to the admin's private room (joined by email)
-            if (io) {
-                io.to(admin.email).emit('receive_notification', notification);
+            if (io && admin.email) {
+                try {
+                    io.to(admin.email).emit('receive_notification', notification);
+                } catch (emitError) {
+                    console.error(`[AdminNotifier] Failed to emit notification to ${admin.email}:`, emitError.message);
+                }
             }
 
             return notification;
         }));
 
-        return notifications;
-    } catch (err) {
-        console.error('Admin notification failed:', err);
+        const notifications = results
+            .filter((result) => result.status === 'fulfilled')
+            .map((result) => result.value);
+        const failures = results.filter((result) => result.status === 'rejected');
+
+        if (failures.length > 0) {
+            const error = new Error(`Failed to notify ${failures.length} admin user(s).`);
+            console.error('[AdminNotifier] Some admin notifications failed:', failures.map((failure) => failure.reason?.message || String(failure.reason)));
+            return { success: false, error, notifications };
+        }
+
+        return { success: true, notifications };
+    } catch (error) {
+        console.error('[AdminNotifier] Failed to notify admins:', error.message);
+        return { success: false, error };
     }
-};
+}
 
 module.exports = { notifyAdmins };

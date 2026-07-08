@@ -75,9 +75,9 @@ const TermsAndConditions = () => {
                     </div>
 
                     <div style={sectionStyle}>
-                        <h3 style={sectionTitleStyle}>2. Bookings & Payments</h3>
+                        <h3 style={sectionTitleStyle}>2. Booking Requests & Pricing</h3>
                         <p>
-                            All bookings are subject to availability. A deposit is required to confirm your reservation, with the balance due prior to departure as specified in your booking invoice. Prices are subject to change without notice until full payment is received.
+                            All booking requests are subject to availability and follow-up confirmation from our team. Prices shown on the website are estimated package values and may change before your itinerary is confirmed.
                         </p>
                     </div>
 

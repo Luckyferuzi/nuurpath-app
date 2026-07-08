@@ -3,6 +3,14 @@ const router = express.Router();
 const prisma = require('../db');
 const auth = require('../middleware/auth');
 const adminAuth = require('../middleware/adminAuth');
+const {
+  normalizeStatus,
+  sendInvalidId,
+  sendValidationError,
+  toPositiveInteger,
+} = require('../utils/validation');
+
+const CONSULTATION_STATUSES = ['Pending', 'Contacted', 'Completed', 'Cancelled'];
 
 // 1. Get ALL Private Consultations
 // @route   GET /api/consultations
@@ -26,9 +34,19 @@ router.get('/', auth, adminAuth, async (req, res) => {
 router.put('/:id', auth, adminAuth, async (req, res) => {
   const { status } = req.body;
   try {
+    const id = toPositiveInteger(req.params.id);
+    if (id === null) {
+      return sendInvalidId(res);
+    }
+
+    const normalizedStatus = normalizeStatus(status, CONSULTATION_STATUSES);
+    if (!normalizedStatus) {
+      return sendValidationError(res, 'Status must be Pending, Contacted, Completed, or Cancelled.');
+    }
+
     const updated = await prisma.privateConsultation.update({
-      where: { id: parseInt(req.params.id) },
-      data: { status }
+      where: { id },
+      data: { status: normalizedStatus }
     });
     res.json(updated);
   } catch (err) {
