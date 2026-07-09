@@ -62,12 +62,21 @@ function createNoOpMiddleware() {
 
 function loadRouterWithMocks(routerModulePath, basePath, options = {}) {
     const originalGoogleClientId = process.env.GOOGLE_CLIENT_ID;
+    const originalAdminSetupToken = process.env.ADMIN_SETUP_TOKEN;
 
     if (Object.prototype.hasOwnProperty.call(options, 'googleClientId')) {
         if (options.googleClientId) {
             process.env.GOOGLE_CLIENT_ID = options.googleClientId;
         } else {
             delete process.env.GOOGLE_CLIENT_ID;
+        }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(options, 'adminSetupToken')) {
+        if (options.adminSetupToken) {
+            process.env.ADMIN_SETUP_TOKEN = options.adminSetupToken;
+        } else {
+            delete process.env.ADMIN_SETUP_TOKEN;
         }
     }
 
@@ -103,6 +112,7 @@ function loadRouterWithMocks(routerModulePath, basePath, options = {}) {
         EMAIL_PASS: '',
         EMAIL_FROM: '',
         ADMIN_EMAIL: '',
+        ADMIN_SETUP_TOKEN: process.env.ADMIN_SETUP_TOKEN || '',
         GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
     }));
     jest.doMock('../../utils/emailService', () => ({
@@ -188,6 +198,12 @@ function loadRouterWithMocks(routerModulePath, basePath, options = {}) {
         delete process.env.GOOGLE_CLIENT_ID;
     } else {
         process.env.GOOGLE_CLIENT_ID = originalGoogleClientId;
+    }
+
+    if (originalAdminSetupToken === undefined) {
+        delete process.env.ADMIN_SETUP_TOKEN;
+    } else {
+        process.env.ADMIN_SETUP_TOKEN = originalAdminSetupToken;
     }
 
     return {

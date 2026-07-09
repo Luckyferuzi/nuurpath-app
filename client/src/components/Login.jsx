@@ -13,15 +13,15 @@ const Login = () => {
     const [showPassword, setShowPassword] = useState(false);
     
     const navigate = useNavigate();
-    const { login, isAuthenticated } = useAuth();
+    const { login, user, isAuthenticated } = useAuth();
 
     const { email, password } = formData;
 
     useEffect(() => {
         if (isAuthenticated) {
-          navigate('/dashboard', { replace: true });
+          navigate(['admin', 'manager'].includes(String(user?.role || '').toLowerCase()) ? '/admin' : '/dashboard', { replace: true });
         }
-    }, [isAuthenticated, navigate]);
+    }, [isAuthenticated, navigate, user?.role]);
 
     const onChange = e => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -36,7 +36,9 @@ const Login = () => {
         const result = await login(email, password);
 
         if (result.success) {
-            navigate('/dashboard');
+            navigate(['admin', 'manager'].includes(String(result.user?.role || '').toLowerCase()) ? '/admin' : '/dashboard');
+        } else if (result.redirectTo) {
+            navigate(result.redirectTo, { state: { email } });
         } else {
             setError(result.error || 'Sign-in failed. Please check your details and try again.');
             setLoading(false);

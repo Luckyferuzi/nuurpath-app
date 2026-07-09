@@ -163,6 +163,9 @@ const ManageUsers = () => {
           <p style={{ marginTop: 0, marginBottom: '15px', color: '#555' }}>
             Only admins can manage users here. New accounts created from this screen are limited to customer or manager roles.
           </p>
+          <p style={{ marginTop: 0, marginBottom: '15px', color: '#555' }}>
+            Managers should sign in through the separate staff portal at <strong>/staff/login</strong>.
+          </p>
           <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '15px', maxWidth: '500px' }}>
             <div>
               <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Name</label>

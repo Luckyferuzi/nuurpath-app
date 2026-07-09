@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import GoogleLoginButton from './GoogleLoginButton.jsx';
@@ -17,9 +17,15 @@ const Register = () => {
     const [emailNotice, setEmailNotice] = useState('');
     
     const navigate = useNavigate();
-    const { register } = useAuth();
+    const { register, user, isAuthenticated } = useAuth();
 
     const { name, email, password, confirmPassword } = formData;
+
+    useEffect(() => {
+        if (isAuthenticated) {
+            navigate(['admin', 'manager'].includes(String(user?.role || '').toLowerCase()) ? '/admin' : '/dashboard', { replace: true });
+        }
+    }, [isAuthenticated, navigate, user?.role]);
 
     const onChange = e => setFormData({ ...formData, [e.target.name]: e.target.value });
 

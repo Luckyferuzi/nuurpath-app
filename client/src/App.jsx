@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider } from './contexts/AuthContext.jsx';
 import { LanguageProvider } from './contexts/LanguageContext.jsx';
@@ -22,6 +22,8 @@ import ServiceInquiriesAdmin from './components/ServiceInquiriesAdmin.jsx';
 import ManagePackages from './components/ManagePackages.jsx';
 import ManageReviews from './components/ManageReviews.jsx';
 import Login from './components/Login.jsx';
+import StaffLogin from './components/StaffLogin.jsx';
+import AdminSetup from './components/AdminSetup.jsx';
 import ChatComponent from './components/ChatComponent.jsx';
 import Register from './components/Register.jsx';
 import ForgotPassword from './components/ForgotPassword.jsx';
@@ -39,9 +41,80 @@ import BackToTopButton from './components/BackToTopButton.jsx';
 import WishlistPage from './components/WishlistPage.jsx';
 import Team from './components/Team.jsx';
 import VerifyEmail from './components/VerifyEmail.jsx';
+import StaffPortalHeader from './components/StaffPortalHeader.jsx';
 import './App.css';
 
 const GOOGLE_CLIENT_ID = (process.env.REACT_APP_GOOGLE_CLIENT_ID || '').trim();
+
+function AppFrame() {
+  const location = useLocation();
+  const isStaffPortalRoute = location.pathname.startsWith('/staff') || location.pathname.startsWith('/admin');
+
+  return (
+    <div className="App">
+      {isStaffPortalRoute ? <StaffPortalHeader /> : <Navbar />}
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/packages" element={<PackageList />} />
+        <Route path="/packages/:id" element={<PackageDetails />} />
+        <Route path="/book/:packageId" element={<BookingForm />} />
+        <Route path="/book-consultation" element={<PrivateConsultationBooking />} />
+        <Route path="/book-flight" element={<FlightBookingForm />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
+        <Route path="/contact" element={<ContactUs />} />
+        <Route path="/terms" element={<TermsAndConditions />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/team" element={<Team />} />
+        <Route path="/verify-email/:token" element={<VerifyEmail />} />
+        <Route path="/staff/login" element={<StaffLogin />} />
+        <Route path="/staff/setup" element={<AdminSetup />} />
+        
+        <Route element={<PrivateRoute />}>
+          <Route path="/dashboard" element={<UserDashboard />} />
+          <Route path="/wishlist" element={<WishlistPage />} />
+          <Route path="/profile" element={<UserProfile />} />
+        </Route>
+      
+
+        {/* Admin Routes */}
+        <Route element={<AdminRoute allowedRoles={['admin', 'manager']} />}>
+          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/consultations" element={<PrivateConsultationsAdmin />} />
+          <Route path="/admin/package-bookings" element={<PackageBookingsAdmin />} />
+          <Route path="/admin/flight-bookings" element={<FlightBookingsAdmin />} />
+          <Route path="/admin/service-inquiries" element={<ServiceInquiriesAdmin />} />
+          <Route path="/admin/reviews" element={<ManageReviews />} />
+          <Route path="/admin/chat" element={<ChatComponent />} />
+        </Route>
+        <Route
+          element={(
+            <AdminRoute
+              allowedRoles={['admin']}
+              permissionTitle="Admin Access Required"
+              permissionMessage="Only admin accounts can manage users, services, and package content."
+              fallbackPath="/admin"
+            />
+          )}
+        >
+          <Route path="/admin/users" element={<ManageUsers />} />
+          <Route path="/admin/services" element={<ManageServices />} />
+          <Route path="/admin/packages" element={<ManagePackages />} />
+        </Route>
+      </Routes>
+      {!isStaffPortalRoute && (
+        <>
+          <Footer />
+          <WhatsAppButton />
+          <ChatWidget />
+          <BackToTopButton />
+        </>
+      )}
+    </div>
+  );
+}
 
 function App() {
   const appContent = (
@@ -49,62 +122,7 @@ function App() {
       <LanguageProvider>
         <ThemeProvider>
           <Router>
-            <div className="App">
-              <Navbar />
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/packages" element={<PackageList />} />
-                <Route path="/packages/:id" element={<PackageDetails />} />
-                <Route path="/book/:packageId" element={<BookingForm />} />
-                <Route path="/book-consultation" element={<PrivateConsultationBooking />} />
-                <Route path="/book-flight" element={<FlightBookingForm />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route path="/reset-password/:token" element={<ResetPassword />} />
-                <Route path="/contact" element={<ContactUs />} />
-                <Route path="/terms" element={<TermsAndConditions />} />
-                <Route path="/privacy" element={<PrivacyPolicy />} />
-                <Route path="/team" element={<Team />} />
-                <Route path="/verify-email/:token" element={<VerifyEmail />} />
-                
-                <Route element={<PrivateRoute />}>
-                  <Route path="/dashboard" element={<UserDashboard />} />
-                  <Route path="/wishlist" element={<WishlistPage />} />
-                  <Route path="/profile" element={<UserProfile />} />
-                </Route>
-              
-
-                {/* Admin Routes */}
-                <Route element={<AdminRoute allowedRoles={['admin', 'manager']} />}>
-                  <Route path="/admin" element={<AdminDashboard />} />
-                  <Route path="/admin/consultations" element={<PrivateConsultationsAdmin />} />
-                  <Route path="/admin/package-bookings" element={<PackageBookingsAdmin />} />
-                  <Route path="/admin/flight-bookings" element={<FlightBookingsAdmin />} />
-                  <Route path="/admin/service-inquiries" element={<ServiceInquiriesAdmin />} />
-                  <Route path="/admin/reviews" element={<ManageReviews />} />
-                  <Route path="/admin/chat" element={<ChatComponent />} />
-                </Route>
-                <Route
-                  element={(
-                    <AdminRoute
-                      allowedRoles={['admin']}
-                      permissionTitle="Admin Access Required"
-                      permissionMessage="Only admin accounts can manage users, services, and package content."
-                      fallbackPath="/admin"
-                    />
-                  )}
-                >
-                  <Route path="/admin/users" element={<ManageUsers />} />
-                  <Route path="/admin/services" element={<ManageServices />} />
-                  <Route path="/admin/packages" element={<ManagePackages />} />
-                </Route>
-              </Routes>
-              <Footer />
-              <WhatsAppButton />
-              <ChatWidget />
-              <BackToTopButton />
-            </div>
+            <AppFrame />
           </Router>
         </ThemeProvider>
       </LanguageProvider>

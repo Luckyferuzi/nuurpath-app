@@ -19,16 +19,23 @@ const {
     escapeHtml,
     hashToken,
 } = require('../utils/security');
+const {
+    ADMIN_ROLE,
+    isAdminOrManager,
+} = require('../utils/roles');
 
 const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
 const client = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
 const GENERIC_LOGIN_ERROR = 'Invalid email or password.';
+const STAFF_LOGIN_ERROR = 'Invalid staff email or password.';
 const GENERIC_FORGOT_PASSWORD_RESPONSE = 'If an account exists for this email, reset instructions have been sent.';
 const GENERIC_RESEND_VERIFICATION_RESPONSE = 'If an account exists and still needs verification, a verification email has been sent.';
 const INVALID_OR_EXPIRED_TOKEN_MESSAGE = 'Invalid or expired token.';
 const VERIFICATION_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
+const STAFF_LOGIN_PATH = '/staff/login';
+const CUSTOMER_LOGIN_PATH = '/login';
 
 function createAuthPayload(user) {
     return {
@@ -41,6 +48,10 @@ function createAuthPayload(user) {
 }
 
 function normalizeEmailInput(value) {
+    return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeSecretInput(value) {
     return typeof value === 'string' ? value.trim() : '';
 }
 
@@ -122,6 +133,17 @@ async function signAuthToken(user, expiresIn) {
     });
 }
 
+async function countAdmins() {
+    return prisma.user.count({
+        where: {
+            role: {
+                equals: ADMIN_ROLE,
+                mode: 'insensitive',
+            },
+        },
+    });
+}
+
 // @route   GET api/auth/me
 // @desc    Get current user
 // @access  Private
@@ -189,11 +211,68 @@ router.post(
                 return res.status(400).json({ msg: GENERIC_LOGIN_ERROR });
             }
 
+            if (isAdminOrManager(user)) {
+                return res.status(403).json({
+                    msg: 'Staff accounts must sign in from the staff portal.',
+                    redirectTo: STAFF_LOGIN_PATH,
+                });
+            }
+
             const expiresIn = rememberMe ? '30d' : '1d';
             const token = await signAuthToken(user, expiresIn);
             return res.json({ token });
         } catch (err) {
             console.error('Login error:', err.message);
+            return res.status(500).json({ msg: 'Server Error' });
+        }
+    }
+);
+
+// @route   POST api/auth/staff/login
+// @desc    Authenticate admin or manager & get token
+// @access  Public
+router.post(
+    '/staff/login',
+    loginLimiter,
+    [
+        check('email', 'Please include a valid email').isEmail(),
+        check('password', 'Password is required').exists(),
+    ],
+    async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+
+        const { email, password, rememberMe } = req.body;
+        const normalizedEmail = normalizeEmailInput(email);
+
+        try {
+            const user = await prisma.user.findUnique({
+                where: { email: normalizedEmail },
+            });
+
+            if (!user || !user.password) {
+                return res.status(400).json({ msg: STAFF_LOGIN_ERROR });
+            }
+
+            const isMatch = await bcrypt.compare(password, user.password);
+            if (!isMatch) {
+                return res.status(400).json({ msg: STAFF_LOGIN_ERROR });
+            }
+
+            if (!isAdminOrManager(user)) {
+                return res.status(403).json({
+                    msg: 'Customer accounts must sign in from the customer login page.',
+                    redirectTo: CUSTOMER_LOGIN_PATH,
+                });
+            }
+
+            const expiresIn = rememberMe ? '30d' : '1d';
+            const token = await signAuthToken(user, expiresIn);
+            return res.json({ token });
+        } catch (err) {
+            console.error('Staff login error:', err.message);
             return res.status(500).json({ msg: 'Server Error' });
         }
     }
@@ -262,6 +341,96 @@ router.post(
             return res.json(response);
         } catch (err) {
             console.error('Register error:', err.message);
+            return res.status(500).json({ msg: 'Server Error' });
+        }
+    }
+);
+
+// @route   GET api/auth/admin-setup/status
+// @desc    Check whether first-time admin setup is still available
+// @access  Public
+router.get('/admin-setup/status', async (req, res) => {
+    try {
+        const adminCount = await countAdmins();
+        const setupConfigured = Boolean(normalizeSecretInput(env.ADMIN_SETUP_TOKEN));
+        const adminExists = adminCount > 0;
+
+        return res.json({
+            adminExists,
+            setupConfigured,
+            setupAvailable: !adminExists && setupConfigured,
+        });
+    } catch (err) {
+        console.error('Admin setup status error:', err.message);
+        return res.status(500).json({ msg: 'Server Error' });
+    }
+});
+
+// @route   POST api/auth/admin-setup/register
+// @desc    Create the first admin account exactly once
+// @access  Public
+router.post(
+    '/admin-setup/register',
+    registerLimiter,
+    [
+        check('name', 'Name is required').not().isEmpty(),
+        check('email', 'Please include a valid email').isEmail(),
+        check('password', 'Please enter a password with 6 or more characters').isLength({ min: 6 }),
+        check('setupToken', 'Setup token is required').not().isEmpty(),
+    ],
+    async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+
+        const configuredSetupToken = normalizeSecretInput(env.ADMIN_SETUP_TOKEN);
+        if (!configuredSetupToken) {
+            return res.status(503).json({ msg: 'Admin setup is not configured on this server.' });
+        }
+
+        const { name, email, password, setupToken, rememberMe } = req.body;
+        const normalizedEmail = normalizeEmailInput(email);
+
+        if (normalizeSecretInput(setupToken) !== configuredSetupToken) {
+            return res.status(403).json({ msg: 'Invalid admin setup token.' });
+        }
+
+        try {
+            const adminCount = await countAdmins();
+            if (adminCount > 0) {
+                return res.status(409).json({ msg: 'Admin setup has already been completed.' });
+            }
+
+            const existingUser = await prisma.user.findUnique({
+                where: { email: normalizedEmail },
+            });
+            if (existingUser) {
+                return res.status(400).json({ msg: 'An account with this email already exists.' });
+            }
+
+            const salt = await bcrypt.genSalt(10);
+            const hashedPassword = await bcrypt.hash(password, salt);
+
+            const adminUser = await prisma.user.create({
+                data: {
+                    name,
+                    email: normalizedEmail,
+                    password: hashedPassword,
+                    role: ADMIN_ROLE,
+                    isVerified: true,
+                },
+            });
+
+            const expiresIn = rememberMe === false ? '1d' : '30d';
+            const token = await signAuthToken(adminUser, expiresIn);
+
+            return res.status(201).json({
+                msg: 'Admin setup complete.',
+                token,
+            });
+        } catch (err) {
+            console.error('Admin setup registration error:', err.message);
             return res.status(500).json({ msg: 'Server Error' });
         }
     }

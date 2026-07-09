@@ -102,7 +102,26 @@ export const AuthProvider = ({ children }) => {
                 const errorData = err.response?.data;
                 console.error('Login error:', errorData || err.message);
             }
-            return { success: false, error: err.response?.data?.msg || err.response?.data?.errors?.[0]?.msg || 'Login failed. Please check your credentials.' };
+            return {
+                success: false,
+                error: err.response?.data?.msg || err.response?.data?.errors?.[0]?.msg || 'Login failed. Please check your credentials.',
+                redirectTo: err.response?.data?.redirectTo || '',
+            };
+        }
+    }, [finalizeLogin]);
+
+    const staffLogin = useCallback(async (email, password, rememberMe = true) => {
+        try {
+            const res = await api.post('/auth/staff/login', { email, password, rememberMe });
+            return await finalizeLogin(res.data.token, rememberMe);
+        } catch (err) {
+            const errorData = err.response?.data;
+            console.error('Staff login error:', errorData || err.message);
+            return {
+                success: false,
+                error: err.response?.data?.msg || err.response?.data?.errors?.[0]?.msg || 'Staff sign-in failed. Please check your credentials.',
+                redirectTo: err.response?.data?.redirectTo || '',
+            };
         }
     }, [finalizeLogin]);
 
@@ -120,6 +139,47 @@ export const AuthProvider = ({ children }) => {
         } catch (err) {
             console.error('Register error:', err.response?.data || err.message);
             return { success: false, error: err.response?.data?.msg || err.response?.data?.errors?.[0]?.msg || err.message };
+        }
+    }, [finalizeLogin]);
+
+    const adminSetup = useCallback(async ({
+        name,
+        email,
+        password,
+        setupToken,
+        rememberMe = true,
+    }) => {
+        try {
+            const res = await api.post('/auth/admin-setup/register', {
+                name,
+                email,
+                password,
+                setupToken,
+                rememberMe,
+            });
+
+            if (res.data.token) {
+                const loginResult = await finalizeLogin(res.data.token, rememberMe);
+                if (loginResult.success) {
+                    return {
+                        ...loginResult,
+                        message: res.data.msg || 'Admin setup complete.',
+                    };
+                }
+
+                return loginResult;
+            }
+
+            return {
+                success: true,
+                message: res.data.msg || 'Admin setup complete.',
+            };
+        } catch (err) {
+            console.error('Admin setup error:', err.response?.data || err.message);
+            return {
+                success: false,
+                error: err.response?.data?.msg || err.response?.data?.errors?.[0]?.msg || err.message,
+            };
         }
     }, [finalizeLogin]);
 
@@ -148,10 +208,12 @@ export const AuthProvider = ({ children }) => {
         isAuthenticated,
         loading,
         login,
+        staffLogin,
         register,
+        adminSetup,
         logout,
         googleLogin
-    }), [user, isAuthenticated, loading, login, register, logout, googleLogin]);
+    }), [user, isAuthenticated, loading, login, staffLogin, register, adminSetup, logout, googleLogin]);
 
     return (
         <AuthContext.Provider value={value}>

@@ -46,7 +46,7 @@ const AdminRoute = ({
         return <Navigate to={fallbackPath} replace />;
     }
 
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/staff/login" replace />;
 };
 
 export default AdminRoute;

@@ -73,6 +73,9 @@ Important rules:
 
 - `POST /api/auth/register`
 - `POST /api/auth/login`
+- `POST /api/auth/staff/login`
+- `GET /api/auth/admin-setup/status`
+- `POST /api/auth/admin-setup/register`
 - `POST /api/auth/google`
 - `POST /api/auth/forgot-password`
 - `POST /api/auth/reset-password/:token`
@@ -153,6 +156,7 @@ Optional integrations:
 
 Bootstrap / local helpers:
 
+- `ADMIN_SETUP_TOKEN`
 - `ADMIN_BOOTSTRAP_EMAIL`
 - `ADMIN_BOOTSTRAP_PASSWORD`
 - `DEMO_USER_EMAIL`
@@ -165,6 +169,7 @@ Production notes:
 - Use a strong `JWT_SECRET` with at least 32 characters
 - `ALLOWED_ORIGINS` must list the deployed frontend domains
 - `CLIENT_URL` and `API_BASE_URL` should be `https://` in production
+- Set `ADMIN_SETUP_TOKEN` to a strong random secret before the first admin uses `/staff/setup`
 - Media uploads are stored in Neon through the `StoredFile` table, so Render does not need a Persistent Disk for package images, profile photos, review media, booking documents, or protected chat images
 - `UPLOAD_ROOT` is now optional and only exists as a legacy fallback for historical self-hosted filesystem uploads
 - Email settings should be configured together if email sending is enabled
@@ -276,7 +281,9 @@ npm run build
 Current automated backend coverage focuses on:
 
 - public registration role safety
-- generic login and forgot-password responses
+- customer and staff login separation
+- one-time first-admin bootstrap protection
+- generic forgot-password responses
 - hashed password reset token storage
 - Google sign-in role safety
 - guest package, flight, and service inquiry flows
@@ -299,7 +306,10 @@ Current automated backend coverage focuses on:
 
 ## Operational Notes
 
+- The first admin should be created through the hidden `/staff/setup` route while the database still has zero admins
+- After the first admin exists, staff sign-in moves to `/staff/login` and the setup route closes permanently
 - Admin should create manager accounts directly
+- Managers should use the same `/staff/login` page after an admin creates their account and shares credentials
 - Managers should handle follow-up, status updates, and internal notes only
 - No online payment is collected on the website
 - No live Galileo ticketing or flight booking is exposed to customers

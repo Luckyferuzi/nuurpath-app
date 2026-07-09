@@ -72,6 +72,78 @@ describe('auth routes', () => {
         expect(mockJwtSign).toHaveBeenCalled();
     });
 
+    test('customer login redirects staff accounts to the staff portal after password verification', async () => {
+        const { app, mockPrisma } = loadRouterWithMocks('../../routes/authRoutes', '/auth');
+        const hashedPassword = await bcrypt.hash('password123', 10);
+
+        mockPrisma.user.findUnique.mockResolvedValue({
+            id: 17,
+            email: 'admin@example.com',
+            password: hashedPassword,
+            role: 'admin',
+            isVerified: true,
+        });
+
+        const response = await request(app)
+            .post('/auth/login')
+            .send({
+                email: 'admin@example.com',
+                password: 'password123',
+            });
+
+        expect(response.status).toBe(403);
+        expect(response.body.msg).toBe('Staff accounts must sign in from the staff portal.');
+        expect(response.body.redirectTo).toBe('/staff/login');
+    });
+
+    test('staff login succeeds for manager accounts', async () => {
+        const { app, mockPrisma, mockJwtSign } = loadRouterWithMocks('../../routes/authRoutes', '/auth');
+        const hashedPassword = await bcrypt.hash('password123', 10);
+
+        mockPrisma.user.findUnique.mockResolvedValue({
+            id: 9,
+            email: 'manager@example.com',
+            password: hashedPassword,
+            role: 'manager',
+            isVerified: true,
+        });
+
+        const response = await request(app)
+            .post('/auth/staff/login')
+            .send({
+                email: 'manager@example.com',
+                password: 'password123',
+            });
+
+        expect(response.status).toBe(200);
+        expect(response.body.token).toBe('signed-jwt');
+        expect(mockJwtSign).toHaveBeenCalled();
+    });
+
+    test('staff login redirects customer accounts to the customer portal', async () => {
+        const { app, mockPrisma } = loadRouterWithMocks('../../routes/authRoutes', '/auth');
+        const hashedPassword = await bcrypt.hash('password123', 10);
+
+        mockPrisma.user.findUnique.mockResolvedValue({
+            id: 11,
+            email: 'member@example.com',
+            password: hashedPassword,
+            role: 'user',
+            isVerified: true,
+        });
+
+        const response = await request(app)
+            .post('/auth/staff/login')
+            .send({
+                email: 'member@example.com',
+                password: 'password123',
+            });
+
+        expect(response.status).toBe(403);
+        expect(response.body.msg).toBe('Customer accounts must sign in from the customer login page.');
+        expect(response.body.redirectTo).toBe('/login');
+    });
+
     test('invalid login stays generic for unknown emails', async () => {
         const { app, mockPrisma } = loadRouterWithMocks('../../routes/authRoutes', '/auth');
 
@@ -178,5 +250,78 @@ describe('auth routes', () => {
                 isVerified: true,
             }),
         }));
+    });
+
+    test('admin setup status shows availability only when no admin exists and setup token is configured', async () => {
+        const { app, mockPrisma } = loadRouterWithMocks('../../routes/authRoutes', '/auth', {
+            adminSetupToken: 'setup-secret-token',
+        });
+
+        mockPrisma.user.count.mockResolvedValue(0);
+
+        const response = await request(app).get('/auth/admin-setup/status');
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({
+            adminExists: false,
+            setupConfigured: true,
+            setupAvailable: true,
+        });
+    });
+
+    test('admin setup creates the first admin exactly once and returns an auth token', async () => {
+        const { app, mockPrisma, mockJwtSign } = loadRouterWithMocks('../../routes/authRoutes', '/auth', {
+            adminSetupToken: 'setup-secret-token',
+        });
+
+        mockPrisma.user.count.mockResolvedValue(0);
+        mockPrisma.user.findUnique.mockResolvedValue(null);
+        mockPrisma.user.create.mockResolvedValue({
+            id: 100,
+            name: 'Owner',
+            email: 'owner@example.com',
+            role: 'admin',
+        });
+
+        const response = await request(app)
+            .post('/auth/admin-setup/register')
+            .send({
+                name: 'Owner',
+                email: 'owner@example.com',
+                password: 'password123',
+                setupToken: 'setup-secret-token',
+            });
+
+        expect(response.status).toBe(201);
+        expect(response.body.msg).toBe('Admin setup complete.');
+        expect(response.body.token).toBe('signed-jwt');
+        expect(mockPrisma.user.create).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({
+                role: 'admin',
+                isVerified: true,
+            }),
+        }));
+        expect(mockJwtSign).toHaveBeenCalled();
+    });
+
+    test('admin setup is blocked after the first admin already exists', async () => {
+        const { app, mockPrisma } = loadRouterWithMocks('../../routes/authRoutes', '/auth', {
+            adminSetupToken: 'setup-secret-token',
+        });
+
+        mockPrisma.user.count.mockResolvedValue(1);
+
+        const response = await request(app)
+            .post('/auth/admin-setup/register')
+            .send({
+                name: 'Second Owner',
+                email: 'second-owner@example.com',
+                password: 'password123',
+                setupToken: 'setup-secret-token',
+            });
+
+        expect(response.status).toBe(409);
+        expect(response.body.msg).toBe('Admin setup has already been completed.');
+        expect(mockPrisma.user.create).not.toHaveBeenCalled();
     });
 });

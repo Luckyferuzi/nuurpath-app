@@ -79,6 +79,7 @@ const env = {
   EMAIL_PASS: optionalEnv('EMAIL_PASS', ''),
   EMAIL_FROM: optionalEnv('EMAIL_FROM', ''),
   ADMIN_EMAIL: optionalEnv('ADMIN_EMAIL', ''),
+  ADMIN_SETUP_TOKEN: optionalEnv('ADMIN_SETUP_TOKEN', ''),
   GOOGLE_CLIENT_ID: optionalEnv('GOOGLE_CLIENT_ID', ''),
 };
 
