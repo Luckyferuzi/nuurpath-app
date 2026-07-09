@@ -36,6 +36,22 @@ model User {
   reviews              Review[]
   notifications        Notification[]
   wishlist             Wishlist[]
+  uploadedFiles        StoredFile[]
+}
+
+model StoredFile {
+  id               Int      @id @default(autoincrement())
+  originalName     String
+  mimeType         String
+  size             Int
+  data             Bytes
+  category         String
+  isPublic         Boolean  @default(false)
+  uploadedByUserId Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  uploadedBy User? @relation(fields: [uploadedByUserId], references: [id], onDelete: SetNull)
 }
 
 model PrivateConsultation {

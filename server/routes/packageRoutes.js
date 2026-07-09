@@ -16,8 +16,15 @@ const {
     removeUploadedFiles,
     runUpload,
     sendUploadError,
-    toPublicUploadUrl,
 } = require('../utils/upload');
+const {
+    STORED_FILE_CATEGORIES,
+    STORED_FILE_ROUTE_PREFIXES,
+    buildPublicStoredFileUrl,
+    createStoredFile,
+    deleteStoredFilesByIds,
+    deleteStoredFilesByReferences,
+} = require('../utils/storedFiles');
 
 function getValidatedPackagePayload(body) {
     const { title, description, price, destination, duration, type, itinerary } = body;
@@ -167,6 +174,8 @@ router.post('/', auth, requireAdmin, async (req, res) => {
         return sendUploadError(res, error, 'File too large. Maximum size allowed is 5 MB.');
     }
 
+    let createdStoredFileId = null;
+
     try {
         const { error, data } = getValidatedPackagePayload(req.body);
         if (error) {
@@ -174,17 +183,32 @@ router.post('/', auth, requireAdmin, async (req, res) => {
             return sendValidationError(res, error);
         }
 
+        let storedFile = null;
+        if (req.file) {
+            const userId = toPositiveInteger(req.user.id);
+            storedFile = await createStoredFile({
+                file: req.file,
+                category: STORED_FILE_CATEGORIES.PACKAGE_IMAGE,
+                uploadedByUserId: userId,
+            });
+            createdStoredFileId = storedFile.id;
+        }
+
         const packageData = {
             ...data,
-            images: req.file ? [toPublicUploadUrl('packages', req.file.filename)] : []
+            images: storedFile ? [buildPublicStoredFileUrl(storedFile.id)] : []
         };
 
         const newPackage = await prisma.package.create({
             data: packageData
         });
+        createdStoredFileId = null;
 
         res.json(newPackage);
     } catch (err) {
+        if (createdStoredFileId !== null) {
+            await deleteStoredFilesByIds([createdStoredFileId]);
+        }
         removeUploadedFiles(req.file);
         console.error('Error in POST /api/packages:', err);
         res.status(500).send('Server Error');
@@ -201,6 +225,8 @@ router.put('/:id', auth, requireAdmin, async (req, res) => {
         return sendUploadError(res, error, 'File too large. Maximum size allowed is 5 MB.');
     }
 
+    let createdStoredFileId = null;
+
     try {
         const id = toPositiveInteger(req.params.id);
         if (id === null) {
@@ -214,19 +240,48 @@ router.put('/:id', auth, requireAdmin, async (req, res) => {
             return sendValidationError(res, error);
         }
 
+        const existingPackage = await prisma.package.findUnique({
+            where: { id },
+            select: { images: true },
+        });
+        if (!existingPackage) {
+            removeUploadedFiles(req.file);
+            return res.status(404).json({ msg: 'Package not found' });
+        }
+
         const updateData = { ...data };
+        let storedFile = null;
 
         if (req.file) {
-            updateData.images = [toPublicUploadUrl('packages', req.file.filename)];
+            const userId = toPositiveInteger(req.user.id);
+            storedFile = await createStoredFile({
+                file: req.file,
+                category: STORED_FILE_CATEGORIES.PACKAGE_IMAGE,
+                uploadedByUserId: userId,
+            });
+            createdStoredFileId = storedFile.id;
+            updateData.images = [buildPublicStoredFileUrl(storedFile.id)];
         }
 
         const updatedPackage = await prisma.package.update({
             where: { id },
             data: updateData
         });
+        createdStoredFileId = null;
+
+        if (storedFile) {
+            try {
+                await deleteStoredFilesByReferences(existingPackage.images || [], [STORED_FILE_ROUTE_PREFIXES.PUBLIC]);
+            } catch (cleanupError) {
+                console.warn('Failed to remove previous package image:', cleanupError.message);
+            }
+        }
 
         res.json(updatedPackage);
     } catch (err) {
+        if (createdStoredFileId !== null) {
+            await deleteStoredFilesByIds([createdStoredFileId]);
+        }
         removeUploadedFiles(req.file);
         console.error('Error in PUT /api/packages:', err);
         res.status(500).send('Server Error');
@@ -243,9 +298,24 @@ router.delete('/:id', auth, requireAdmin, async (req, res) => {
             return sendInvalidId(res);
         }
 
+        const existingPackage = await prisma.package.findUnique({
+            where: { id },
+            select: { images: true },
+        });
+        if (!existingPackage) {
+            return res.status(404).json({ msg: 'Package not found' });
+        }
+
         await prisma.package.delete({
             where: { id }
         });
+
+        try {
+            await deleteStoredFilesByReferences(existingPackage.images || [], [STORED_FILE_ROUTE_PREFIXES.PUBLIC]);
+        } catch (cleanupError) {
+            console.warn('Failed to remove deleted package images:', cleanupError.message);
+        }
+
         res.json({ msg: 'Package removed' });
     } catch (err) {
         console.error(err.message);

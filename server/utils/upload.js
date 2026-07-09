@@ -1,4 +1,3 @@
-const crypto = require('crypto');
 const fs = require('fs');
 const multer = require('multer');
 const path = require('path');
@@ -14,15 +13,6 @@ const privateUploadRoot = configuredUploadRoot
     : path.join(serverRoot, 'private', 'uploads');
 const privateBookingDocumentDir = path.join(privateUploadRoot, 'bookings');
 const privateChatUploadDir = path.join(privateUploadRoot, 'chat');
-
-const mimeToExtension = {
-    'application/pdf': 'pdf',
-    'image/jpeg': 'jpg',
-    'image/png': 'png',
-    'image/webp': 'webp',
-    'video/mp4': 'mp4',
-    'video/webm': 'webm',
-};
 
 const mimeToAllowedExtensions = {
     'application/pdf': new Set(['.pdf']),
@@ -60,34 +50,6 @@ const chatMimeTypes = new Set([
     'image/webp',
 ]);
 
-function ensureDirectoryExists(directoryPath) {
-    if (!fs.existsSync(directoryPath)) {
-        fs.mkdirSync(directoryPath, { recursive: true });
-    }
-}
-
-function sanitizeSegment(value, fallback = 'file') {
-    const normalized = String(value || '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
-
-    return normalized || fallback;
-}
-
-function buildSafeFilename(file) {
-    const extension = mimeToExtension[file.mimetype];
-
-    if (!extension) {
-        throw new Error('Invalid file type.');
-    }
-
-    const fieldName = sanitizeSegment(file.fieldname || 'file');
-    const randomSuffix = crypto.randomBytes(6).toString('hex');
-
-    return `${fieldName}-${Date.now()}-${randomSuffix}.${extension}`;
-}
-
 function isAllowedFileType(file, allowedMimeTypes) {
     if (!file || !file.mimetype || !allowedMimeTypes?.has(file.mimetype)) {
         return false;
@@ -103,34 +65,13 @@ function isAllowedFileType(file, allowedMimeTypes) {
     return allowedExtensions.has(originalExtension);
 }
 
-function createDiskStorage(rootDirectory, subdirectory) {
-    const targetDirectory = path.join(rootDirectory, subdirectory);
-    ensureDirectoryExists(targetDirectory);
-
-    return multer.diskStorage({
-        destination(req, file, cb) {
-            ensureDirectoryExists(targetDirectory);
-            cb(null, targetDirectory);
-        },
-        filename(req, file, cb) {
-            try {
-                cb(null, buildSafeFilename(file));
-            } catch (error) {
-                cb(error);
-            }
-        },
-    });
-}
-
 function createUploadHandler({
-    rootDirectory,
-    subdirectory,
     allowedMimeTypes,
     invalidTypeMessage,
     maxFileSize,
 }) {
     return multer({
-        storage: createDiskStorage(rootDirectory, subdirectory),
+        storage: multer.memoryStorage(),
         limits: {
             fileSize: maxFileSize,
         },
@@ -183,7 +124,7 @@ function collectUploadedFiles(filesInput) {
     }
 
     if (typeof filesInput === 'object') {
-        if (filesInput.path || filesInput.filename) {
+        if (filesInput.buffer || filesInput.path || filesInput.filename) {
             return [filesInput];
         }
 
@@ -259,7 +200,9 @@ function extractSafeFilenameFromReference(value) {
 
     const knownPrefixes = [
         '/api/bookings/documents/',
+        '/api/chat/files/',
         '/uploads/bookings/',
+        '/uploads/chat/',
     ];
 
     const prefix = knownPrefixes.find((candidate) => trimmed.startsWith(candidate));
@@ -307,48 +250,34 @@ function resolvePrivateChatUploadPath(filename) {
 }
 
 const chatUpload = createUploadHandler({
-    rootDirectory: privateUploadRoot,
-    subdirectory: 'chat',
     allowedMimeTypes: chatMimeTypes,
     invalidTypeMessage: 'Invalid file type. Only JPEG, PNG, and WebP images are allowed.',
     maxFileSize: 10 * 1024 * 1024,
 });
 
 const packageImageUpload = createUploadHandler({
-    rootDirectory: publicUploadRoot,
-    subdirectory: 'packages',
     allowedMimeTypes: publicImageMimeTypes,
     invalidTypeMessage: 'Invalid file type. Only JPEG, PNG, and WebP images are allowed.',
     maxFileSize: 5 * 1024 * 1024,
 });
 
 const profileImageUpload = createUploadHandler({
-    rootDirectory: publicUploadRoot,
-    subdirectory: 'profiles',
     allowedMimeTypes: publicImageMimeTypes,
     invalidTypeMessage: 'Invalid file type. Only JPEG, PNG, and WebP images are allowed.',
     maxFileSize: 5 * 1024 * 1024,
 });
 
 const reviewMediaUpload = createUploadHandler({
-    rootDirectory: publicUploadRoot,
-    subdirectory: 'reviews',
     allowedMimeTypes: reviewMediaMimeTypes,
     invalidTypeMessage: 'Invalid file type. Only JPEG, PNG, WebP, MP4, and WebM files are allowed.',
     maxFileSize: 25 * 1024 * 1024,
 });
 
 const bookingDocumentUpload = createUploadHandler({
-    rootDirectory: privateUploadRoot,
-    subdirectory: 'bookings',
     allowedMimeTypes: privateDocumentMimeTypes,
     invalidTypeMessage: 'Invalid file type. Only PDF, JPEG, PNG, and WebP files are allowed.',
     maxFileSize: 10 * 1024 * 1024,
 });
-
-ensureDirectoryExists(publicUploadRoot);
-ensureDirectoryExists(privateBookingDocumentDir);
-ensureDirectoryExists(privateChatUploadDir);
 
 module.exports = {
     bookingDocumentUpload,

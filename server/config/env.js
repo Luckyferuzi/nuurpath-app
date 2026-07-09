@@ -87,14 +87,9 @@ if (isProduction) {
   requireEnv('JWT_SECRET');
   requireEnv('CLIENT_URL');
   requireEnv('API_BASE_URL');
-  requireEnv('UPLOAD_ROOT');
 
   if (env.JWT_SECRET === 'secret' || env.JWT_SECRET === 'your-secret-key' || env.JWT_SECRET.length < 32) {
     throw new Error('JWT_SECRET must be a strong production secret with at least 32 characters.');
-  }
-
-  if (!path.isAbsolute(env.UPLOAD_ROOT)) {
-    throw new Error('UPLOAD_ROOT must be an absolute filesystem path in production.');
   }
 
   if (!env.CLIENT_URL.startsWith('https://')) {

@@ -15,9 +15,16 @@ const {
     reviewMediaUpload,
     runUpload,
     sendUploadError,
-    toPublicUploadUrl,
     validateReviewMediaSizes,
 } = require('../utils/upload');
+const {
+    STORED_FILE_CATEGORIES,
+    STORED_FILE_ROUTE_PREFIXES,
+    buildPublicStoredFileUrl,
+    createStoredFile,
+    deleteStoredFilesByIds,
+    deleteStoredFilesByReferences,
+} = require('../utils/storedFiles');
 
 function requireStaffForAllReviews(req, res, next) {
     if (req.query.all !== 'true') {
@@ -90,6 +97,8 @@ router.post('/', auth, async (req, res) => {
         return res.status(400).json({ success: false, message: reviewMediaSizeError, msg: reviewMediaSizeError });
     }
 
+    const createdStoredFileIds = [];
+
     try {
         const { rating, comment, packageId } = req.body;
         const userId = toPositiveInteger(req.user.id);
@@ -135,10 +144,26 @@ router.post('/', auth, async (req, res) => {
         }
 
         const imageUrls = req.files?.images
-            ? req.files.images.map((file) => toPublicUploadUrl('reviews', file.filename))
+            ? await Promise.all(req.files.images.map(async (file) => {
+                const storedFile = await createStoredFile({
+                    file,
+                    category: STORED_FILE_CATEGORIES.REVIEW_IMAGE,
+                    uploadedByUserId: userId,
+                });
+                createdStoredFileIds.push(storedFile.id);
+                return buildPublicStoredFileUrl(storedFile.id);
+            }))
             : [];
         const videoUrls = req.files?.videos
-            ? req.files.videos.map((file) => toPublicUploadUrl('reviews', file.filename))
+            ? await Promise.all(req.files.videos.map(async (file) => {
+                const storedFile = await createStoredFile({
+                    file,
+                    category: STORED_FILE_CATEGORIES.REVIEW_VIDEO,
+                    uploadedByUserId: userId,
+                });
+                createdStoredFileIds.push(storedFile.id);
+                return buildPublicStoredFileUrl(storedFile.id);
+            }))
             : [];
         
         const review = await prisma.review.create({
@@ -153,8 +178,12 @@ router.post('/', auth, async (req, res) => {
                 isVisible: false
             }
         });
+        createdStoredFileIds.length = 0;
         res.json(review);
     } catch (dbErr) {
+        if (createdStoredFileIds.length > 0) {
+            await deleteStoredFilesByIds(createdStoredFileIds);
+        }
         removeUploadedFiles(req.files);
         console.error(dbErr.message);
         res.status(500).send('Server Error');
@@ -196,7 +225,24 @@ router.delete('/:id', auth, requireAdmin, async (req, res) => {
             return sendInvalidId(res);
         }
 
+        const review = await prisma.review.findUnique({
+            where: { id },
+            select: { images: true, videos: true },
+        });
+        if (!review) {
+            return res.status(404).json({ msg: 'Review not found' });
+        }
+
         await prisma.review.delete({ where: { id } });
+        try {
+            await deleteStoredFilesByReferences(
+                [...(review.images || []), ...(review.videos || [])],
+                [STORED_FILE_ROUTE_PREFIXES.PUBLIC]
+            );
+        } catch (cleanupError) {
+            console.warn('Failed to remove deleted review media:', cleanupError.message);
+        }
+
         res.json({ msg: 'Review deleted' });
     } catch (err) {
         console.error(err.message);

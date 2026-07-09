@@ -13,11 +13,17 @@ const {
 const { isAdmin } = require('../utils/roles');
 const {
     profileImageUpload,
-    removeUploadedFiles,
     runUpload,
     sendUploadError,
-    toPublicUploadUrl,
 } = require('../utils/upload');
+const {
+    STORED_FILE_CATEGORIES,
+    STORED_FILE_ROUTE_PREFIXES,
+    buildPublicStoredFileUrl,
+    createStoredFile,
+    deleteStoredFilesByIds,
+    extractStoredFileIdFromReference,
+} = require('../utils/storedFiles');
 
 // @route   GET api/profile
 // @desc    Get current user's profile
@@ -142,23 +148,55 @@ router.post('/upload-picture', auth, async (req, res) => {
         return res.status(400).json({ success: false, message: 'No file uploaded.', msg: 'No file uploaded.' });
     }
 
-    const fileUrl = toPublicUploadUrl('profiles', req.file.filename);
+    let createdStoredFileId = null;
 
     try {
         const userId = toPositiveInteger(req.user.id);
         if (userId === null) {
-            removeUploadedFiles(req.file);
             return sendValidationError(res, 'Invalid user id.');
         }
+
+        const existingUser = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { profilePicture: true },
+        });
+
+        if (!existingUser) {
+            return res.status(404).json({ msg: 'User not found' });
+        }
+
+        const storedFile = await createStoredFile({
+            file: req.file,
+            category: STORED_FILE_CATEGORIES.PROFILE_IMAGE,
+            uploadedByUserId: userId,
+        });
+        createdStoredFileId = storedFile.id;
+        const fileUrl = buildPublicStoredFileUrl(storedFile.id);
 
         const updatedUser = await prisma.user.update({
             where: { id: userId },
             data: { profilePicture: fileUrl },
             select: { profilePicture: true }
         });
+        createdStoredFileId = null;
+
+        const previousFileId = extractStoredFileIdFromReference(
+            existingUser.profilePicture,
+            [STORED_FILE_ROUTE_PREFIXES.PUBLIC]
+        );
+        if (previousFileId !== null) {
+            try {
+                await deleteStoredFilesByIds([previousFileId]);
+            } catch (cleanupError) {
+                console.warn('Failed to remove previous profile image:', cleanupError.message);
+            }
+        }
+
         res.json(updatedUser);
     } catch (err) {
-        removeUploadedFiles(req.file);
+        if (createdStoredFileId !== null) {
+            await deleteStoredFilesByIds([createdStoredFileId]);
+        }
         console.error(err.message);
         res.status(500).send('Server Error');
     }

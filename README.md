@@ -113,6 +113,12 @@ Important rules:
 - `GET /api/notifications`
 - `PUT /api/notifications/read-all`
 
+### Media Delivery
+
+- `GET /api/media/public/:id`
+- `GET /api/bookings/documents/:id`
+- `GET /api/chat/files/:id`
+
 ## Environment Configuration
 
 Example files:
@@ -134,7 +140,6 @@ Core:
 - `ALLOWED_ORIGINS`
 - `DATABASE_URL`
 - `JWT_SECRET`
-- `UPLOAD_ROOT`
 
 Optional integrations:
 
@@ -160,9 +165,10 @@ Production notes:
 - Use a strong `JWT_SECRET` with at least 32 characters
 - `ALLOWED_ORIGINS` must list the deployed frontend domains
 - `CLIENT_URL` and `API_BASE_URL` should be `https://` in production
-- `UPLOAD_ROOT` should point to persistent storage
+- Media uploads are stored in Neon through the `StoredFile` table, so Render does not need a Persistent Disk for package images, profile photos, review media, booking documents, or protected chat images
+- `UPLOAD_ROOT` is now optional and only exists as a legacy fallback for historical self-hosted filesystem uploads
 - Email settings should be configured together if email sending is enabled
-- Private booking documents and new protected chat files must stay outside public static storage
+- Private booking documents and protected chat files are served through authenticated API routes instead of public static storage
 
 ### Frontend variables
 
@@ -234,6 +240,7 @@ Recent additive migrations from the latest work:
 - `20260709103000_allow_guest_package_requests`
 - `20260709143000_add_service_inquiries`
 - `20260709173000_add_operational_pipeline_fields`
+- `20260709193000_add_stored_files`
 
 ## Testing and QA
 
@@ -276,13 +283,15 @@ Current automated backend coverage focuses on:
 - admin and manager permission enforcement
 - operational status and internal note regression checks
 - upload type validation helper behavior
+- stored file reference parsing for Neon-backed media
 
 ## Storage and Privacy Notes
 
-- Public media remains under `server/public/uploads/`
-- Private booking documents remain under `server/private/uploads/` or the private branch of `UPLOAD_ROOT`
-- New protected chat files are served through authenticated API access
-- Historical public chat uploads created before the hardening pass may still exist under legacy public paths and should be reviewed before production launch
+- New package images, profile photos, review media, booking documents, and protected chat images are stored directly in Neon inside the `StoredFile` table
+- Public media is served through `GET /api/media/public/:id`
+- Private booking documents remain protected behind `GET /api/bookings/documents/:id`
+- Protected chat images remain behind authenticated `GET /api/chat/files/:id` access
+- Legacy `/uploads/...` paths can still be served for historical local files, but new uploads no longer depend on Render disk storage
 
 ## Postman Collection
 
@@ -300,6 +309,7 @@ Current automated backend coverage focuses on:
 
 - Deploy frontend and backend separately
 - Keep CORS origins aligned with the real frontend domains
-- Store uploads on persistent storage
+- Apply the latest Prisma migration so the `StoredFile` table exists in Neon
+- Render no longer needs a Persistent Disk for application uploads
 - Back up the database before production migrations
 - Test email delivery, Google OAuth, and WhatsApp links in the live environment

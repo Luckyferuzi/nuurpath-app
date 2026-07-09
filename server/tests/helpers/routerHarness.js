@@ -27,6 +27,7 @@ function createMockPrisma() {
         notification: createModelMock(),
         privateConsultation: createModelMock(),
         chatMessage: createModelMock(),
+        storedFile: createModelMock(),
         $transaction: jest.fn(async (operations) => {
             if (Array.isArray(operations)) {
                 return Promise.all(operations);

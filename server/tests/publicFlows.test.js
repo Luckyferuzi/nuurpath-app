@@ -91,6 +91,49 @@ describe('guest-first public request flows', () => {
         }));
     });
 
+    test('package requests accept passport documents stored in Neon-backed file records', async () => {
+        const { app, mockPrisma } = loadRouterWithMocks('../../routes/bookingRoutes', '/bookings');
+
+        mockPrisma.package.findUnique.mockResolvedValue({
+            id: 7,
+            title: 'Family Umrah',
+        });
+        mockPrisma.storedFile.findUnique.mockResolvedValue({
+            id: 88,
+            category: 'booking_document',
+            isPublic: false,
+        });
+        mockPrisma.packageBooking.create.mockImplementation(async ({ data }) => ({
+            id: 103,
+            createdAt: new Date('2026-07-09T00:00:00.000Z'),
+            updatedAt: new Date('2026-07-09T00:00:00.000Z'),
+            ...data,
+            package: {
+                id: 7,
+                title: 'Family Umrah',
+            },
+        }));
+
+        const response = await request(app)
+            .post('/bookings')
+            .send({
+                packageId: 7,
+                passengers: 3,
+                travelDate: '2026-12-27',
+                contactName: 'Passport Guest',
+                contactEmail: 'passport@example.com',
+                contactPhone: '+255700000009',
+                passportCopy: '/api/bookings/documents/88',
+            });
+
+        expect(response.status).toBe(201);
+        expect(mockPrisma.packageBooking.create).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({
+                passportCopy: '/api/bookings/documents/88',
+            }),
+        }));
+    });
+
     test('package requests reject invalid package ids with a clear not-found response', async () => {
         const { app, mockPrisma } = loadRouterWithMocks('../../routes/bookingRoutes', '/bookings');
 

@@ -1,4 +1,5 @@
 const { isAllowedFileType } = require('../utils/upload');
+const { extractStoredFileIdFromReference } = require('../utils/storedFiles');
 
 describe('upload validation helpers', () => {
     test('allows matching mime types and extensions', () => {
@@ -35,5 +36,23 @@ describe('upload validation helpers', () => {
         );
 
         expect(allowed).toBe(false);
+    });
+
+    test('extracts a stored file id from a protected booking document path', () => {
+        const fileId = extractStoredFileIdFromReference(
+            '/api/bookings/documents/123',
+            ['/api/bookings/documents/']
+        );
+
+        expect(fileId).toBe(123);
+    });
+
+    test('rejects non-numeric stored file references', () => {
+        const fileId = extractStoredFileIdFromReference(
+            '/api/bookings/documents/passport-copy.pdf',
+            ['/api/bookings/documents/']
+        );
+
+        expect(fileId).toBeNull();
     });
 });

@@ -25,6 +25,39 @@ const {
     resolvePrivateBookingDocumentPath,
     toProtectedBookingDocumentUrl,
 } = require('../utils/upload');
+const {
+    STORED_FILE_CATEGORIES,
+    STORED_FILE_ROUTE_PREFIXES,
+    buildProtectedBookingStoredFileUrl,
+    extractStoredFileIdFromReference,
+    findStoredFileById,
+    sendStoredFile,
+} = require('../utils/storedFiles');
+
+async function normalizeBookingDocumentReference(value) {
+    const storedFileId = extractStoredFileIdFromReference(value, [STORED_FILE_ROUTE_PREFIXES.BOOKING_DOCUMENT]);
+    if (storedFileId !== null) {
+        const storedFile = await findStoredFileById(storedFileId, { includeData: false });
+
+        if (!storedFile || storedFile.category !== STORED_FILE_CATEGORIES.BOOKING_DOCUMENT) {
+            return null;
+        }
+
+        return buildProtectedBookingStoredFileUrl(storedFile.id);
+    }
+
+    const legacyFilename = extractSafeFilenameFromReference(value);
+    if (!legacyFilename) {
+        return null;
+    }
+
+    const passportFilePath = resolvePrivateBookingDocumentPath(legacyFilename);
+    if (!passportFilePath || !fs.existsSync(passportFilePath)) {
+        return null;
+    }
+
+    return toProtectedBookingDocumentUrl(legacyFilename);
+}
 
 function serializeCustomerPackageBooking(booking) {
     if (!booking || typeof booking !== 'object') {
@@ -120,17 +153,10 @@ router.post('/', packageRequestLimiter, softAuth, async (req, res) => {
 
         let normalizedPassportCopy = null;
         if (passportCopy !== undefined && passportCopy !== null && passportCopy !== '') {
-            const passportFilename = extractSafeFilenameFromReference(passportCopy);
-            if (!passportFilename) {
-                return sendValidationError(res, 'Invalid passport document reference.');
-            }
-
-            const passportFilePath = resolvePrivateBookingDocumentPath(passportFilename);
-            if (!passportFilePath || !fs.existsSync(passportFilePath)) {
+            normalizedPassportCopy = await normalizeBookingDocumentReference(passportCopy);
+            if (!normalizedPassportCopy) {
                 return sendValidationError(res, 'Uploaded passport document was not found.');
             }
-
-            normalizedPassportCopy = toProtectedBookingDocumentUrl(passportFilename);
         }
 
         const selectedPackage = await prisma.package.findUnique({
@@ -266,13 +292,25 @@ router.post('/', packageRequestLimiter, softAuth, async (req, res) => {
     }
 });
 
-// @route   GET api/bookings/documents/:filename
+// @route   GET api/bookings/documents/:fileReference
 // @desc    Download a protected booking document
 // @access  Private (Admin/Manager)
-router.get('/documents/:filename', auth, requireAdminOrManager, async (req, res) => {
+router.get('/documents/:fileReference', auth, requireAdminOrManager, async (req, res) => {
     try {
-        const documentPath = resolvePrivateBookingDocumentPath(req.params.filename);
+        const storedFileId = extractStoredFileIdFromReference(
+            req.params.fileReference,
+            [STORED_FILE_ROUTE_PREFIXES.BOOKING_DOCUMENT]
+        );
+        if (storedFileId !== null) {
+            const storedFile = await findStoredFileById(storedFileId);
+            if (!storedFile || storedFile.category !== STORED_FILE_CATEGORIES.BOOKING_DOCUMENT) {
+                return res.status(404).json({ success: false, message: 'Document not found.' });
+            }
 
+            return sendStoredFile(res, storedFile);
+        }
+
+        const documentPath = resolvePrivateBookingDocumentPath(req.params.fileReference);
         if (!documentPath || !fs.existsSync(documentPath)) {
             return res.status(404).json({ success: false, message: 'Document not found.' });
         }

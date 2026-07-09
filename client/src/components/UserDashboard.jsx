@@ -689,7 +689,7 @@ const UserDashboard = () => {
                                     <div key={item.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                                         {item.package.images && item.package.images.length > 0 && (
                                             <div className="h-40 overflow-hidden">
-                                                <img src={item.package.images[0]} alt={item.package.title} className="w-full h-full object-cover" />
+                                                <img src={resolveBackendUrl(item.package.images[0])} alt={item.package.title} className="w-full h-full object-cover" />
                                             </div>
                                         )}
                                         <div className="p-4">

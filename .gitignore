@@ -57,6 +57,7 @@ Thumbs.db
 *.sqlite3
 *.db
 *.sql
+!server/prisma/migrations/**/migration.sql
 *.sql.gz
 *.dump
 *.bak

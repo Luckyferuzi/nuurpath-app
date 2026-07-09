@@ -22,9 +22,18 @@ const {
     sendUploadError,
     resolvePrivateChatUploadPath,
     toProtectedChatUploadUrl,
-    toProtectedBookingDocumentUrl,
-    toPublicUploadUrl,
 } = require('./utils/upload');
+const {
+    STORED_FILE_CATEGORIES,
+    STORED_FILE_ROUTE_PREFIXES,
+    buildProtectedBookingStoredFileUrl,
+    buildProtectedChatStoredFileUrl,
+    buildPublicStoredFileUrl,
+    createStoredFile,
+    extractStoredFileIdFromReference,
+    findStoredFileById,
+    sendStoredFile,
+} = require('./utils/storedFiles');
 const {
     buildChatPresence,
     canManageSupportChats,
@@ -359,6 +368,23 @@ async function startServer() {
     app.use('/api/itinerary', require('./routes/itineraryRoutes'));
     app.use('/api/wishlist', require('./routes/wishlistRoutes'));
 
+    app.get('/api/media/public/:fileReference', asyncHandler(async (req, res) => {
+        const storedFileId = extractStoredFileIdFromReference(
+            req.params.fileReference,
+            [STORED_FILE_ROUTE_PREFIXES.PUBLIC]
+        );
+        if (storedFileId === null) {
+            return res.status(404).json({ success: false, message: 'File not found.' });
+        }
+
+        const storedFile = await findStoredFileById(storedFileId);
+        if (!storedFile || !storedFile.isPublic) {
+            return res.status(404).json({ success: false, message: 'File not found.' });
+        }
+
+        return sendStoredFile(res, storedFile);
+    }));
+
     app.post('/api/chat/upload', auth, asyncHandler(async (req, res) => {
         try {
             await runUpload(chatUpload.single('file'), req, res);
@@ -370,27 +396,40 @@ async function startServer() {
             return res.status(400).json({ success: false, message: 'No file uploaded.', msg: 'No file uploaded.' });
         }
 
-        const fileUrl = toProtectedChatUploadUrl(req.file.filename);
+        const userId = toPositiveInteger(req.user.id);
+        if (userId === null) {
+            return res.status(400).json({ success: false, message: 'Invalid user id.', msg: 'Invalid user id.' });
+        }
+
+        const storedFile = await createStoredFile({
+            file: req.file,
+            category: STORED_FILE_CATEGORIES.CHAT_IMAGE,
+            uploadedByUserId: userId,
+        });
+        const fileUrl = buildProtectedChatStoredFileUrl(storedFile.id);
 
         return res.json({
             success: true,
             url: fileUrl,
             file: {
-                filename: req.file.filename,
+                id: storedFile.id,
+                filename: storedFile.originalName,
                 url: fileUrl,
-                type: req.file.mimetype,
+                type: storedFile.mimeType,
             },
         });
     }));
 
-    app.get('/api/chat/files/:filename', auth, asyncHandler(async (req, res) => {
-        const filePath = resolvePrivateChatUploadPath(req.params.filename);
-        if (!filePath || !fs.existsSync(filePath)) {
-            return res.status(404).json({ success: false, message: 'File not found.' });
-        }
+    app.get('/api/chat/files/:fileReference', auth, asyncHandler(async (req, res) => {
+        const storedFileId = extractStoredFileIdFromReference(
+            req.params.fileReference,
+            [STORED_FILE_ROUTE_PREFIXES.CHAT_IMAGE]
+        );
+        const expectedMessagePath = storedFileId !== null
+            ? buildProtectedChatStoredFileUrl(storedFileId)
+            : toProtectedChatUploadUrl(req.params.fileReference);
 
         if (!canManageSupportChats(req.user)) {
-            const expectedMessagePath = toProtectedChatUploadUrl(req.params.filename);
             const isAuthorized = await prisma.chatMessage.findFirst({
                 where: {
                     room: getSupportRoomForUser(req.user.id),
@@ -402,6 +441,20 @@ async function startServer() {
             if (!isAuthorized) {
                 return res.status(403).json({ success: false, message: 'You do not have permission to access this file.' });
             }
+        }
+
+        if (storedFileId !== null) {
+            const storedFile = await findStoredFileById(storedFileId);
+            if (!storedFile || storedFile.category !== STORED_FILE_CATEGORIES.CHAT_IMAGE) {
+                return res.status(404).json({ success: false, message: 'File not found.' });
+            }
+
+            return sendStoredFile(res, storedFile);
+        }
+
+        const filePath = resolvePrivateChatUploadPath(req.params.fileReference);
+        if (!filePath || !fs.existsSync(filePath)) {
+            return res.status(404).json({ success: false, message: 'File not found.' });
         }
 
         return res.sendFile(filePath);
@@ -418,13 +471,24 @@ async function startServer() {
             return res.status(400).json({ success: false, message: 'No file uploaded.', msg: 'No file uploaded.' });
         }
 
-        const fileUrl = toPublicUploadUrl('packages', req.file.filename);
+        const userId = toPositiveInteger(req.user.id);
+        if (userId === null) {
+            return res.status(400).json({ success: false, message: 'Invalid user id.', msg: 'Invalid user id.' });
+        }
+
+        const storedFile = await createStoredFile({
+            file: req.file,
+            category: STORED_FILE_CATEGORIES.PACKAGE_IMAGE,
+            uploadedByUserId: userId,
+        });
+        const fileUrl = buildPublicStoredFileUrl(storedFile.id);
 
         return res.json({
             success: true,
             url: fileUrl,
             file: {
-                filename: req.file.filename,
+                id: storedFile.id,
+                filename: storedFile.originalName,
                 url: fileUrl,
             },
         });
@@ -441,15 +505,22 @@ async function startServer() {
             return res.status(400).json({ success: false, message: 'No file uploaded.', msg: 'No file uploaded.' });
         }
 
-        const protectedUrl = toProtectedBookingDocumentUrl(req.file.filename);
+        const userId = req.user?.id ? toPositiveInteger(req.user.id) : null;
+        const storedFile = await createStoredFile({
+            file: req.file,
+            category: STORED_FILE_CATEGORIES.BOOKING_DOCUMENT,
+            uploadedByUserId: userId,
+        });
+        const protectedUrl = buildProtectedBookingStoredFileUrl(storedFile.id);
 
         return res.json({
             success: true,
             url: protectedUrl,
             file: {
-                filename: req.file.filename,
+                id: storedFile.id,
+                filename: storedFile.originalName,
                 url: protectedUrl,
-                type: req.file.mimetype,
+                type: storedFile.mimeType,
             },
         });
     }));
