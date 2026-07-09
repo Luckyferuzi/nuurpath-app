@@ -1,12 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { CONFIG } from '../config';
+import axios, { resolveBackendUrl } from '../lib/api';
 
 const getMediaUrl = (path) => {
     if (!path) return '';
-    if (path.startsWith('http')) return path;
-    const baseUrl = CONFIG.API_BASE_URL.replace('/api', '');
-    return `${baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+    return resolveBackendUrl(path);
 };
 
 const MemoriesGallery = () => {
@@ -17,7 +14,7 @@ const MemoriesGallery = () => {
     useEffect(() => {
         const fetchMemories = async () => {
             try {
-                const res = await axios.get('/api/reviews');
+                const res = await axios.get('/reviews');
                 setMemories(res.data);
                 setError(null);
             } catch (err) {

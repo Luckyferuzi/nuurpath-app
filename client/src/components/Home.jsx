@@ -1,12 +1,12 @@
 //Users/issatende/Projects/nuurpath-travels/client/src/components/Home.jsx
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
-import { CONFIG } from '../config';
+import axios, { resolveBackendUrl } from '../lib/api';
 import PackageList from './PackageList';
 import GlobalSupport from './GlobalSupport';
 import BookingForm from './BookingForm';
 import MemoriesGallery from './MemoriesGallery';
+import ServiceInquiryForm from './ServiceInquiryForm';
 
 const Home = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -15,24 +15,51 @@ const Home = () => {
   const [loadingServices, setLoadingServices] = useState(true);
   const [loadingTrips, setLoadingTrips] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
-  const [error, setError] = useState(null); // Added error state for general errors
+  const [tripsError, setTripsError] = useState(null);
+  const [servicesError, setServicesError] = useState(null);
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
   const minSwipeDistance = 50;
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [selectedTripId, setSelectedTripId] = useState(null);
+  const [serviceInquiryModalOpen, setServiceInquiryModalOpen] = useState(false);
+  const [selectedService, setSelectedService] = useState(null);
+  const processSteps = [
+    {
+      title: 'Submit Your Request',
+      description: 'Choose a package or service and share the details we need to understand your travel plans.',
+    },
+    {
+      title: 'Team Review',
+      description: 'Our team checks your request, clarifies requirements, and prepares the next steps.',
+    },
+    {
+      title: 'Continue on WhatsApp',
+      description: 'We continue the important conversation with you directly on WhatsApp.',
+    },
+    {
+      title: 'Get Guided Support',
+      description: 'Receive guidance for packages, flights, documents, and travel preparation.',
+    },
+  ];
+  const trustBadges = [
+    'Human Support',
+    'WhatsApp Follow-up',
+    'Umrah & Travel Packages',
+    'Visa & Passport Guidance',
+    'No Online Payment Required',
+    'Tanzania-Based Support',
+  ];
 
   useEffect(() => {
     const getImageUrl = (imagePath) => {
       if (!imagePath) return "https://placehold.co/1200x600/0B1C3E/D4AF37?text=NuurPath+Travels";
-      if (imagePath.startsWith('http')) return imagePath;
-      const baseUrl = CONFIG.API_BASE_URL.replace('/api', '');
-      return `${baseUrl}${imagePath.startsWith('/') ? '' : '/'}${imagePath}`;
+      return resolveBackendUrl(imagePath);
     };
 
     const fetchTrips = async () => {
       try {
-        const response = await axios.get(`${CONFIG.API_BASE_URL}/packages`);
+        const response = await axios.get(`/packages`);
         const data = Array.isArray(response.data) ? response.data : (response.data.packages || []);
         
         const trips = data.slice(0, 5).map(pkg => ({
@@ -43,7 +70,7 @@ const Home = () => {
         }));
         setUpcomingTrips(trips);
       } catch (error) {
-        setError('Failed to fetch upcoming trips.');
+        setTripsError('Something went wrong while loading packages. Please try again or contact us on WhatsApp.');
         console.error("Failed to fetch upcoming trips", error);
       } finally {
         setLoadingTrips(false);
@@ -52,10 +79,10 @@ const Home = () => {
 
     const fetchServices = async () => {
       try {
-        const response = await axios.get(`${CONFIG.API_BASE_URL}/services`);
+        const response = await axios.get(`/services`);
         setServices(response.data);
       } catch (error) {
-        setError('Failed to fetch services.');
+        setServicesError('Something went wrong while loading our services. Please try again or contact us on WhatsApp.');
         console.error("Failed to fetch services", error);
       } finally {
         setLoadingServices(false);
@@ -106,9 +133,9 @@ const Home = () => {
     }
   };
 
-  const scrollToConsultation = (e) => {
+  const scrollToSection = (sectionId) => (e) => {
     e.preventDefault();
-    const element = document.getElementById('consultation');
+    const element = document.getElementById(sectionId);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
     }
@@ -124,6 +151,82 @@ const Home = () => {
     setBookingModalOpen(false);
     setSelectedTripId(null);
     setIsPaused(false);
+  };
+
+  const isConsultationService = (service) => /consult/i.test(String(service?.title || ''));
+
+  const getServiceCtaLabel = (service) => {
+    const title = String(service?.title || '').toLowerCase();
+
+    if (title.includes('flight')) {
+      return 'Ask About Flights';
+    }
+
+    if (title.includes('passport')) {
+      return 'Start Passport Support';
+    }
+
+    if (title.includes('visa')) {
+      return 'Start Visa Guidance';
+    }
+
+    if (title.includes('document')) {
+      return 'Get Guidance';
+    }
+
+    if (title.includes('consult')) {
+      return 'Request Consultation';
+    }
+
+    if (title.includes('package') || title.includes('holiday') || title.includes('umrah')) {
+      return 'Request Package';
+    }
+
+    return 'Start Request';
+  };
+
+  const getServiceDescription = (service) => {
+    const title = String(service?.title || '').toLowerCase();
+
+    if (title.includes('umrah') || title.includes('package') || title.includes('holiday')) {
+      return 'Explore guided Umrah and travel package options, then submit your request online. Our team will continue with availability, requirements, and next steps on WhatsApp.';
+    }
+
+    if (title.includes('flight')) {
+      return 'Share your route, dates, and passenger details. Our team will check suitable options and follow up with guidance and quotation.';
+    }
+
+    if (title.includes('visa')) {
+      return 'Tell us your destination and travel purpose. We help you understand the required documents and next steps.';
+    }
+
+    if (title.includes('passport')) {
+      return 'Start your passport support request and receive guidance on procedures, documents, and preparation.';
+    }
+
+    if (title.includes('document')) {
+      return 'Share your situation so our team can guide you on travel documents, requirements, and preparation.';
+    }
+
+    if (title.includes('consult')) {
+      return 'Request a private consultation for personalized travel guidance and planning support.';
+    }
+
+    if (title.includes('hotel')) {
+      return 'Share your destination, dates, and room needs. Our team will guide you on suitable accommodation options and next steps.';
+    }
+
+    return 'Need help with a custom travel plan? Share your request online and our team will guide you through the next steps on WhatsApp.';
+  };
+
+  const openServiceInquiryModal = (service) => {
+    setSelectedService(service);
+    setServiceInquiryModalOpen(true);
+  };
+
+  const closeServiceInquiryModal = () => {
+    setSelectedService(null);
+    setServiceInquiryModalOpen(false);
   };
 
   return (
@@ -144,38 +247,77 @@ const Home = () => {
           animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
       `}</style>
-      {/* Hero Section with Mission */}
+      {/* Hero Section */}
       <div className="bg-[#0B1C3E] text-white py-20 px-4 text-center relative overflow-hidden">
         <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/arabesque.png')] bg-fixed"></div>
         <div className="container mx-auto relative z-10">
           <h1 className="text-4xl md:text-6xl font-black uppercase tracking-tighter mb-6">
-            Explore the World, <br/>
-            <span className="text-[#D4AF37]">Stay True to Your Faith</span>
+            Start Your Journey <br/>
+            <span className="text-[#D4AF37]">with Guided Travel Support</span>
           </h1>
           <p className="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto mb-10 font-medium">
-            Our mission is to provide exceptional travel experiences that honor your values. 
-            From spiritual journeys to leisure vacations, we ensure every step of your path is enlightened.
+            Explore Umrah packages, request flights, and get visa or passport guidance online - then continue with the NuurPath team on WhatsApp for the next steps.
           </p>
-          <div className="flex flex-col md:flex-row gap-4 justify-center">
+          <div className="flex flex-col md:flex-row gap-4 justify-center mb-5">
             <Link to="/packages" className="bg-[#D4AF37] text-[#0B1C3E] px-8 py-3 rounded-full font-bold uppercase tracking-widest hover:bg-white transition-colors">
-              View Packages
+              Explore Packages
             </Link>
-            <a href="#consultation" onClick={scrollToConsultation} className="border-2 border-[#D4AF37] text-[#D4AF37] px-8 py-3 rounded-full font-bold uppercase tracking-widest hover:bg-[#D4AF37] hover:text-[#0B1C3E] transition-colors cursor-pointer">
-              Book Consultation
+            <Link to="/book-flight" className="border-2 border-[#D4AF37] text-[#D4AF37] px-8 py-3 rounded-full font-bold uppercase tracking-widest hover:bg-[#D4AF37] hover:text-[#0B1C3E] transition-colors">
+              Ask About Flights
+            </Link>
+            <a href="#services" onClick={scrollToSection('services')} className="border-2 border-white text-white px-8 py-3 rounded-full font-bold uppercase tracking-widest hover:bg-white hover:text-[#0B1C3E] transition-colors cursor-pointer">
+              Get Travel Guidance
             </a>
           </div>
+          <p className="text-sm text-gray-400 font-semibold tracking-wide">
+            Start your request online. Continue with our team on WhatsApp. No online payment is required on the website.
+          </p>
         </div>
       </div>
 
-      {/* Upcoming Trips Promotion Section */}
+      {/* Trust Process Section */}
       <div className="container mx-auto px-4 py-16">
         <div className="text-center mb-12">
-          <h2 className="text-3xl font-black uppercase tracking-widest text-[#0B1C3E] mb-2">Upcoming Trips</h2>
+          <h2 className="text-3xl font-black uppercase tracking-widest text-[#0B1C3E] mb-2">How NuurPath Helps</h2>
           <div className="w-24 h-1 bg-[#D4AF37] mx-auto"></div>
+          <p className="text-gray-600 mt-4 max-w-3xl mx-auto">
+            NuurPath helps you start important travel requests online, then continue with real human support for quotations, document guidance, and next steps.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+          {processSteps.map((step, index) => (
+            <div key={step.title} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-left">
+              <div className="w-12 h-12 rounded-full bg-[#0B1C3E] text-white flex items-center justify-center font-black text-lg mb-4">
+                {index + 1}
+              </div>
+              <h3 className="text-lg font-bold text-[#0B1C3E] mb-2">{step.title}</h3>
+              <p className="text-sm text-gray-600 leading-6">{step.description}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap justify-center gap-3">
+          {trustBadges.map((badge) => (
+            <span key={badge} className="px-4 py-2 rounded-full border border-gray-200 bg-white text-sm font-semibold text-[#0B1C3E] shadow-sm">
+              {badge}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Featured Packages Section */}
+      <div className="container mx-auto px-4 py-16">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-black uppercase tracking-widest text-[#0B1C3E] mb-2">Featured Packages</h2>
+          <div className="w-24 h-1 bg-[#D4AF37] mx-auto"></div>
+          <p className="text-gray-600 mt-4 max-w-2xl mx-auto">
+            Explore Umrah and travel package options, then send your request online for human review and WhatsApp follow-up.
+          </p>
         </div>
         
-        {error && ( // Display general error for this section
-            <div className="text-center text-red-500 mb-8">{error}</div>
+        {tripsError && (
+            <div className="text-center text-red-500 mb-8">{tripsError}</div>
         )}
         <div 
           className="relative max-w-5xl mx-auto overflow-hidden rounded-2xl shadow-2xl aspect-video group bg-gray-200"
@@ -202,13 +344,13 @@ const Home = () => {
                                 <h3 className="text-3xl md:text-5xl font-black uppercase tracking-tighter mb-4 text-center">{trip.title}</h3>
                                 <div className="flex flex-col md:flex-row gap-4">
                                     <Link to={trip.link} className="bg-[#D4AF37] text-[#0B1C3E] px-8 py-3 rounded-full font-bold uppercase tracking-widest hover:bg-white transition-colors">
-                                        View Details
+                                        View Package
                                     </Link>
                                     <button 
                                         onClick={() => handleBookNow(trip.id)}
                                         className="border-2 border-white text-white px-8 py-3 rounded-full font-bold uppercase tracking-widest hover:bg-white hover:text-[#0B1C3E] transition-colors"
                                     >
-                                        Book Now
+                                        Request Package
                                     </button>
                                 </div>
                             </div>
@@ -234,19 +376,25 @@ const Home = () => {
                 </>
             ) : (
                 <div className="absolute inset-0 flex items-center justify-center text-gray-500 font-bold text-xl">
-                    No upcoming trips found.
+                    No packages are available right now. Please check again soon or contact us on WhatsApp.
                 </div>
             )}
         </div>
       </div>
 
       {/* Services Section */}
-      <div className="bg-white py-16 border-y border-gray-100">
+      <div id="services" className="bg-white py-16 border-y border-gray-100">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-black uppercase tracking-widest text-[#0B1C3E] mb-2">Our Services</h2>
+            <h2 className="text-3xl font-black uppercase tracking-widest text-[#0B1C3E] mb-2">Travel Support Services</h2>
             <div className="w-24 h-1 bg-[#D4AF37] mx-auto"></div>
+            <p className="text-gray-600 mt-4 max-w-2xl mx-auto">
+              Start your request online and continue with our team on WhatsApp for guidance, quotations, document steps, and next actions.
+            </p>
           </div>
+          {servicesError && (
+            <div className="text-center text-red-500 mb-8">{servicesError}</div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
             {loadingServices ? (
               [1, 2].map((i) => (
@@ -266,13 +414,31 @@ const Home = () => {
                 >
                   <div className="text-4xl mb-4">{index % 2 === 0 ? '✈️' : '🌴'}</div>
                   <h3 className="text-xl font-bold text-[#0B1C3E] mb-3">{service.title}</h3>
-                  <p className="text-gray-600">
-                    {service.description}
+                  <p className="text-gray-600 mb-4">
+                    {getServiceDescription(service)}
                   </p>
+                  <p className="text-xs uppercase tracking-[2px] text-gray-500 font-bold mb-6">
+                    Human support for important travel steps
+                  </p>
+                  {isConsultationService(service) ? (
+                    <Link
+                      to="/book-consultation"
+                      className="inline-block bg-[#0B1C3E] text-white px-6 py-3 rounded-full font-bold uppercase tracking-widest hover:bg-[#1a2f55] transition-colors"
+                    >
+                      {getServiceCtaLabel(service)}
+                    </Link>
+                  ) : (
+                    <button
+                      onClick={() => openServiceInquiryModal(service)}
+                      className="bg-[#0B1C3E] text-white px-6 py-3 rounded-full font-bold uppercase tracking-widest hover:bg-[#1a2f55] transition-colors"
+                    >
+                      {getServiceCtaLabel(service)}
+                    </button>
+                  )}
                 </div>
               ))
             ) : (
-              <div className="col-span-full text-center text-gray-500">No services found.</div>
+              <div className="col-span-full text-center text-gray-500">No services are available right now. Please check again soon or contact us on WhatsApp.</div>
             )}
           </div>
         </div>
@@ -281,12 +447,12 @@ const Home = () => {
       {/* Private Consultation CTA */}
       <div id="consultation" className="bg-[#006837] text-white py-16">
         <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl font-black uppercase tracking-widest mb-4">Plan Your Perfect Journey</h2>
+          <h2 className="text-3xl font-black uppercase tracking-widest mb-4">Need Personalized Travel Guidance?</h2>
           <p className="text-lg text-green-100 mb-8 max-w-2xl mx-auto">
-            Need personalized advice? Book a private consultation with our travel experts to discuss your specific needs and preferences.
+            Request a private consultation for personalized travel guidance, planning support, and help understanding your next steps.
           </p>
           <Link to="/book-consultation" className="inline-block bg-white text-[#006837] px-8 py-4 rounded-full font-bold uppercase tracking-widest hover:bg-[#D4AF37] hover:text-[#0B1C3E] transition-colors shadow-lg">
-            Book a Private Call
+            Request Private Consultation
           </Link>
         </div>
       </div>
@@ -322,6 +488,30 @@ const Home = () => {
             </button>
             <div className="p-2">
               <BookingForm packageId={selectedTripId} onClose={closeBookingModal} isModal={true} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {serviceInquiryModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={closeServiceInquiryModal}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={closeServiceInquiryModal}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-800 z-10 bg-gray-100 rounded-full p-1"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <div className="p-2">
+              <ServiceInquiryForm service={selectedService} onClose={closeServiceInquiryModal} isModal={true} />
             </div>
           </div>
         </div>

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../db');
 const auth = require('../middleware/auth');
-const adminAuth = require('../middleware/adminAuth');
+const { requireAdmin } = require('../middleware/adminAuth');
 const {
     isNonEmptyString,
     sendInvalidId,
@@ -160,7 +160,7 @@ router.get('/:id', async (req, res) => {
 // @route   POST api/packages
 // @desc    Create a package
 // @access  Private (Admin)
-router.post('/', auth, adminAuth, async (req, res) => {
+router.post('/', auth, requireAdmin, async (req, res) => {
     try {
         await runUpload(packageImageUpload.single('image'), req, res);
     } catch (error) {
@@ -194,7 +194,7 @@ router.post('/', auth, adminAuth, async (req, res) => {
 // @route   PUT api/packages/:id
 // @desc    Update a package
 // @access  Private (Admin)
-router.put('/:id', auth, adminAuth, async (req, res) => {
+router.put('/:id', auth, requireAdmin, async (req, res) => {
     try {
         await runUpload(packageImageUpload.single('image'), req, res);
     } catch (error) {
@@ -236,7 +236,7 @@ router.put('/:id', auth, adminAuth, async (req, res) => {
 // @route   DELETE api/packages/:id
 // @desc    Delete a package
 // @access  Private (Admin)
-router.delete('/:id', auth, adminAuth, async (req, res) => {
+router.delete('/:id', auth, requireAdmin, async (req, res) => {
     try {
         const id = toPositiveInteger(req.params.id);
         if (id === null) {

@@ -1,157 +1,305 @@
 # NuurPath Travels
 
-NuurPath is a full-stack travel management platform for package discovery, booking requests, consultations, flights, reviews, and admin follow-up. The current product is an inquiry and operations workflow, not an online payment system.
+NuurPath is a travel request and operations platform for Umrah packages, flights, visa/passport support, service inquiries, consultations, and customer follow-up. The website starts the request. The team continues the real operational work on WhatsApp and through internal follow-up.
 
-## Project Structure
+## What It Is
 
-- `client/` - React frontend
-- `server/` - Express + Prisma backend
-- `server/server.js` - active backend entrypoint
-- `server/prisma/schema.prisma` - canonical Prisma schema
-- `server/config/env.js` - canonical backend env loader and production validation
+- Guest-first request platform for package, flight, service, consultation, and contact inquiries
+- Optional customer account system for tracking requests and receiving account-based benefits
+- Admin and manager operations dashboard for request triage, pipeline updates, and internal notes
+- Travel lead pipeline, not a checkout flow
 
-## Production Domains
+## What It Is Not
 
-- Frontend: `https://nuurpath.com`
-- Frontend alias: `https://www.nuurpath.com`
-- Backend: `https://api.nuurpath.com`
-- Frontend API env: `REACT_APP_API_URL=https://api.nuurpath.com/api`
+- Not an online payment gateway
+- Not a live flight inventory engine
+- Not an instant ticketing system
+- Not a Galileo integration
+- Not a visa or passport approval guarantee
 
-The backend does not serve `client/build/` in production. Frontend and backend should be deployed separately.
+Flights remain manual and team-assisted. Package and service requests remain inquiry-based. Customer follow-up continues on WhatsApp.
 
-## Environment Files
+## Role Model
+
+- `user`: customer account created through public registration or Google sign-in
+- `manager`: operational follow-up role created by an admin
+- `admin`: full operational and user-management role
+
+Important rules:
+
+- Public registration always creates `user` accounts only
+- Managers do not self-register
+- Managers cannot manage users or roles
+- Admins create manager accounts
+- The last admin cannot be deleted or demoted
+
+## Main Flows
+
+### Public / Guest
+
+- Browse packages and services without logging in
+- Submit package requests without mandatory registration
+- Submit flight requests without mandatory registration
+- Submit visa/passport/service inquiries without mandatory registration
+- Submit consultation and contact requests without mandatory registration
+- Continue with the team on WhatsApp after submission
+
+### Logged-in Users
+
+- Log in with email/password
+- Optionally use Google sign-in when configured
+- Submit the same request flows while linking records to their account
+- View their own protected request history where supported
+- Update their own profile and password
+
+### Admin / Manager
+
+- View operational pipelines for package requests, flight requests, service inquiries, and consultations
+- Update pipeline status and internal notes
+- Continue lead follow-up through WhatsApp
+- Admin-only management for users, managers, services, and package content
+
+## Repository Structure
+
+- `client/`: React frontend
+- `server/`: Express + Prisma backend
+- `server/server.js`: backend entrypoint
+- `server/prisma/schema.prisma`: canonical database schema
+- `nuurpath_postman_collection.json`: lightweight API request collection
+
+## Key API Endpoints
+
+### Auth
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/google`
+- `POST /api/auth/forgot-password`
+- `POST /api/auth/reset-password/:token`
+- `POST /api/auth/verify-email`
+- `GET /api/auth/me`
+
+### Public Request Creation
+
+- `POST /api/bookings`
+- `POST /api/flights`
+- `POST /api/services/inquiries`
+- `POST /api/appointments/private`
+- `POST /api/contact`
+
+### Admin / Manager Operations
+
+- `GET /api/package-bookings`
+- `PUT /api/package-bookings/:id`
+- `GET /api/flights`
+- `PUT /api/flights/:id`
+- `GET /api/services/inquiries`
+- `PUT /api/services/inquiries/:id`
+- `GET /api/appointments/private`
+- `PUT /api/appointments/private/:id`
+
+### Admin User Management
+
+- `GET /api/users`
+- `POST /api/users`
+- `PUT /api/users/:id`
+- `DELETE /api/users/:id`
+
+### Profile / Notifications
+
+- `GET /api/profile`
+- `PUT /api/profile`
+- `PUT /api/profile/change-password`
+- `GET /api/notifications`
+- `PUT /api/notifications/read-all`
+
+## Environment Configuration
+
+Example files:
 
 - Root orchestration example: `.env.example`
 - Backend example: `server/.env.example`
 - Frontend example: `client/.env.example`
 
-Do not commit real secrets. Keep production values in your host platform or private `.env` files only.
+Do not commit real secrets. Keep production values in your hosting platform or private local env files.
 
-### Backend production variables
+### Backend variables
 
-- `NODE_ENV=production`
-- `PORT=5001`
-- `CLIENT_URL=https://nuurpath.com`
-- `API_BASE_URL=https://api.nuurpath.com`
-- `ALLOWED_ORIGINS=https://nuurpath.com,https://www.nuurpath.com`
-- `UPLOAD_ROOT=/var/data/nuurpath/uploads`
-- `DATABASE_URL=<real-value>`
-- `JWT_SECRET=<strong-real-value>`
-- `EMAIL_HOST=<smtp-host>`
-- `EMAIL_PORT=<smtp-port>`
-- `EMAIL_USER=<smtp-user>`
-- `EMAIL_PASS=<smtp-password>`
-- `EMAIL_FROM=<from-address>`
-- `ADMIN_EMAIL=<admin-inbox>`
-- `GOOGLE_CLIENT_ID=<google-oauth-client-id>`
+Core:
 
-### Frontend production variables
+- `NODE_ENV`
+- `PORT`
+- `CLIENT_URL`
+- `API_BASE_URL`
+- `ALLOWED_ORIGINS`
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `UPLOAD_ROOT`
 
-- `REACT_APP_API_URL=https://api.nuurpath.com/api`
-- `REACT_APP_GOOGLE_CLIENT_ID=<google-oauth-client-id>`
+Optional integrations:
+
+- `GOOGLE_CLIENT_ID`
+- `EMAIL_HOST`
+- `EMAIL_PORT`
+- `EMAIL_USER`
+- `EMAIL_PASS`
+- `EMAIL_FROM`
+- `ADMIN_EMAIL`
+
+Bootstrap / local helpers:
+
+- `ADMIN_BOOTSTRAP_EMAIL`
+- `ADMIN_BOOTSTRAP_PASSWORD`
+- `DEMO_USER_EMAIL`
+- `DEMO_USER_PASSWORD`
+- `TEST_LOGIN_EMAIL`
+- `TEST_LOGIN_PASSWORD`
+
+Production notes:
+
+- Use a strong `JWT_SECRET` with at least 32 characters
+- `ALLOWED_ORIGINS` must list the deployed frontend domains
+- `CLIENT_URL` and `API_BASE_URL` should be `https://` in production
+- `UPLOAD_ROOT` should point to persistent storage
+- Email settings should be configured together if email sending is enabled
+- Private booking documents and new protected chat files must stay outside public static storage
+
+### Frontend variables
+
+- `REACT_APP_API_URL=http://localhost:5000/api`
+- `REACT_APP_GOOGLE_CLIENT_ID=your_google_client_id_here`
+- `REACT_APP_WHATSAPP_NUMBER=255764770939`
+
+`REACT_APP_WHATSAPP_NUMBER` is public configuration, not a secret.
 
 ## Local Development
 
-1. Copy example env files and fill in local values.
+1. Copy env examples and fill local values.
 
 ```bash
 cp server/.env.example server/.env
 cp client/.env.example client/.env.local
 ```
 
-2. Start the backend.
+2. Install dependencies.
+
+```bash
+npm install
+cd server && npm install
+cd ../client && npm install
+```
+
+3. Start the backend.
 
 ```bash
 cd server
-npm ci
-npm start
-```
-
-3. Start the frontend in another terminal.
-
-```bash
-cd client
-npm ci
-npm start
-```
-
-4. Optional root helper for parallel local work.
-
-```bash
-npm ci
 npm run dev
 ```
 
-## Prisma Commands
+4. Start the frontend in another terminal.
 
-Run Prisma commands from `server/` so they use `server/prisma/schema.prisma`.
+```bash
+cd client
+npm start
+```
+
+5. Optional root helper.
+
+```bash
+npm run dev
+```
+
+## Database and Prisma
+
+Run Prisma commands from `server/`.
 
 ```bash
 cd server
-npx prisma generate --schema=prisma/schema.prisma
-npx prisma migrate deploy --schema=prisma/schema.prisma
+npx prisma generate
+npx prisma validate
 ```
 
-For local schema iteration only:
+Local development migration flow only:
 
 ```bash
 cd server
-npx prisma migrate dev --schema=prisma/schema.prisma
+npx prisma migrate dev
 ```
 
-Do not use `prisma migrate reset` in deployment flows.
+Do not use destructive reset flows against real data. Back up production before applying migrations.
 
-## Docker
+Recent additive migrations from the latest work:
 
-The included `Dockerfile` builds the frontend as a validation step and packages the backend runtime separately. The runtime container starts the API from `server/server.js`; it does not serve the React build.
+- `202607090001_add_verification_token_expiry`
+- `20260709103000_allow_guest_package_requests`
+- `20260709143000_add_service_inquiries`
+- `20260709173000_add_operational_pipeline_fields`
 
-For local container deployment:
+## Testing and QA
+
+Backend regression tests:
 
 ```bash
-cp .env.example .env
-docker compose build
-docker compose up -d
+cd server
+npm test -- --runInBand
 ```
 
-Set real values in `.env` before deploying. The compose file uses environment interpolation instead of hardcoded secrets.
+Backend syntax verification:
 
-## Render Deployment
+```bash
+cd server
+npm run check
+```
 
-### Backend
+Prisma verification:
 
-- Service name: `nuurpath-app`
-- Type: `Web Service`
-- Root directory: `server`
-- Build command: `npm ci && npx prisma generate --schema=prisma/schema.prisma && npx prisma migrate deploy`
-- Start command: `npm start`
-- Health check path: `/health`
-- Custom domain: `https://api.nuurpath.com`
-- Auto deploy: `Off`
-- Persistent disk: required while uploads remain on the filesystem
-- Disk mount path: `/var/data/nuurpath`
-- Required upload env: `UPLOAD_ROOT=/var/data/nuurpath/uploads`
+```bash
+cd server
+npm run prisma:validate
+npx prisma generate
+```
 
-### Frontend
+Frontend production build:
 
-- Service name: `nuurpath-web`
-- Type: `Static Site`
-- Root directory: `client`
-- Build command: `npm ci && npm run build`
-- Publish directory: `build`
-- Custom domains: `https://nuurpath.com` and `https://www.nuurpath.com`
-- Auto deploy: `Off` during backend phase
-- Required env: `REACT_APP_API_URL=https://api.nuurpath.com/api`
+```bash
+cd client
+npm run build
+```
 
-## Storage Notes
+Current automated backend coverage focuses on:
 
-- Local development falls back to `server/public/uploads/` and `server/private/uploads/`.
-- Production filesystem uploads should use `UPLOAD_ROOT=/var/data/nuurpath/uploads`.
-- Public assets are served from `${UPLOAD_ROOT}/public`.
-- Protected booking documents are stored under `${UPLOAD_ROOT}/private` and remain behind authenticated API access.
+- public registration role safety
+- generic login and forgot-password responses
+- hashed password reset token storage
+- Google sign-in role safety
+- guest package, flight, and service inquiry flows
+- admin and manager permission enforcement
+- operational status and internal note regression checks
+- upload type validation helper behavior
 
-## Repository Hygiene
+## Storage and Privacy Notes
 
-- Do not commit `client/build/`
-- Do not commit `server/public/uploads/`
-- Do not commit `server/private/uploads/`
-- Do not commit `.env` files or other real secrets
+- Public media remains under `server/public/uploads/`
+- Private booking documents remain under `server/private/uploads/` or the private branch of `UPLOAD_ROOT`
+- New protected chat files are served through authenticated API access
+- Historical public chat uploads created before the hardening pass may still exist under legacy public paths and should be reviewed before production launch
+
+## Postman Collection
+
+`nuurpath_postman_collection.json` is a lightweight helper collection for local QA. It now points at the current local API base URL and the main request flows, but it is not a full contract test suite.
+
+## Operational Notes
+
+- Admin should create manager accounts directly
+- Managers should handle follow-up, status updates, and internal notes only
+- No online payment is collected on the website
+- No live Galileo ticketing or flight booking is exposed to customers
+- WhatsApp numbers and production SMTP settings should be tested before launch
+
+## Deployment Reminders
+
+- Deploy frontend and backend separately
+- Keep CORS origins aligned with the real frontend domains
+- Store uploads on persistent storage
+- Back up the database before production migrations
+- Test email delivery, Google OAuth, and WhatsApp links in the live environment

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import axios, { BACKEND_ORIGIN, getStoredAuthToken } from '../lib/api';
 import { Link } from 'react-router-dom';
-import { CONFIG } from '../config';
 import io from 'socket.io-client';
 
 const NotificationBell = () => {
@@ -24,12 +23,10 @@ const NotificationBell = () => {
 
     const fetchNotifications = async () => {
         try {
-            const token = localStorage.getItem('token');
+            const token = getStoredAuthToken();
             if (!token) return;
 
-            const res = await axios.get(`${CONFIG.API_BASE_URL}/notifications`, {
-                headers: { 'x-auth-token': token }
-            });
+            const res = await axios.get('/notifications');
 
             const data = res.data.notifications || (Array.isArray(res.data) ? res.data : []);
             setNotifications(data);
@@ -45,32 +42,22 @@ const NotificationBell = () => {
         const interval = setInterval(fetchNotifications, 60000);
 
         // Socket.IO Connection
-        const token = localStorage.getItem('token');
+        const token = getStoredAuthToken();
         let socket = null;
 
         if (token) {
-            // Connect to root URL (remove /api if present in base URL)
-            const socketUrl = CONFIG.API_BASE_URL.replace('/api', '');
-            socket = io(socketUrl);
-
-            // Fetch user details to register socket with email
-            axios.get(`${CONFIG.API_BASE_URL}/auth/me`, {
-                headers: { 'x-auth-token': token }
-            }).then(res => {
-                const user = res.data;
-                socket.emit("register_user", { 
-                    id: user.id, 
-                    email: user.email, 
-                    role: user.role 
-                });
-            }).catch(err => {
-                console.error("Socket auth error:", err); // Log socket auth errors
+            socket = io(BACKEND_ORIGIN, {
+                auth: { token },
             });
 
             // Listen for real-time notifications
             socket.on("receive_notification", (newNotification) => {
                 setNotifications(prev => [newNotification, ...prev]);
                 setUnreadCount(prev => prev + 1);
+            });
+
+            socket.on("connect_error", (err) => {
+                console.error("Socket auth error:", err);
             });
         }
 
@@ -82,16 +69,13 @@ const NotificationBell = () => {
 
     const markAsRead = async (id) => {
         try {
-            const token = localStorage.getItem('token');
             // Optimistic update
             setNotifications(prev => prev.map(n => 
                 n.id === id ? { ...n, read: true } : n
             ));
             setUnreadCount(prev => Math.max(0, prev - 1));
 
-            await axios.put(`${CONFIG.API_BASE_URL}/notifications/${id}/read`, {}, {
-                headers: { 'x-auth-token': token }
-            });
+            await axios.put(`/notifications/${id}/read`);
         } catch (err) {
             setError('Failed to mark notification as read.'); // Set user-facing error
             console.error("Error marking notification as read:", err); // Log for debugging

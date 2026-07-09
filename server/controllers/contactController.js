@@ -1,5 +1,6 @@
 const sendEmail = require('../utils/emailService');
 const { validationResult } = require('express-validator');
+const { formatPlainTextForHtml, sanitizeEmailHeaderValue } = require('../utils/security');
 
 exports.submitContactForm = async (req, res) => {
     const errors = validationResult(req);
@@ -10,25 +11,35 @@ exports.submitContactForm = async (req, res) => {
     const { name, email, subject, message } = req.body;
 
     try {
+        const normalizedSubject = sanitizeEmailHeaderValue(subject, 'Contact Form Submission');
         const emailContent = `
             <h3>New Contact Form Submission</h3>
-            <p><strong>Name:</strong> ${name}</p>
-            <p><strong>Email:</strong> ${email}</p>
-            <p><strong>Subject:</strong> ${subject}</p>
+            <p><strong>Name:</strong> ${formatPlainTextForHtml(name)}</p>
+            <p><strong>Email:</strong> ${formatPlainTextForHtml(email)}</p>
+            <p><strong>Subject:</strong> ${formatPlainTextForHtml(subject)}</p>
             <p><strong>Message:</strong></p>
-            <p>${message.replace(/\n/g, '<br>')}</p>
+            <p>${formatPlainTextForHtml(message)}</p>
         `;
 
         const emailOptions = {
             to: process.env.ADMIN_EMAIL,
-            subject: `Contact Form: ${subject}`,
-            html: emailContent
+            subject: `Contact Form: ${normalizedSubject}`,
+            html: emailContent,
+            text: [
+                'New Contact Form Submission',
+                `Name: ${name}`,
+                `Email: ${email}`,
+                `Subject: ${normalizedSubject}`,
+                'Message:',
+                message,
+            ].join('\n'),
         };
 
         if (req.file) {
             emailOptions.attachments = [{
-                filename: req.file.originalname,
-                content: req.file.buffer
+                filename: sanitizeEmailHeaderValue(req.file.originalname, 'attachment'),
+                content: req.file.buffer,
+                contentType: req.file.mimetype,
             }];
         }
 

@@ -1,4 +1,5 @@
 const prisma = require('../db');
+const { getNotificationRoomForUser } = require('./socketRooms');
 
 function toPositiveInteger(value) {
     const normalized = Number.parseInt(value, 10);
@@ -73,12 +74,12 @@ async function sendNotification(app, params) {
     try {
         const targetUser = await prisma.user.findUnique({
             where: { id: notification.userId },
-            select: { email: true },
+            select: { id: true },
         });
         const io = app && typeof app.get === 'function' ? app.get('io') : null;
 
-        if (io && targetUser && targetUser.email) {
-            io.to(targetUser.email).emit('receive_notification', notification);
+        if (io && targetUser) {
+            io.to(getNotificationRoomForUser(targetUser.id)).emit('receive_notification', notification);
         }
     } catch (error) {
         console.error('[NotificationService] Failed to emit notification:', error.message);

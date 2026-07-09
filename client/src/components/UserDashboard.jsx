@@ -3,14 +3,21 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.jsx';
-import axios from 'axios';
+import axios, { resolveBackendUrl } from '../lib/api';
 import FlightDetailsModal from './FlightDetailsModal';
-import { CONFIG } from '../config';
 import UserSpendingSummary from './UserSpendingSummary';
 import TripCountdown from './TripCountdown';
 import WeatherWidget from './WeatherWidget';
 import DestinationMap from './DestinationMap';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import {
+    getOperationalStatusBadgeClassName,
+    getOperationalStatusLabel,
+    isOperationalCancelledStatus,
+    isOperationalCompletedStatus,
+    isOperationalConfirmedStatus,
+    isOperationalOpenStatus,
+} from '../lib/operationalPipeline.js';
 
 const UserDashboard = () => {
     const { user, isAuthenticated, loading: authLoading } = useAuth();
@@ -77,12 +84,12 @@ const UserDashboard = () => {
                     reviewsRes,
                     notifRes
                 ] = await Promise.allSettled([
-                    axios.get(`${CONFIG.API_BASE_URL}/bookings`),
-                    axios.get(`${CONFIG.API_BASE_URL}/appointments/private`),
-                    axios.get(`${CONFIG.API_BASE_URL}/flights`),
-                    axios.get(`${CONFIG.API_BASE_URL}/wishlist`),
-                    axios.get(`${CONFIG.API_BASE_URL}/reviews/user`),
-                    axios.get(`${CONFIG.API_BASE_URL}/notifications`)
+                    axios.get(`/bookings`),
+                    axios.get(`/appointments/private`),
+                    axios.get(`/flights`),
+                    axios.get(`/wishlist`),
+                    axios.get(`/reviews/user`),
+                    axios.get(`/notifications`)
                 ]);
 
                 if (bookingsRes.status === 'fulfilled') {
@@ -120,7 +127,7 @@ const UserDashboard = () => {
             ...bookings.map(b => ({
                 ...b,
                 type: 'Package',
-                date: new Date(b.travelDate),
+                date: b.travelDate ? new Date(b.travelDate) : null,
                 title: b.package?.title || 'Travel Package',
                 destination: b.package?.destination
             })),
@@ -135,7 +142,7 @@ const UserDashboard = () => {
 
         // Filter for confirmed trips in the future
         const upcoming = allTrips
-            .filter(t => t.status === 'Confirmed' && t.date > now)
+            .filter(t => isOperationalConfirmedStatus(t.status) && t.date && t.date > now)
             .sort((a, b) => a.date - b.date);
 
         setNextTrip(upcoming.length > 0 ? upcoming[0] : null);
@@ -145,7 +152,7 @@ const UserDashboard = () => {
         if (bookings.length > 0) {
             const distribution = {};
             bookings.forEach(b => {
-                if (b.status !== 'Cancelled' && b.package) {
+                if (!isOperationalCancelledStatus(b.status) && b.package) {
                     let type = b.package.type || 'Other';
                     type = type.charAt(0).toUpperCase() + type.slice(1);
                     const cost = Number(b.package.price || 0) * (b.passengers || 1);
@@ -177,7 +184,7 @@ const UserDashboard = () => {
 
         setUploading(true);
         try {
-            const response = await axios.post(`${CONFIG.API_BASE_URL}/profile/upload-picture`, formData, {
+            const response = await axios.post(`/profile/upload-picture`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
@@ -192,15 +199,15 @@ const UserDashboard = () => {
     };
 
     const handleCancelFlight = async (id) => {
-        if (!window.confirm('Are you sure you want to cancel this flight booking?')) return;
+        if (!window.confirm('Are you sure you want to cancel this flight request?')) return;
 
         try {
-            const response = await axios.put(`${CONFIG.API_BASE_URL}/flights/${id}/cancel`);
+            const response = await axios.put(`/flights/${id}/cancel`);
 
             if (response.status === 200) {
                 setFlights(flights.map(f => f.id === id ? { ...f, status: 'Cancelled' } : f));
             } else {
-                alert('Failed to cancel flight booking.');
+                alert('Failed to cancel flight request.');
             }
         } catch (error) {
             console.error("Error cancelling flight:", error);
@@ -222,7 +229,7 @@ const UserDashboard = () => {
         }
 
         try {
-            const response = await axios.put(`${CONFIG.API_BASE_URL}/profile/change-password`, {
+            const response = await axios.put(`/profile/change-password`, {
                 currentPassword: passwordData.currentPassword,
                 newPassword: passwordData.newPassword
             });
@@ -242,7 +249,7 @@ const UserDashboard = () => {
         e.preventDefault();
         setProfileMessage(null);
         try {
-            const response = await axios.put(`${CONFIG.API_BASE_URL}/profile`, profileData);
+            const response = await axios.put(`/profile`, profileData);
             
             if (response.status === 200) {
                 setProfileMessage({ type: 'success', text: 'Profile updated successfully' });
@@ -292,12 +299,12 @@ const UserDashboard = () => {
         }
 
         try {
-            await axios.post(`${CONFIG.API_BASE_URL}/reviews`, formData, {
+            await axios.post(`/reviews`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
             
             // Refresh reviews
-            const reviewsRes = await axios.get(`${CONFIG.API_BASE_URL}/reviews/user`);
+            const reviewsRes = await axios.get(`/reviews/user`);
             setUserReviews(reviewsRes.data);
 
             alert('Review submitted successfully! It will be visible after approval.');
@@ -388,7 +395,7 @@ const UserDashboard = () => {
 
     const handleRemoveFromWishlist = async (packageId) => {
         try {
-            await axios.post(`${CONFIG.API_BASE_URL}/wishlist/${packageId}`);
+            await axios.post(`/wishlist/${packageId}`);
             setWishlist(prev => prev.filter(item => item.packageId !== packageId));
         } catch (err) {
             console.error('Error removing from wishlist:', err);
@@ -397,7 +404,7 @@ const UserDashboard = () => {
 
     const handleMarkRead = async (id) => {
         try {
-            await axios.put(`${CONFIG.API_BASE_URL}/notifications/${id}/read`);
+            await axios.put(`/notifications/${id}/read`);
             setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
         } catch (err) {
             console.error('Error marking notification as read:', err);
@@ -419,7 +426,7 @@ const UserDashboard = () => {
                 <div className="relative group">
                     <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-gray-100 bg-gray-200">
                         {profilePic ? (
-                            <img src={profilePic.startsWith('http') ? profilePic : `${CONFIG.API_BASE_URL.replace('/api', '')}${profilePic.startsWith('/') ? '' : '/'}${profilePic}`} alt="Profile" className="w-full h-full object-cover" />
+                            <img src={resolveBackendUrl(profilePic)} alt="Profile" className="w-full h-full object-cover" />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center text-gray-400 text-3xl font-bold">
                                 {user.name.charAt(0).toUpperCase()}
@@ -436,7 +443,7 @@ const UserDashboard = () => {
                 </div>
                 <div>
                     <h1 className="text-3xl font-bold text-[#0B1C3E] mb-1">Hello, {user.name}</h1>
-                    <p className="text-gray-500">Manage your trips and consultations here.</p>
+                    <p className="text-gray-500">Track your requests, follow status updates, and keep your saved packages in one place.</p>
                 </div>
             </div>
 
@@ -448,7 +455,7 @@ const UserDashboard = () => {
                     }`}
                     onClick={() => setActiveTab('bookings')}
                 >
-                    My Packages
+                    My Requests
                     {activeTab === 'bookings' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#D4AF37]"></span>}
                 </button>
                 <button
@@ -466,7 +473,7 @@ const UserDashboard = () => {
                     }`}
                     onClick={() => setActiveTab('flights')}
                 >
-                    My Flights
+                    My Flight Requests
                     {activeTab === 'flights' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#D4AF37]"></span>}
                 </button>
                 <button
@@ -555,19 +562,17 @@ const UserDashboard = () => {
                                         <div>
                                             <h3 className="font-bold text-lg text-[#0B1C3E]">{booking.package?.title || 'Travel Package'}</h3>
                                             <div className="text-sm text-gray-600 mt-1 space-y-1">
-                                                <p>📅 Travel Date: {booking.travelDate ? new Date(booking.travelDate).toLocaleDateString() : 'TBD'}</p>
-                                                <p>👥 Passengers: {booking.passengers}</p>
+                                                <p>📅 Preferred Travel Date: {booking.travelDate ? new Date(booking.travelDate).toLocaleDateString() : 'TBD'}</p>
+                                                <p>👥 Travelers: {booking.passengers}</p>
                                             </div>
                                         </div>
                                         <div className="mt-4 md:mt-0 flex flex-col items-end gap-2">
                                             <span className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider ${
-                                                booking.status === 'Confirmed' ? 'bg-green-100 text-green-700' :
-                                                booking.status === 'Cancelled' ? 'bg-red-100 text-red-700' :
-                                                'bg-yellow-100 text-yellow-700'
+                                                getOperationalStatusBadgeClassName(booking.status)
                                             }`}>
-                                                {booking.status || 'Pending'}
+                                                {getOperationalStatusLabel(booking.status)}
                                             </span>
-                                            {booking.status === 'Confirmed' && new Date(booking.travelDate) < new Date() && (
+                                            {(isOperationalConfirmedStatus(booking.status) || isOperationalCompletedStatus(booking.status)) && booking.travelDate && new Date(booking.travelDate) < new Date() && (
                                                 hasReviewed ? (
                                                     <span className="text-xs text-gray-500 font-medium flex items-center gap-1">
                                                         <span className="text-yellow-500">★</span> Reviewed
@@ -586,7 +591,7 @@ const UserDashboard = () => {
                                 )})
                             ) : (
                                 <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-                                    <p className="text-gray-500 mb-4">You haven't booked any packages yet.</p>
+                                    <p className="text-gray-500 mb-4">You have not sent a package request yet. Explore packages and send your first request when you are ready.</p>
                                     <Link to="/packages" className="inline-block bg-[#0B1C3E] text-white px-6 py-2 rounded-lg font-medium hover:bg-[#1a2f55] transition-colors">
                                         Explore Packages
                                     </Link>
@@ -609,18 +614,18 @@ const UserDashboard = () => {
                                                 )}
                                             </div>
                                             <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
-                                                consultation.status === 'Contacted' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                                                getOperationalStatusBadgeClassName(consultation.status)
                                             }`}>
-                                                {consultation.status || 'Pending'}
+                                                {getOperationalStatusLabel(consultation.status)}
                                             </span>
                                         </div>
                                     </div>
                                 ))
                             ) : (
                                 <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-                                    <p className="text-gray-500 mb-4">No consultation requests found.</p>
+                                    <p className="text-gray-500 mb-4">You have not requested a consultation yet.</p>
                                     <Link to="/book-consultation" className="inline-block bg-[#0B1C3E] text-white px-6 py-2 rounded-lg font-medium hover:bg-[#1a2f55] transition-colors">
-                                        Book Consultation
+                                        Request Consultation
                                     </Link>
                                 </div>
                             )}
@@ -647,13 +652,11 @@ const UserDashboard = () => {
                                             </div>
                                             <div className="flex flex-col items-end gap-2">
                                                 <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
-                                                    flight.status === 'Confirmed' ? 'bg-green-100 text-green-700' : 
-                                                    flight.status === 'Cancelled' ? 'bg-red-100 text-red-700' :
-                                                    'bg-yellow-100 text-yellow-700'
+                                                    getOperationalStatusBadgeClassName(flight.status)
                                                 }`}>
-                                                    {flight.status || 'Pending'}
+                                                    {getOperationalStatusLabel(flight.status)}
                                                 </span>
-                                                {flight.status !== 'Cancelled' && (
+                                                {isOperationalOpenStatus(flight.status) && (
                                                     <button 
                                                         onClick={(e) => {
                                                             e.stopPropagation();
@@ -670,9 +673,9 @@ const UserDashboard = () => {
                                 ))
                             ) : (
                                 <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-                                    <p className="text-gray-500 mb-4">No flight bookings found.</p>
+                                    <p className="text-gray-500 mb-4">You have not requested a flight quote yet.</p>
                                     <Link to="/book-flight" className="inline-block bg-[#0B1C3E] text-white px-6 py-2 rounded-lg font-medium hover:bg-[#1a2f55] transition-colors">
-                                        Book a Flight
+                                        Request Flight Quote
                                     </Link>
                                 </div>
                             )}
@@ -694,7 +697,7 @@ const UserDashboard = () => {
                                             <p className="text-sm text-gray-600 mb-4 line-clamp-2">{item.package.description}</p>
                                             <div className="flex justify-between items-center">
                                                 <Link to={`/packages/${item.packageId}`} className="text-sm font-bold text-[#0B1C3E] hover:text-[#D4AF37]">
-                                                    View Details
+                                                    View Package
                                                 </Link>
                                                 <button onClick={() => handleRemoveFromWishlist(item.packageId)} className="text-red-500 hover:text-red-700 text-sm">
                                                     Remove
@@ -705,7 +708,7 @@ const UserDashboard = () => {
                                 ))
                             ) : (
                                 <div className="col-span-full text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-                                    <p className="text-gray-500 mb-4">Your wishlist is empty.</p>
+                                    <p className="text-gray-500 mb-4">You have not saved any packages yet.</p>
                                     <Link to="/packages" className="inline-block bg-[#0B1C3E] text-white px-6 py-2 rounded-lg font-medium hover:bg-[#1a2f55] transition-colors">Explore Packages</Link>
                                 </div>
                             )}
@@ -737,7 +740,7 @@ const UserDashboard = () => {
                                 ))
                             ) : (
                                 <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-                                    <p className="text-gray-500">You have no notifications.</p>
+                                    <p className="text-gray-500">You have no updates right now.</p>
                                 </div>
                             )}
                         </div>

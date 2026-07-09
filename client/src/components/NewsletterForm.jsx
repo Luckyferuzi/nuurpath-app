@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
-import { CONFIG } from '../config';
+import axios from '../lib/api';
 
 const NewsletterForm = () => {
     const [email, setEmail] = useState('');
@@ -12,7 +11,7 @@ const NewsletterForm = () => {
         if (!email) return;
         setStatus('loading');
         try {
-            await axios.post(`${CONFIG.API_BASE_URL}/newsletter/subscribe`, { email });
+            await axios.post(`/newsletter/subscribe`, { email });
             setStatus('success');
             setMessage('Subscribed successfully!');
             setEmail('');

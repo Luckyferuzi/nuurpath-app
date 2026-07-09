@@ -18,6 +18,7 @@ import PackageBookingsAdmin from './components/PackageBookingsAdmin.jsx';
 import FlightBookingsAdmin from './components/FlightBookingsAdmin.jsx';
 import ManageUsers from './components/ManageUsers.jsx';
 import ManageServices from './components/ManageServices.jsx';
+import ServiceInquiriesAdmin from './components/ServiceInquiriesAdmin.jsx';
 import ManagePackages from './components/ManagePackages.jsx';
 import ManageReviews from './components/ManageReviews.jsx';
 import Login from './components/Login.jsx';
@@ -29,6 +30,7 @@ import ContactUs from './components/ContactUs.jsx';
 import UserDashboard from './components/UserDashboard.jsx';
 import UserProfile from './components/UserProfile.jsx';
 import TermsAndConditions from './components/TermsAndConditions.jsx';
+import PrivacyPolicy from './components/PrivacyPolicy.jsx';
 import Footer from './components/Footer.jsx';
 import Home from './components/Home.jsx';
 import WhatsAppButton from './components/WhatsAppButton.jsx';
@@ -62,6 +64,7 @@ function App() {
                 <Route path="/reset-password/:token" element={<ResetPassword />} />
                 <Route path="/contact" element={<ContactUs />} />
                 <Route path="/terms" element={<TermsAndConditions />} />
+                <Route path="/privacy" element={<PrivacyPolicy />} />
                 <Route path="/team" element={<Team />} />
                 <Route path="/verify-email/:token" element={<VerifyEmail />} />
                 
@@ -73,16 +76,28 @@ function App() {
               
 
                 {/* Admin Routes */}
-                <Route element={<AdminRoute />}>
+                <Route element={<AdminRoute allowedRoles={['admin', 'manager']} />}>
                   <Route path="/admin" element={<AdminDashboard />} />
                   <Route path="/admin/consultations" element={<PrivateConsultationsAdmin />} />
                   <Route path="/admin/package-bookings" element={<PackageBookingsAdmin />} />
                   <Route path="/admin/flight-bookings" element={<FlightBookingsAdmin />} />
+                  <Route path="/admin/service-inquiries" element={<ServiceInquiriesAdmin />} />
+                  <Route path="/admin/reviews" element={<ManageReviews />} />
+                  <Route path="/admin/chat" element={<ChatComponent />} />
+                </Route>
+                <Route
+                  element={(
+                    <AdminRoute
+                      allowedRoles={['admin']}
+                      permissionTitle="Admin Access Required"
+                      permissionMessage="Only admin accounts can manage users, services, and package content."
+                      fallbackPath="/admin"
+                    />
+                  )}
+                >
                   <Route path="/admin/users" element={<ManageUsers />} />
                   <Route path="/admin/services" element={<ManageServices />} />
                   <Route path="/admin/packages" element={<ManagePackages />} />
-                  <Route path="/admin/reviews" element={<ManageReviews />} />
-                  <Route path="/admin/chat" element={<ChatComponent />} />
                 </Route>
               </Routes>
               <Footer />

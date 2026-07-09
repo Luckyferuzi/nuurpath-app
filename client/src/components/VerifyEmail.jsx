@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import axios from 'axios';
-import { CONFIG } from '../config';
+import axios from '../lib/api';
 
 const VerifyEmail = () => {
     const { token } = useParams();
@@ -11,7 +10,7 @@ const VerifyEmail = () => {
     useEffect(() => {
         const verify = async () => {
             try {
-                const res = await axios.post(`${CONFIG.API_BASE_URL}/auth/verify-email`, { token });
+                const res = await axios.post(`/auth/verify-email`, { token });
                 setStatus('success');
                 setMessage(res.data.msg);
             } catch (err) {

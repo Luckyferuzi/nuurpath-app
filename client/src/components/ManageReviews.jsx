@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import { CONFIG } from '../config';
+import axios from '../lib/api';
+import { useAuth } from '../contexts/AuthContext.jsx';
 
 const ManageReviews = () => {
+  const { user } = useAuth();
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
 
   useEffect(() => {
     fetchReviews();
@@ -13,46 +15,54 @@ const ManageReviews = () => {
 
   const fetchReviews = async () => {
     try {
-      const response = await axios.get(`${CONFIG.API_BASE_URL}/reviews`);
+      const response = await axios.get(`/reviews?all=true`);
       setReviews(response.data);
+      setError(null);
       setLoading(false);
     } catch (err) {
       console.error('Error fetching reviews:', err);
-      setError('Failed to load reviews.');
+      setError(err.response?.data?.msg || err.message || 'Failed to load reviews.');
       setLoading(false);
     }
   };
 
   const handleToggleVisibility = async (id) => {
     try {
-      await axios.put(`${CONFIG.API_BASE_URL}/reviews/${id}/toggle`);
+      setError(null);
+      await axios.put(`/reviews/${id}/toggle`);
       
       setReviews(reviews.map(r => 
         r.id === id ? { ...r, isVisible: !r.isVisible } : r
       ));
     } catch (err) {
-      alert('Failed to update review status');
+      setError(err.response?.data?.msg || err.message || 'Failed to update review status.');
     }
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this review?')) return;
     try {
-      await axios.delete(`${CONFIG.API_BASE_URL}/reviews/${id}`);
+      setError(null);
+      await axios.delete(`/reviews/${id}`);
       setReviews(reviews.filter(r => r.id !== id));
     } catch (err) {
-      alert('Failed to delete review');
+      setError(err.response?.data?.msg || err.message || 'Failed to delete review.');
     }
   };
 
   if (loading) return <div className="p-10 text-center">Loading reviews...</div>;
-  if (error) return <div className="p-10 text-center text-red-600">{error}</div>;
+  if (error && reviews.length === 0) return <div className="p-10 text-center text-red-600">{error}</div>;
 
   const headerClass = "px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider";
 
   return (
     <div className="container mx-auto px-4 py-8">
       <h2 className="text-3xl font-bold text-[#0B1C3E] mb-6">Manage Reviews</h2>
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+          {error}
+        </div>
+      )}
       
       <div className="overflow-x-auto bg-white rounded-lg shadow">
         <table className="min-w-full leading-normal">
@@ -94,12 +104,14 @@ const ManageReviews = () => {
                   >
                     {review.isVisible ? 'Hide' : 'Approve'}
                   </button>
-                  <button 
-                    onClick={() => handleDelete(review.id)}
-                    className="text-red-600 hover:text-red-800 font-medium"
-                  >
-                    Delete
-                  </button>
+                  {isAdmin && (
+                    <button 
+                      onClick={() => handleDelete(review.id)}
+                      className="text-red-600 hover:text-red-800 font-medium"
+                    >
+                      Delete
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

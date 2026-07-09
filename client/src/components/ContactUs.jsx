@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import axios from '../lib/api';
 import { CONFIG } from '../config';
+import { buildWhatsAppUrl } from '../lib/whatsapp.js';
 
 const ContactUs = () => {
   const [formData, setFormData] = useState({
@@ -24,20 +25,21 @@ const ContactUs = () => {
     },
     {
       question: "Do you offer visa assistance?",
-      answer: "Yes, we provide comprehensive visa assistance for Hajj, Umrah, and other international destinations as part of our travel packages."
+      answer: "Yes. We provide visa guidance and help you understand the required documents and next steps based on your destination and travel plans."
     },
     {
       question: "How can I book a package?",
-      answer: "You can book directly through our website by browsing our packages, or you can contact us via phone or email for a personalized booking experience."
+      answer: "Browse packages on the website, then submit your request online. Our team will review your details and continue with you on WhatsApp."
     },
     {
       question: "Can I customize my travel itinerary?",
-      answer: "Absolutely! We specialize in creating tailored travel experiences. Please use the contact form above to tell us about your specific requirements."
+      answer: "Absolutely. Share your travel plans with us and our team will guide you on suitable package, flight, or document support options."
     }
   ];
 
   const { name, email, subject, message } = formData;
   const MAX_MESSAGE_LENGTH = 1000;
+  const whatsappUrl = buildWhatsAppUrl('Hello NuurPath team, I would like travel guidance and would like to continue on WhatsApp.');
 
   useEffect(() => {
     if (status.success) {
@@ -112,7 +114,7 @@ const ContactUs = () => {
         formDataToSend.append('attachment', attachment);
       }
 
-      await axios.post(`${CONFIG.API_BASE_URL}/contact`, formDataToSend, {
+      await axios.post(`/contact`, formDataToSend, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -128,7 +130,7 @@ const ContactUs = () => {
       }
     } catch (err) {
       const errorMessage = err.response?.data?.msg || err.response?.data?.errors?.[0]?.msg || err.message || 'Failed to send message';
-      setStatus({ loading: false, error: errorMessage, success: false });
+      setStatus({ loading: false, error: errorMessage || 'Something went wrong. Please try again or contact us on WhatsApp.', success: false });
     }
   };
 
@@ -176,11 +178,31 @@ const ContactUs = () => {
 
   return (
     <div style={containerStyle}>
-      <h2 style={{ textAlign: 'center', marginBottom: '20px', color: '#0B1C3E' }}>Contact Us</h2>
+      <h2 style={{ textAlign: 'center', marginBottom: '12px', color: '#0B1C3E' }}>Contact NuurPath</h2>
+      <p style={{ textAlign: 'center', color: '#555', marginBottom: '20px', lineHeight: 1.6 }}>
+        Share your travel question and our team will respond with the next steps. You can send your message here and continue important follow-up on WhatsApp.
+      </p>
+
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '20px' }}>
+        <a
+          href={whatsappUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ display: 'inline-block', padding: '10px 18px', backgroundColor: '#25D366', color: 'white', textDecoration: 'none', borderRadius: '4px', fontWeight: 'bold' }}
+        >
+          Continue on WhatsApp
+        </a>
+        <a
+          href={`tel:${CONFIG.CONTACT_PHONES}`}
+          style={{ display: 'inline-block', padding: '10px 18px', backgroundColor: '#0B1C3E', color: 'white', textDecoration: 'none', borderRadius: '4px', fontWeight: 'bold' }}
+        >
+          Call NuurPath
+        </a>
+      </div>
       
       {status.success && (
         <div style={{ padding: '15px', backgroundColor: '#d4edda', color: '#155724', marginBottom: '20px', borderRadius: '4px', textAlign: 'center' }}>
-          Message sent successfully! We will get back to you soon.
+          Your message has been received. Our team will review it and share the next steps.
         </div>
       )}
       
@@ -198,10 +220,10 @@ const ContactUs = () => {
         <input style={inputStyle} type="email" id="email" name="email" value={email} onChange={handleChange} required placeholder="Your Email" />
 
         <label style={labelStyle} htmlFor="subject">Subject</label>
-        <input style={inputStyle} type="text" id="subject" name="subject" value={subject} onChange={handleChange} required placeholder="Subject" />
+        <input style={inputStyle} type="text" id="subject" name="subject" value={subject} onChange={handleChange} required placeholder="Package request, flight question, visa guidance..." />
 
         <label style={labelStyle} htmlFor="message">Message</label>
-        <textarea style={{ ...inputStyle, height: '150px', marginBottom: '5px' }} id="message" name="message" value={message} onChange={handleChange} required placeholder="How can we help you?" maxLength={MAX_MESSAGE_LENGTH} />
+        <textarea style={{ ...inputStyle, height: '150px', marginBottom: '5px' }} id="message" name="message" value={message} onChange={handleChange} required placeholder="Tell us about your travel plans, destination, or the support you need." maxLength={MAX_MESSAGE_LENGTH} />
         <div style={{ textAlign: 'right', fontSize: '12px', color: '#666', marginBottom: '15px' }}>
           {message.length} / {MAX_MESSAGE_LENGTH} characters
         </div>
@@ -251,7 +273,7 @@ const ContactUs = () => {
         </div>
 
         <button type="submit" style={{ ...buttonStyle, opacity: status.loading ? 0.7 : 1 }} disabled={status.loading}>
-          {status.loading ? 'Sending...' : 'Send Message'}
+          {status.loading ? 'Sending...' : 'Send Travel Question'}
         </button>
       </form>
 
@@ -304,7 +326,7 @@ const ContactUs = () => {
       )}
 
       <div style={{ marginTop: '40px' }}>
-        <h3 style={{ textAlign: 'center', marginBottom: '15px', color: '#0B1C3E' }}>Our Location</h3>
+        <h3 style={{ textAlign: 'center', marginBottom: '15px', color: '#0B1C3E' }}>Visit or Reach Us</h3>
         <div style={{ textAlign: 'center', marginBottom: '20px', color: '#555' }}>
             <p style={{ margin: '5px 0' }}><strong>Address:</strong> GSM PLAZA, 2nd Floor</p>
             <p style={{ margin: '5px 0' }}><strong>Phone:</strong> {CONFIG.CONTACT_PHONES}</p>
@@ -348,7 +370,23 @@ const ContactUs = () => {
                     fontWeight: 'bold'
                 }}
             >
-                Call Now
+                Call NuurPath
+            </a>
+            <a 
+                href={whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                    display: 'inline-block',
+                    padding: '10px 20px',
+                    backgroundColor: '#25D366',
+                    color: 'white',
+                    textDecoration: 'none',
+                    borderRadius: '4px',
+                    fontWeight: 'bold'
+                }}
+            >
+                Chat on WhatsApp
             </a>
         </div>
       </div>

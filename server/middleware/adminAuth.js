@@ -1,26 +1,42 @@
-const allowedRoles = new Set(['admin', 'manager']);
+const { normalizeRole } = require('../utils/roles');
 
-function adminAuth(req, res, next) {
-  if (!req.user) {
-    return res.status(401).json({
-      msg: 'Authentication required',
-      message: 'Authentication required',
-    });
-  }
+function requireRole(allowedRoles, options = {}) {
+  const normalizedAllowedRoles = new Set(
+    (Array.isArray(allowedRoles) ? allowedRoles : [])
+      .map((role) => normalizeRole(role, ''))
+      .filter(Boolean)
+  );
 
-  const role = String(req.user.role || '').toLowerCase();
+  const forbiddenMessage = options.forbiddenMessage || 'You do not have permission to perform this action.';
 
-  if (!allowedRoles.has(role)) {
-    return res.status(403).json({
-      msg: 'Admin access required',
-      message: 'Admin access required',
-    });
-  }
+  return function roleMiddleware(req, res, next) {
+    if (!req.user) {
+      return res.status(401).json({
+        msg: 'Authentication required',
+        message: 'Authentication required',
+      });
+    }
 
-  req.user.role = role;
+    const role = normalizeRole(req.user.role, '');
 
-  return next();
+    if (!role || !normalizedAllowedRoles.has(role)) {
+      return res.status(403).json({
+        msg: forbiddenMessage,
+        message: forbiddenMessage,
+      });
+    }
+
+    req.user.role = role;
+
+    return next();
+  };
 }
 
-module.exports = adminAuth;
-module.exports.adminAuth = adminAuth;
+const requireAdmin = requireRole(['admin']);
+const requireAdminOrManager = requireRole(['admin', 'manager']);
+
+module.exports = requireAdminOrManager;
+module.exports.adminAuth = requireAdminOrManager;
+module.exports.requireRole = requireRole;
+module.exports.requireAdmin = requireAdmin;
+module.exports.requireAdminOrManager = requireAdminOrManager;

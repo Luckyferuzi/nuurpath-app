@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../db');
 const auth = require('../middleware/auth');
-const adminAuth = require('../middleware/adminAuth');
+const { requireAdminOrManager } = require('../middleware/adminAuth');
 const { sendNotification } = require('../utils/notificationService');
 const {
     isNonEmptyString,
@@ -182,7 +182,7 @@ router.delete('/:id', auth, async (req, res) => {
 
         // Check ownership for non-admin users
         if (user.role !== 'admin' && user.role !== 'manager' && notification.userId !== userId) {
-            return res.status(401).json({ msg: 'User not authorized' });
+            return res.status(403).json({ msg: 'User not authorized' });
         }
 
         await prisma.notification.delete({
@@ -198,7 +198,7 @@ router.delete('/:id', auth, async (req, res) => {
 // @route   POST api/notifications
 // @desc    Create a notification and emit real-time event
 // @access  Private (Admin/Manager)
-router.post('/', auth, adminAuth, async (req, res) => {
+router.post('/', auth, requireAdminOrManager, async (req, res) => {
     try {
         const { userId, title, message, type, bookingId } = req.body;
         const normalizedUserId = toPositiveInteger(userId);

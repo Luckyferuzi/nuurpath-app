@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { CONFIG } from '../config';
+import axios from '../lib/api';
 
 const UserProfile = () => {
     const [profile, setProfile] = useState({
@@ -23,10 +22,7 @@ const UserProfile = () => {
     useEffect(() => {
         const fetchProfile = async () => {
             try {
-                const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-                const res = await axios.get(`${CONFIG.API_BASE_URL}/profile`, {
-                    headers: { 'x-auth-token': token }
-                });
+                const res = await axios.get('/profile');
                 setProfile(res.data);
             } catch (err) {
                 setError('Failed to load profile.');
@@ -47,10 +43,7 @@ const UserProfile = () => {
         setMessage('');
         setError('');
         try {
-            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-            await axios.put(`${CONFIG.API_BASE_URL}/profile`, profile, {
-                headers: { 'x-auth-token': token }
-            });
+            await axios.put('/profile', profile);
             setMessage('Profile updated successfully!');
         } catch (err) {
             setError('Failed to update profile.');
@@ -73,12 +66,9 @@ const UserProfile = () => {
         }
 
         try {
-            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-            await axios.put(`${CONFIG.API_BASE_URL}/profile/change-password`, {
+            await axios.put('/profile/change-password', {
                 currentPassword: passwordData.currentPassword,
                 newPassword: passwordData.newPassword
-            }, {
-                headers: { 'x-auth-token': token }
             });
             setPasswordStatus({ loading: false, success: 'Password updated successfully', error: '' });
             setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });

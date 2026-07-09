@@ -1,5 +1,18 @@
 const PDFDocument = require('pdfkit');
 
+function formatTravelDate(value) {
+    if (!value) {
+        return 'To be confirmed';
+    }
+
+    const parsed = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+        return 'To be confirmed';
+    }
+
+    return parsed.toLocaleDateString();
+}
+
 const generateReceiptDoc = (booking) => {
     const doc = new PDFDocument();
 
@@ -15,17 +28,17 @@ const generateReceiptDoc = (booking) => {
     doc.text(`Date: ${new Date().toLocaleDateString()}`);
     doc.moveDown();
     
-    doc.text(`Customer Name: ${booking.contactName}`);
-    doc.text(`Email: ${booking.contactEmail}`);
+    doc.text(`Customer Name: ${booking.contactName || booking.user?.name || 'Customer'}`);
+    doc.text(`Email: ${booking.contactEmail || booking.user?.email || 'Not provided'}`);
     doc.moveDown();
     
     doc.fontSize(14).text('Package Details', { underline: true });
-    doc.fontSize(12).text(`Package: ${booking.package.title}`);
-    doc.text(`Travel Date: ${new Date(booking.travelDate).toLocaleDateString()}`);
+    doc.fontSize(12).text(`Package: ${booking.package?.title || (booking.packageId ? `Package #${booking.packageId}` : 'Package request')}`);
+    doc.text(`Travel Date: ${formatTravelDate(booking.travelDate)}`);
     doc.text(`Passengers: ${booking.passengers}`);
     doc.moveDown();
     
-    doc.fontSize(14).text(`Total Amount: $${(Number(booking.package.price) * booking.passengers).toLocaleString()}`, { align: 'right' });
+    doc.fontSize(14).text(`Total Amount: $${(Number(booking.package?.price || 0) * booking.passengers).toLocaleString()}`, { align: 'right' });
     
     return doc;
 };

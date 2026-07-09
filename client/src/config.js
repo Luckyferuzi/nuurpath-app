@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
+import { API_BASE_URL, BACKEND_ORIGIN } from './lib/api';
 
 const CONFIG = {
     LOGO_URL: "nuurpath-logo.png",
@@ -6,7 +6,8 @@ const CONFIG = {
     ACCENT_COLOR: "#D4AF37",  // Mustard Gold
     SECONDARY_COLOR: "#F8F9FA",
     API_BASE_URL,
-    WHATSAPP: "255764770939",
+    BACKEND_ORIGIN,
+    WHATSAPP: (process.env.REACT_APP_WHATSAPP_NUMBER || "255764770939").trim(),
     CONTACT_PHONES: "+255 764 770 939 / +255 782 266 440 / +255 686 770 990",
     ADDRESS: "P.O. Box, Dar Es Salaam, Tanzania",
     SOCIAL: {
@@ -19,4 +20,4 @@ const CONFIG = {
 };
 
 export default CONFIG;
-export { API_BASE_URL, CONFIG };
+export { API_BASE_URL, BACKEND_ORIGIN, CONFIG };

@@ -1,94 +1,100 @@
 import React, { createContext, useState, useEffect, useContext, useMemo, useCallback } from 'react';
-import axios from 'axios';
-import { CONFIG } from '../config';
+import api, { getStoredAuthToken, setApiAuthFailureHandler } from '../lib/api';
 
 const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
-
-// Configure axios base URL
-axios.defaults.baseURL = CONFIG.API_BASE_URL.replace('/api', '');
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [loading, setLoading] = useState(true);
 
-    const logout = useCallback(() => {
+    const clearStoredTokens = useCallback(() => {
         localStorage.removeItem('token');
         sessionStorage.removeItem('token');
-        delete axios.defaults.headers.common['x-auth-token'];
-        setUser(null);
-        setIsAuthenticated(false);
     }, []);
 
-    // Use an interceptor to ensure the token is always attached to requests
+    const storeToken = useCallback((token, rememberMe = true) => {
+        clearStoredTokens();
+
+        if (rememberMe) {
+            localStorage.setItem('token', token);
+            return;
+        }
+
+        sessionStorage.setItem('token', token);
+    }, [clearStoredTokens]);
+
+    const logout = useCallback(() => {
+        clearStoredTokens();
+        setUser(null);
+        setIsAuthenticated(false);
+    }, [clearStoredTokens]);
+
     useEffect(() => {
-        const requestInterceptor = axios.interceptors.request.use(config => {
-            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-            if (token) {
-                config.headers['x-auth-token'] = token;
+        setApiAuthFailureHandler((error) => {
+            if (error?.response?.status === 401) {
+                logout();
             }
-            return config;
         });
 
-        const responseInterceptor = axios.interceptors.response.use(
-            response => response,
-            error => {
-                if (error.response?.status === 401 || error.response?.status === 403) {
-                    logout();
-                }
-                return Promise.reject(error);
-            }
-        );
-
         return () => {
-            axios.interceptors.request.eject(requestInterceptor);
-            axios.interceptors.response.eject(responseInterceptor);
+            setApiAuthFailureHandler(null);
         };
     }, [logout]);
 
     const loadUser = useCallback(async () => {
-        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const token = getStoredAuthToken();
         if (!token) {
+            setUser(null);
+            setIsAuthenticated(false);
             setLoading(false);
-            return;
+            return null;
         }
 
         try {
-            const res = await axios.get('/api/auth/me');
+            const res = await api.get('/auth/me');
             setUser(res.data);
             setIsAuthenticated(true);
+            return res.data;
         } catch (err) {
             console.error('Load user error:', err.response?.data || err.message);
-            // Only clear token if the error is 401 (Unauthorized) or 403 (Forbidden)
-            if (err.response?.status === 401 || err.response?.status === 403) {
-                localStorage.removeItem('token');
-                sessionStorage.removeItem('token');
-                delete axios.defaults.headers.common['x-auth-token'];
-                setUser(null);
-                setIsAuthenticated(false);
+            if (err.response?.status === 401) {
+                logout();
             }
+            return null;
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [logout]);
 
     useEffect(() => {
         loadUser();
     }, [loadUser]);
 
-    const login = useCallback(async (email, password, rememberMe = false) => {
+    const finalizeLogin = useCallback(async (token, rememberMe = true) => {
+        storeToken(token, rememberMe);
+        const currentUser = await loadUser();
+
+        if (!currentUser) {
+            logout();
+            return {
+                success: false,
+                error: 'We could not load your account after sign-in. Please try again.',
+            };
+        }
+
+        return {
+            success: true,
+            user: currentUser,
+        };
+    }, [loadUser, logout, storeToken]);
+
+    const login = useCallback(async (email, password, rememberMe = true) => {
         try {
-            const res = await axios.post('/api/auth/login', { email, password, rememberMe });
-            const token = res.data.token;
-            if (rememberMe) {
-                localStorage.setItem('token', token);
-            } else {
-                sessionStorage.setItem('token', token);
-            }
-            await loadUser(); // This will set the header and fetch user
-            return { success: true };
+            const res = await api.post('/auth/login', { email, password, rememberMe });
+            return await finalizeLogin(res.data.token, rememberMe);
         } catch (err) {
             if (err.code === 'ERR_NETWORK') {
                 console.error('Login error: Server is unreachable. Please check if the backend is running.');
@@ -98,34 +104,44 @@ export const AuthProvider = ({ children }) => {
             }
             return { success: false, error: err.response?.data?.msg || err.response?.data?.errors?.[0]?.msg || 'Login failed. Please check your credentials.' };
         }
-    }, [loadUser]);
+    }, [finalizeLogin]);
 
     const register = useCallback(async (name, email, password) => {
         try {
-            const res = await axios.post('/api/auth/register', { name, email, password });
+            const res = await api.post('/auth/register', { name, email, password });
             if (res.data.token) {
-                localStorage.setItem('token', res.data.token);
-                await loadUser();
-                return { success: true };
+                return await finalizeLogin(res.data.token, true);
             }
-            return { success: true, message: res.data.msg };
+            return {
+                success: true,
+                message: res.data.msg || 'Registration successful! You can log in now.',
+                emailNotice: res.data.emailNotice || '',
+            };
         } catch (err) {
             console.error('Register error:', err.response?.data || err.message);
-            return { success: false, error: err.response?.data?.msg || err.message };
+            return { success: false, error: err.response?.data?.msg || err.response?.data?.errors?.[0]?.msg || err.message };
         }
-    }, [loadUser]);
+    }, [finalizeLogin]);
 
     const googleLogin = useCallback(async (token) => {
+        if (!token) {
+            return {
+                success: false,
+                error: 'Google sign-in did not return a credential. Please try again.',
+            };
+        }
+
         try {
-            const res = await axios.post('/api/auth/google', { token });
-            localStorage.setItem('token', res.data.token);
-            await loadUser();
-            return true;
+            const res = await api.post('/auth/google', { token });
+            return await finalizeLogin(res.data.token, true);
         } catch (err) {
             console.error('Google Login error:', err.response?.data || err.message);
-            return false;
+            return {
+                success: false,
+                error: err.response?.data?.msg || 'Google sign-in failed. Please try again.',
+            };
         }
-    }, [loadUser]);
+    }, [finalizeLogin]);
 
     const value = useMemo(() => ({
         user,

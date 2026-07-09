@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import axios from 'axios';
+import axios from '../lib/api';
 import { useAuth } from '../contexts/AuthContext.jsx';
-import { CONFIG } from '../config';
 
 const ManageUsers = () => {
   const { user: currentUser } = useAuth();
@@ -23,7 +22,7 @@ const ManageUsers = () => {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`${CONFIG.API_BASE_URL}/users?page=${currentPage}`);
+      const response = await axios.get(`/users?page=${currentPage}`);
 
       const data = response.data;
       
@@ -31,12 +30,14 @@ const ManageUsers = () => {
         setUsers(data.users);
         setTotalPages(data.totalPages || 1);
         setCurrentPage(data.currentPage || 1);
+        setError(null);
       } else {
         // Fallback for non-paginated responses, though API should be paginated
         setUsers(Array.isArray(data) ? data : []);
+        setError(null);
       }
     } catch (err) {
-      setError(err.message || 'Failed to fetch users');
+      setError(err.response?.data?.msg || err.message || 'Failed to fetch users.');
     } finally {
       setLoading(false);
     }
@@ -56,12 +57,11 @@ const ManageUsers = () => {
     if (!window.confirm('Are you sure you want to delete this user?')) return;
 
     try {
-      await axios.delete(`${CONFIG.API_BASE_URL}/users/${userId}`);
+      await axios.delete(`/users/${userId}`);
 
       setUsers(users.filter(user => (user._id || user.id) !== userId)); // Optimistic update
     } catch (err) {
       setError(err.response?.data?.msg || err.message || 'Failed to delete user.'); // User-facing error
-      alert(err.message || 'Failed to delete user');
     }
   };
 
@@ -72,15 +72,15 @@ const ManageUsers = () => {
       if (editingId) {
         const data = { ...formData };
         if (!data.password) delete data.password; // Don't send empty password on update
-        await axios.put(`${CONFIG.API_BASE_URL}/users/${editingId}`, data);
+        await axios.put(`/users/${editingId}`, data);
       } else {
-        await axios.post(`${CONFIG.API_BASE_URL}/users`, formData);
+        await axios.post(`/users`, formData);
       } // Consider adding a success message here
       
       fetchUsers();
       resetForm();
     } catch (err) {
-      alert('Failed to save user: ' + (err.response?.data?.msg || err.message));
+      setError(err.response?.data?.msg || err.message || 'Failed to save user.');
     }
   };
 
@@ -102,6 +102,17 @@ const ManageUsers = () => {
     setEditingId(null);
     setShowForm(false);
   };
+
+  const roleOptions = editingId
+    ? [
+        { value: 'user', label: 'User' },
+        { value: 'manager', label: 'Manager' },
+        { value: 'admin', label: 'Admin' },
+      ]
+    : [
+        { value: 'user', label: 'User' },
+        { value: 'manager', label: 'Manager' },
+      ];
 
   const containerStyle = {
     padding: '20px',
@@ -131,7 +142,6 @@ const ManageUsers = () => {
   };
 
   if (loading) return <div style={{ textAlign: 'center', padding: '20px' }}>Loading...</div>;
-  if (error) return <div style={{ color: 'red', textAlign: 'center', padding: '20px' }}>{error}</div>;
 
   return (
     <div style={containerStyle}>
@@ -144,12 +154,15 @@ const ManageUsers = () => {
         onClick={() => setShowForm(!showForm)} 
         style={{ marginBottom: '20px', padding: '10px 20px', backgroundColor: '#006837', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
       >
-        {showForm ? 'Cancel' : 'Add New User'}
+        {showForm ? 'Cancel' : 'Add User or Manager'}
       </button>
 
       {showForm && (
         <div style={{ backgroundColor: '#f9f9f9', padding: '20px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #ddd' }}>
           <h3 style={{ marginBottom: '15px' }}>{editingId ? 'Edit User' : 'New User'}</h3>
+          <p style={{ marginTop: 0, marginBottom: '15px', color: '#555' }}>
+            Only admins can manage users here. New accounts created from this screen are limited to customer or manager roles.
+          </p>
           <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '15px', maxWidth: '500px' }}>
             <div>
               <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Name</label>
@@ -170,9 +183,9 @@ const ManageUsers = () => {
             <div>
               <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Role</label>
               <select value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}>
-                <option value="user">User</option>
-                <option value="manager">Manager</option>
-                <option value="admin">Admin</option>
+                {roleOptions.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
               </select>
             </div>
             <div style={{ display: 'flex', gap: '10px' }}>

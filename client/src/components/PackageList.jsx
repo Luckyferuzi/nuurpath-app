@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { CONFIG } from '../config';
 import PackageComparison from './PackageComparison';
 import { useAuth } from '../contexts/AuthContext.jsx';
-import axios from 'axios';
+import axios, { resolveBackendUrl } from '../lib/api';
 
 const PackageCard = ({ pkg, wishlist, toggleWishlist, compareList, toggleCompare }) => {
   const [showFullDescription, setShowFullDescription] = useState(false);
@@ -11,11 +10,7 @@ const PackageCard = ({ pkg, wishlist, toggleWishlist, compareList, toggleCompare
   // Helper to construct the correct image URL
   const getImageUrl = (imagePath) => {
     if (!imagePath) return 'https://placehold.co/600x400?text=No+Image';
-    if (imagePath.startsWith('http')) return imagePath;
-    
-    // Remove '/api' from base URL to get the root server URL
-    const baseUrl = CONFIG.API_BASE_URL.replace('/api', '');
-    return `${baseUrl}${imagePath.startsWith('/') ? '' : '/'}${imagePath}`;
+    return resolveBackendUrl(imagePath);
   };
 
   return (
@@ -46,9 +41,12 @@ const PackageCard = ({ pkg, wishlist, toggleWishlist, compareList, toggleCompare
       <div className="p-6 flex flex-col grow">
         <div className="flex justify-between items-start mb-2">
           <h3 className="text-xl font-bold text-[#0B1C3E]">{pkg.title}</h3>
-          <span className="text-[#006837] font-bold text-lg">
-            {typeof pkg.price === 'number' ? `$${pkg.price.toLocaleString()}` : pkg.price}
-          </span>
+          <div className="text-right">
+            <span className="block text-xs uppercase tracking-[2px] text-gray-500 font-bold">Starting from</span>
+            <span className="text-[#006837] font-bold text-lg">
+              {typeof pkg.price === 'number' ? `$${pkg.price.toLocaleString()}` : pkg.price}
+            </span>
+          </div>
         </div>
 
         <div className="text-sm text-gray-500 mb-3 flex items-center gap-3">
@@ -77,10 +75,14 @@ const PackageCard = ({ pkg, wishlist, toggleWishlist, compareList, toggleCompare
             </button>
           )}
         </div>
+
+        <p className="text-xs text-gray-500 mb-4">
+          Availability, requirements, and next steps are confirmed by our team after you submit your request.
+        </p>
         
         <div className="mt-auto space-y-2">
           <Link to={`/packages/${pkg._id || pkg.id}`} className="block w-full text-center bg-[#0B1C3E] text-white py-2 rounded-lg hover:bg-[#1a2f55] transition-colors">
-            View Details
+            Ask About This Package
           </Link>
           <button 
             onClick={() => toggleCompare(pkg)}
@@ -133,7 +135,7 @@ const PackageList = () => {
         if (minPrice) params.append('minPrice', minPrice);
         if (maxPrice) params.append('maxPrice', maxPrice);
 
-        const response = await axios.get(`${CONFIG.API_BASE_URL}/packages`, { params });
+        const response = await axios.get(`/packages`, { params });
         const data = response.data;
         
         if (data.packages) {
@@ -147,7 +149,7 @@ const PackageList = () => {
         // Fetch wishlist if logged in
         if (isAuthenticated) {
           try {
-            const wishlistRes = await axios.get(`${CONFIG.API_BASE_URL}/wishlist`);
+            const wishlistRes = await axios.get(`/wishlist`);
             if (wishlistRes.data) {
               setWishlist(new Set(wishlistRes.data.map(item => item.packageId)));
             }
@@ -157,7 +159,8 @@ const PackageList = () => {
           }
         }
       } catch (err) {
-        setError(err.message);
+        console.error('Failed to fetch packages:', err);
+        setError('Something went wrong while loading packages. Please try again or contact us on WhatsApp.');
       } finally {
         setLoading(false);
       }
@@ -168,11 +171,11 @@ const PackageList = () => {
 
   const toggleWishlist = async (pkgId) => {
     if (!isAuthenticated) {
-      setError('Please login to save favorites.'); // User-facing error
+      setError('Create an account to save favorites and track future requests.');
       return;
     }
     try {
-      await axios.post(`${CONFIG.API_BASE_URL}/wishlist/${pkgId}`);
+      await axios.post(`/wishlist/${pkgId}`);
       setWishlist(prev => {
         const newSet = new Set(prev); // Optimistic update
         if (newSet.has(pkgId)) newSet.delete(pkgId);
@@ -204,23 +207,28 @@ const PackageList = () => {
     });
   };
 
-  if (loading) return <div className="text-center p-10">Loading packages...</div>;
-  if (error) return <div className="text-center p-10 text-red-500">Error: {error}</div>;
+  if (loading) return <div className="text-center p-10">Loading packages and request options...</div>;
+  if (error) return <div className="text-center p-10 text-red-500">{error}</div>;
 
   return (
     <div className="container mx-auto p-6">
-      <h2 className="text-3xl font-bold text-center mb-8 text-[#0B1C3E]">Our Travel Packages</h2>
+      <div className="text-center mb-8">
+        <h2 className="text-3xl font-bold text-[#0B1C3E]">Explore Travel Packages</h2>
+        <p className="text-gray-600 mt-3 max-w-2xl mx-auto">
+          Browse Umrah and travel package options, then start your request online. Our team confirms availability, guidance, and next steps on WhatsApp.
+        </p>
+      </div>
       
       {/* Filters */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-8 flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="w-full md:w-1/3">
-          <input type="text" placeholder="Search destination..." value={destinationFilter} onChange={(e) => setDestinationFilter(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#0B1C3E]" />
+          <input type="text" placeholder="Search package or destination..." value={destinationFilter} onChange={(e) => setDestinationFilter(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#0B1C3E]" />
         </div>
         <div className="flex gap-2 w-full md:w-1/3">
           <input type="number" placeholder="Min Price" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} className="w-1/2 p-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#0B1C3E]" />
           <input type="number" placeholder="Max Price" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} className="w-1/2 p-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#0B1C3E]" />
         </div>
-        <div className="text-sm text-gray-500">Showing {displayPackages.length} of {totalPackages} packages</div>
+        <div className="text-sm text-gray-500">Showing {displayPackages.length} of {totalPackages} package options</div>
       </div>
 
       {/* Comparison Table */}
@@ -238,7 +246,7 @@ const PackageList = () => {
             compareList={compareList} 
             toggleCompare={toggleCompare} 
           />
-        )) : <div className="col-span-full text-center text-gray-500">No packages found.</div>}
+        )) : <div className="col-span-full text-center text-gray-500">No packages are available right now. Please check again soon or contact us on WhatsApp.</div>}
       </div>
 
       {totalPages > 1 && (

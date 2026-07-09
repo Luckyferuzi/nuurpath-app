@@ -2,14 +2,19 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../db');
 const auth = require('../middleware/auth');
-const adminAuth = require('../middleware/adminAuth');
+const { requireAdmin, requireAdminOrManager } = require('../middleware/adminAuth');
+const { flightRequestLimiter } = require('../middleware/rateLimitMiddleware');
 const softAuth = require('../middleware/softAuth');
 const { notifyAdmins } = require('../utils/adminNotifier');
+const { isAdminOrManager } = require('../utils/roles');
+const {
+    normalizeOperationalStatus,
+    shouldSetLastContactedAt,
+} = require('../utils/operationalPipeline');
 const {
     isNonEmptyString,
     isValidDate,
     isValidEmail,
-    normalizeStatus,
     parseOptionalDate,
     sendInvalidId,
     sendValidationError,
@@ -17,49 +22,65 @@ const {
     toTrimmedString,
 } = require('../utils/validation');
 
-const FLIGHT_STATUSES = ['Pending', 'Confirmed', 'Cancelled'];
+function serializeFlightRequest(booking, { includeInternalFields = false } = {}) {
+    if (!booking || typeof booking !== 'object') {
+        return booking;
+    }
+
+    const normalizedStatus = normalizeOperationalStatus(booking.status) || 'New';
+    const serializedBooking = {
+        ...booking,
+        status: normalizedStatus,
+        requestId: booking.id,
+        tripType: booking.returnDate ? 'Round Trip' : 'One Way',
+    };
+
+    if (!includeInternalFields) {
+        delete serializedBooking.adminNotes;
+        delete serializedBooking.lastContactedAt;
+    }
+
+    return serializedBooking;
+}
 
 // @route   GET api/flights
-// @desc    Get flight bookings (User sees theirs, Admin sees all)
+// @desc    Get flight requests (User sees theirs, Admin/Manager sees all)
 // @access  Private
 router.get('/', auth, async (req, res) => {
     try {
-        // Check user role
         const userId = toPositiveInteger(req.user.id);
         if (userId === null) {
             return sendValidationError(res, 'Invalid user id.');
         }
 
         const user = await prisma.user.findUnique({ where: { id: userId } });
-
         if (!user) {
             return res.status(404).json({ msg: 'User not found' });
         }
-        
-        let where = {};
-        if (user.role !== 'admin' && user.role !== 'manager') {
-            where = { userId: userId };
-        }
+
+        const includeInternalFields = isAdminOrManager(user);
+        const where = includeInternalFields ? {} : { userId };
 
         const bookings = await prisma.flightBooking.findMany({
             where,
             orderBy: { createdAt: 'desc' },
-            include: { user: true }
+            include: { user: true },
         });
-        res.json(bookings);
+
+        return res.json(bookings.map((booking) => serializeFlightRequest(booking, { includeInternalFields })));
     } catch (err) {
         console.error(err.message);
-        res.status(500).send('Server Error');
+        return res.status(500).send('Server Error');
     }
 });
 
 // @route   POST api/flights
-// @desc    Create a flight booking request (Public/User)
+// @desc    Create a flight request (Public/User)
 // @access  Public
-router.post('/', softAuth, async (req, res) => {
+router.post('/', flightRequestLimiter, softAuth, async (req, res) => {
     try {
         const { from, to, departureDate, returnDate, passengers, travelClass, contactName, contactEmail, contactPhone } = req.body;
-        
+
         if (!isNonEmptyString(from) || !isNonEmptyString(to)) {
             return sendValidationError(res, 'Origin and destination are required.');
         }
@@ -99,10 +120,12 @@ router.post('/', softAuth, async (req, res) => {
             return sendValidationError(res, 'Travel class is required.');
         }
 
-        // Only link to the authenticated user attached by softAuth.
         let validUserId = null;
         if (req.user && req.user.id) {
             validUserId = toPositiveInteger(req.user.id);
+            if (validUserId === null) {
+                return sendValidationError(res, 'Invalid user id.');
+            }
         }
 
         const booking = await prisma.flightBooking.create({
@@ -116,27 +139,27 @@ router.post('/', softAuth, async (req, res) => {
                 contactName: toTrimmedString(contactName),
                 contactEmail: toTrimmedString(contactEmail),
                 contactPhone: toTrimmedString(contactPhone),
-                userId: validUserId
-            }
+                userId: validUserId,
+                status: 'Pending',
+            },
         });
 
-        // Notify Admins about the new flight request
         await notifyAdmins(req.app, {
             title: 'New Flight Request',
             message: `New flight request #${booking.id} from ${contactName} (${from} to ${to})`,
             type: 'NEW_FLIGHT_REQUEST',
-            bookingId: booking.id
+            bookingId: booking.id,
         });
 
-        res.json(booking);
+        return res.status(201).json(serializeFlightRequest(booking));
     } catch (err) {
-        console.error("Flight booking error:", err);
-        res.status(500).send('Server Error');
+        console.error('Flight request error:', err);
+        return res.status(500).json({ msg: 'Unable to submit your flight request right now. Please try again.' });
     }
 });
 
 // @route   GET api/flights/:id
-// @desc    Get a single flight booking (User sees own, Admin sees any)
+// @desc    Get a single flight request (User sees own, Admin/Manager sees any)
 // @access  Private
 router.get('/:id', auth, async (req, res) => {
     try {
@@ -151,62 +174,85 @@ router.get('/:id', auth, async (req, res) => {
         }
 
         const user = await prisma.user.findUnique({ where: { id: userId } });
-
         if (!user) {
             return res.status(404).json({ msg: 'User not found' });
         }
 
         const booking = await prisma.flightBooking.findUnique({
             where: { id },
-            include: { user: true }
+            include: { user: true },
         });
 
         if (!booking) {
-            return res.status(404).json({ msg: 'Booking not found' });
+            return res.status(404).json({ msg: 'Request not found' });
         }
 
-        if (user.role !== 'admin' && user.role !== 'manager' && booking.userId !== userId) {
+        const includeInternalFields = isAdminOrManager(user);
+        if (!includeInternalFields && booking.userId !== userId) {
             return res.status(403).json({ msg: 'Not authorized' });
         }
 
-        res.json(booking);
+        return res.json(serializeFlightRequest(booking, { includeInternalFields }));
     } catch (err) {
         console.error(err.message);
-        res.status(500).send('Server Error');
+        return res.status(500).send('Server Error');
     }
 });
 
 // @route   PUT api/flights/:id
-// @desc    Update flight booking status (Admin)
-// @access  Private (Admin)
-router.put('/:id', auth, adminAuth, async (req, res) => {
+// @desc    Update flight request pipeline status and internal notes
+// @access  Private (Admin/Manager)
+router.put('/:id', auth, requireAdminOrManager, async (req, res) => {
     try {
         const id = toPositiveInteger(req.params.id);
         if (id === null) {
             return sendInvalidId(res);
         }
 
-        const { status } = req.body;
-        const normalizedStatus = normalizeStatus(status, FLIGHT_STATUSES);
-        if (!normalizedStatus) {
-            return sendValidationError(res, 'Status must be Pending, Confirmed, or Cancelled.');
+        const { status, adminNotes } = req.body;
+        const updateData = {};
+
+        if (status !== undefined) {
+            const normalizedStatus = normalizeOperationalStatus(status);
+            if (!normalizedStatus) {
+                return sendValidationError(res, 'Status must match the operational pipeline.');
+            }
+
+            updateData.status = normalizedStatus;
+            if (shouldSetLastContactedAt(normalizedStatus)) {
+                updateData.lastContactedAt = new Date();
+            }
+        }
+
+        if (adminNotes !== undefined) {
+            updateData.adminNotes = isNonEmptyString(adminNotes) ? toTrimmedString(adminNotes) : null;
+        }
+
+        if (Object.keys(updateData).length === 0) {
+            return sendValidationError(res, 'No valid flight request fields were provided for update.');
         }
 
         const booking = await prisma.flightBooking.update({
             where: { id },
-            data: { status: normalizedStatus }
+            data: updateData,
+            include: { user: true },
         });
-        res.json(booking);
+
+        return res.json(serializeFlightRequest(booking, { includeInternalFields: true }));
     } catch (err) {
         console.error(err.message);
-        res.status(500).send('Server Error');
+        if (err.code === 'P2025') {
+            return res.status(404).json({ msg: 'Flight request not found' });
+        }
+
+        return res.status(500).send('Server Error');
     }
 });
 
 // @route   DELETE api/flights/:id
-// @desc    Delete flight booking (Admin)
+// @desc    Delete a flight request
 // @access  Private (Admin)
-router.delete('/:id', auth, adminAuth, async (req, res) => {
+router.delete('/:id', auth, requireAdmin, async (req, res) => {
     try {
         const id = toPositiveInteger(req.params.id);
         if (id === null) {
@@ -214,17 +260,21 @@ router.delete('/:id', auth, adminAuth, async (req, res) => {
         }
 
         await prisma.flightBooking.delete({
-            where: { id }
+            where: { id },
         });
-        res.json({ msg: 'Booking deleted' });
+        return res.json({ msg: 'Request deleted' });
     } catch (err) {
         console.error(err.message);
-        res.status(500).send('Server Error');
+        if (err.code === 'P2025') {
+            return res.status(404).json({ msg: 'Flight request not found' });
+        }
+
+        return res.status(500).send('Server Error');
     }
 });
 
 // @route   PUT api/flights/:id/cancel
-// @desc    Cancel a flight booking
+// @desc    Cancel a flight request
 // @access  Private
 router.put('/:id/cancel', auth, async (req, res) => {
     try {
@@ -239,38 +289,36 @@ router.put('/:id/cancel', auth, async (req, res) => {
         }
 
         const booking = await prisma.flightBooking.findUnique({
-            where: { id }
+            where: { id },
         });
 
         if (!booking) {
-            return res.status(404).json({ msg: 'Booking not found' });
+            return res.status(404).json({ msg: 'Request not found' });
         }
 
-        // Ensure user owns the booking
         if (booking.userId !== userId) {
-            return res.status(401).json({ msg: 'User not authorized' });
+            return res.status(403).json({ msg: 'User not authorized' });
         }
 
         const updatedBooking = await prisma.flightBooking.update({
             where: { id },
-            data: { status: 'Cancelled' }
+            data: { status: 'Cancelled' },
         });
 
-        // Create Notification for the user
         await prisma.notification.create({
             data: {
                 userId,
-                title: 'Flight Cancellation',
-                message: `Flight Booking #${updatedBooking.id} (${updatedBooking.from} to ${updatedBooking.to}) cancelled by user`,
+                title: 'Flight Request Cancelled',
+                message: `Flight request #${updatedBooking.id} (${updatedBooking.from} to ${updatedBooking.to}) was cancelled.`,
                 type: 'FLIGHT_CANCELLED',
-                bookingId: updatedBooking.id
-            }
+                bookingId: updatedBooking.id,
+            },
         });
 
-        res.json(updatedBooking);
+        return res.json(serializeFlightRequest(updatedBooking));
     } catch (err) {
         console.error(err.message);
-        res.status(500).send('Server Error');
+        return res.status(500).send('Server Error');
     }
 });
 

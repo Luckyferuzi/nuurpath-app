@@ -1,4 +1,8 @@
 import React from 'react';
+import {
+  getOperationalStatusBadgeClassName,
+  getOperationalStatusLabel,
+} from '../lib/operationalPipeline.js';
 
 const FlightDetailsModal = ({ flight, onClose }) => {
   if (!flight) return null;
@@ -7,7 +11,7 @@ const FlightDetailsModal = ({ flight, onClose }) => {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden transform transition-all scale-100">
         <div className="bg-[#0B1C3E] p-5 flex justify-between items-center">
-          <h3 className="text-white font-bold text-xl">Flight Details</h3>
+          <h3 className="text-white font-bold text-xl">Flight Request Details</h3>
           <button 
             onClick={onClose} 
             className="text-white/80 hover:text-white text-2xl leading-none focus:outline-none"
@@ -64,13 +68,11 @@ const FlightDetailsModal = ({ flight, onClose }) => {
 
           {/* Status */}
           <div className="flex justify-between items-center pt-2">
-            <span className="text-sm text-gray-500 font-medium">Booking Status</span>
+            <span className="text-sm text-gray-500 font-medium">Request Status</span>
             <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                flight.status === 'Confirmed' ? 'bg-green-100 text-green-700' : 
-                flight.status === 'Cancelled' ? 'bg-red-100 text-red-700' :
-                'bg-yellow-100 text-yellow-700'
+                getOperationalStatusBadgeClassName(flight.status)
             }`}>
-                {flight.status || 'Pending'}
+                {getOperationalStatusLabel(flight.status)}
             </span>
           </div>
         </div>

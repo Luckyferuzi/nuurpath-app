@@ -10,6 +10,7 @@ const {
     toPositiveInteger,
     toTrimmedString,
 } = require('../utils/validation');
+const { isAdmin } = require('../utils/roles');
 const {
     profileImageUpload,
     removeUploadedFiles,
@@ -49,7 +50,7 @@ router.get('/', auth, async (req, res) => {
 });
 
 // @route   GET api/profile/:id
-// @desc    Get a user profile by id (self or admin/manager)
+// @desc    Get a user profile by id (self or admin)
 // @access  Private
 router.get('/:id', auth, async (req, res) => {
     try {
@@ -58,18 +59,13 @@ router.get('/:id', auth, async (req, res) => {
             return sendValidationError(res, 'Invalid user id.');
         }
 
-        const requestor = await prisma.user.findUnique({
-            where: { id: requestorId },
-            select: { role: true }
-        });
-
         const targetUserId = toPositiveInteger(req.params.id);
         if (targetUserId === null) {
             return sendInvalidId(res);
         }
 
-        if (requestor.role !== 'admin' && requestor.role !== 'manager' && targetUserId !== requestorId) {
-            return res.status(403).json({ msg: 'Not authorized' });
+        if (!isAdmin(req.user) && targetUserId !== requestorId) {
+            return res.status(403).json({ msg: 'You do not have permission to view this profile.' });
         }
 
         const profile = await prisma.user.findUnique({

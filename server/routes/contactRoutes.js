@@ -4,6 +4,7 @@ const { check } = require('express-validator');
 const contactController = require('../controllers/contactController');
 const { contactFormLimiter } = require('../middleware/rateLimitMiddleware');
 const multer = require('multer');
+const { isAllowedFileType } = require('../utils/upload');
 
 const storage = multer.memoryStorage();
 
@@ -15,7 +16,7 @@ const fileFilter = (req, file, cb) => {
         'image/webp',
     ]);
 
-    if (allowedMimeTypes.has(file.mimetype)) {
+    if (isAllowedFileType(file, allowedMimeTypes)) {
         cb(null, true);
     } else {
         cb(new Error('Invalid file type. Only PDF, JPEG, PNG, and WebP files are allowed.'), false);

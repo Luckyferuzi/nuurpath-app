@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { isOperationalOpenStatus } from '../lib/operationalPipeline.js';
 
 const UserSpendingSummary = ({ bookings }) => {
     const { total, count } = useMemo(() => {
@@ -7,8 +8,7 @@ const UserSpendingSummary = ({ bookings }) => {
 
         if (bookings && bookings.length > 0) {
             bookings.forEach(booking => {
-                // Only count confirmed or pending bookings (exclude cancelled)
-                if (booking.status !== 'Cancelled' && booking.package?.price) {
+                if (isOperationalOpenStatus(booking.status) && booking.package?.price) {
                     totalAmount += Number(booking.package.price) * (booking.passengers || 1);
                     activeCount++;
                 }

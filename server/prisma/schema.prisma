@@ -20,6 +20,7 @@ model User {
   passwordResetExpires DateTime?
   passwordChangedAt    DateTime?
   verificationToken    String?
+  verificationTokenExpires DateTime?
   isVerified           Boolean   @default(false)
   bio                  String?
   contactInfo          String?
@@ -30,6 +31,7 @@ model User {
   privateConsultations PrivateConsultation[]
   packageBookings      PackageBooking[]
   flightBookings       FlightBooking[]
+  serviceInquiries     ServiceInquiry[]
   appointments         Appointment[]
   reviews              Review[]
   notifications        Notification[]
@@ -45,6 +47,8 @@ model PrivateConsultation {
   date        String
   time        String
   status      String   @default("Pending")
+  adminNotes  String?
+  lastContactedAt DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   user        User?    @relation(fields: [userId], references: [id])
@@ -85,26 +89,29 @@ model ChatMessage {
 
 model PackageBooking {
   id             Int      @id @default(autoincrement())
-  userId         Int
+  userId         Int?
   packageId      Int
   passengers     Int
-  locationFrom   String
-  travelDate     DateTime
+  locationFrom   String?
+  travelDate     DateTime?
   prefClass      String   @default("Economy")
   contactName    String
   contactEmail   String
   contactPhone   String
-  passportNumber String
+  passportNumber String?
   passportExpiryDate DateTime?
   passportCopy       String?
-  dateOfBirth    DateTime
-  nationality    String
+  dateOfBirth    DateTime?
+  nationality    String?
   specialRequests    String?
   notes              String?
   status         String   @default("Pending")
+  adminNotes     String?
+  lastContactedAt DateTime?
   createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  user    User          @relation(fields: [userId], references: [id])
+  user    User?         @relation(fields: [userId], references: [id])
   package Package       @relation(fields: [packageId], references: [id])
 }
 
@@ -123,7 +130,10 @@ model FlightBooking {
   passengerDetails Json?
   totalPrice       Float?
   status           String    @default("pending")
+  adminNotes       String?
+  lastContactedAt  DateTime?
   createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   user User? @relation(fields: [userId], references: [id])
 }
@@ -198,6 +208,32 @@ model Service {
   order       Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  inquiries   ServiceInquiry[]
+}
+
+model ServiceInquiry {
+  id             Int      @id @default(autoincrement())
+  userId         Int?
+  serviceId      Int?
+  serviceType    String
+  contactName    String
+  contactEmail   String
+  contactPhone   String
+  country        String?
+  preferredDate  DateTime?
+  applicants     Int?
+  urgency        String?
+  documentStatus String?
+  message        String?
+  status         String   @default("New")
+  adminNotes     String?
+  lastContactedAt DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user    User?    @relation(fields: [userId], references: [id])
+  service Service? @relation(fields: [serviceId], references: [id])
 }
 
 model SiteContent {

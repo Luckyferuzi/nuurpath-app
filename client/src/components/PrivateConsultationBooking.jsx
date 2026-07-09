@@ -1,9 +1,10 @@
 import React, { useState, forwardRef, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
-import axios from 'axios';
-import { CONFIG } from '../config';
+import axios from '../lib/api';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { useNavigate } from 'react-router-dom';
+import { buildConsultationRequestWhatsAppUrl } from '../lib/whatsapp.js';
 
 const DateCustomInput = forwardRef(({ value, onClick, onChange, ...props }, ref) => (
   <input
@@ -18,6 +19,7 @@ const DateCustomInput = forwardRef(({ value, onClick, onChange, ...props }, ref)
 
 const PrivateConsultationBooking = () => {
   const { user, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -29,6 +31,7 @@ const PrivateConsultationBooking = () => {
   const [status, setStatus] = useState({ loading: false, error: null, success: false });
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [successDetails, setSuccessDetails] = useState(null);
 
   useEffect(() => {
     if (user) {
@@ -75,13 +78,28 @@ const PrivateConsultationBooking = () => {
         userId: isAuthenticated ? user.id : null
       };
 
-      await axios.post(`${CONFIG.API_BASE_URL}/appointments/private`, payload);
+      const response = await axios.post(`/appointments/private`, payload);
+      const consultation = response.data || {};
+      const requestId = consultation.requestId || consultation.id;
+      const whatsappUrl = buildConsultationRequestWhatsAppUrl({
+        requestId,
+        contactName: payload.name,
+        date: payload.date,
+        time: payload.time,
+        description: payload.description,
+      });
 
       setStatus({ loading: false, error: null, success: true });
+      setSuccessDetails({
+        requestId,
+        date: payload.date,
+        time: payload.time,
+        whatsappUrl,
+      });
       setFormData({ name: '', email: '', description: '', phone: '', date: null, time: null });
       setAgreedToTerms(false);
     } catch (err) {
-      const errorMessage = err.response?.data?.msg || err.message || 'Failed to book consultation';
+      const errorMessage = err.response?.data?.msg || err.message || 'Something went wrong. Please try again or contact us on WhatsApp.';
       setStatus({ loading: false, error: errorMessage, success: false }); // User-facing error
     }
   };
@@ -130,14 +148,47 @@ const PrivateConsultationBooking = () => {
 
   return (
     <div style={containerStyle}>
-      <h2 style={{ textAlign: 'center', marginBottom: '20px' }}>Book a Private Consultation</h2>
+      <h2 style={{ textAlign: 'center', marginBottom: '20px' }}>Request a Private Consultation</h2>
       
-      {status.success && (
-        <div style={{ padding: '10px', backgroundColor: '#d4edda', color: '#155724', marginBottom: '15px', borderRadius: '4px' }}>
-          Consultation booked successfully!
+      {status.success && successDetails && (
+        <div style={{ padding: '18px', backgroundColor: '#d4edda', color: '#155724', marginBottom: '15px', borderRadius: '8px' }}>
+          <h3 style={{ marginTop: 0, marginBottom: '10px', color: '#0B1C3E' }}>Your consultation request has been received</h3>
+          <p style={{ marginBottom: '10px' }}>
+            Reference <strong>#{successDetails.requestId}</strong>. Our team will review your request and continue with you on WhatsApp.
+          </p>
+          <p style={{ marginBottom: '10px' }}>
+            Preferred slot: <strong>{successDetails.date}</strong> at <strong>{successDetails.time}</strong>
+          </p>
+          <p style={{ marginBottom: '15px' }}>
+            No online payment is required on the website.
+          </p>
+          {!isAuthenticated && (
+            <p style={{ marginBottom: '15px', fontSize: '14px', color: '#4b5563' }}>
+              Create an account to track requests and receive future offers. You can still start requests without signing in.
+            </p>
+          )}
+          <div style={{ display: 'grid', gap: '10px' }}>
+            <a
+              href={successDetails.whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ ...buttonStyle, display: 'block', textAlign: 'center', textDecoration: 'none', backgroundColor: '#25D366' }}
+            >
+              Continue on WhatsApp
+            </a>
+            {isAuthenticated && (
+              <button type="button" onClick={() => navigate('/dashboard?tab=consultations')} style={{ ...buttonStyle, backgroundColor: '#0B1C3E' }}>
+                View My Requests
+              </button>
+            )}
+          </div>
         </div>
       )}
       
+      <div style={{ padding: '15px', backgroundColor: '#eff6ff', color: '#374151', marginBottom: '20px', borderRadius: '8px', border: '1px solid #bfdbfe', fontSize: '14px', lineHeight: 1.6 }}>
+        Start your consultation request online. Our team will review your details, guide you on the next steps, and continue with you on WhatsApp. No online payment is required on the website.
+      </div>
+
       {status.error && (
         <div style={{ padding: '10px', backgroundColor: '#f8d7da', color: '#721c24', marginBottom: '15px', borderRadius: '4px' }}>
           {status.error}
@@ -187,11 +238,11 @@ const PrivateConsultationBooking = () => {
         <label style={labelStyle} htmlFor="email">Email Address</label>
         <input style={inputStyle} type="email" id="email" name="email" value={formData.email} onChange={handleChange} required placeholder="Your Email Address" />
 
-        <label style={labelStyle} htmlFor="phone">Phone Number</label>
-        <input style={inputStyle} type="tel" id="phone" name="phone" value={formData.phone} onChange={handleChange} required placeholder="Your Phone Number" />
+        <label style={labelStyle} htmlFor="phone">Phone / WhatsApp Number</label>
+        <input style={inputStyle} type="tel" id="phone" name="phone" value={formData.phone} onChange={handleChange} required placeholder="Your Phone or WhatsApp Number" />
 
-        <label style={labelStyle} htmlFor="description">Brief Description of Concern/Request</label>
-        <textarea style={{ ...inputStyle, height: '100px' }} id="description" name="description" value={formData.description} onChange={handleChange} required placeholder="Describe your concern..." />
+        <label style={labelStyle} htmlFor="description">What would you like guidance on?</label>
+        <textarea style={{ ...inputStyle, height: '100px' }} id="description" name="description" value={formData.description} onChange={handleChange} required placeholder="Tell us about your travel plans, questions, or support needs..." />
 
         <label style={labelStyle} htmlFor="date">Preferred Date</label>
         <DatePicker
@@ -233,7 +284,7 @@ const PrivateConsultationBooking = () => {
         </div>
 
         <button type="submit" style={{ ...buttonStyle, opacity: status.loading ? 0.7 : 1 }} disabled={status.loading}>
-          {status.loading ? 'Booking...' : 'Book Private Call'}
+          {status.loading ? 'Sending Request...' : 'Send Consultation Request'}
         </button>
       </form>
 
@@ -242,7 +293,7 @@ const PrivateConsultationBooking = () => {
           <div style={{ backgroundColor: 'white', borderRadius: '0.3rem', maxWidth: '500px', width: '90%', boxShadow: '0 0.5rem 1rem rgba(0,0,0,0.5)', border: '1px solid rgba(0,0,0,0.2)' }}>
             {/* Modal Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', borderBottom: '1px solid #dee2e6' }}>
-              <h3 style={{ margin: 0, fontSize: '1.25rem', lineHeight: 1.5, color: '#0B1C3E' }}>Confirm Booking</h3>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', lineHeight: 1.5, color: '#0B1C3E' }}>Confirm Consultation Request</h3>
               <button 
                 type="button" 
                 onClick={() => setShowConfirmation(false)} 
@@ -279,7 +330,7 @@ const PrivateConsultationBooking = () => {
                 onClick={confirmSubmit} 
                 style={{ padding: '0.375rem 0.75rem', backgroundColor: '#007bff', color: 'white', border: '1px solid #007bff', borderRadius: '0.25rem', cursor: 'pointer', fontWeight: 'bold' }}
               >
-                Confirm Booking
+                Send Consultation Request
               </button>
             </div>
           </div>

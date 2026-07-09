@@ -70,41 +70,48 @@ const TermsAndConditions = () => {
                     <div style={sectionStyle}>
                         <h3 style={sectionTitleStyle}>1. Introduction</h3>
                         <p>
-                            Welcome to NuurPath International Limited. These Terms and Conditions govern your use of our website and services. By booking a tour, flight, or appointment with us, you agree to comply with these terms.
+                            Welcome to NuurPath International Limited. These Terms and Conditions govern your use of our website, your account, and any package, flight, consultation, or service request you submit through NuurPath.
                         </p>
                     </div>
 
                     <div style={sectionStyle}>
-                        <h3 style={sectionTitleStyle}>2. Booking Requests & Pricing</h3>
+                        <h3 style={sectionTitleStyle}>2. Requests, Pricing, and Confirmation</h3>
                         <p>
-                            All booking requests are subject to availability and follow-up confirmation from our team. Prices shown on the website are estimated package values and may change before your itinerary is confirmed.
+                            Requests submitted through the website are expressions of interest and are subject to review, availability, and follow-up confirmation from our team. Prices shown on the website are estimated package values and may change before your itinerary or service is confirmed. NuurPath does not collect online payment on the website unless clearly stated otherwise.
                         </p>
                     </div>
 
                     <div style={sectionStyle}>
-                        <h3 style={sectionTitleStyle}>3. Cancellations & Refunds</h3>
+                        <h3 style={sectionTitleStyle}>3. Communication and Follow-Up</h3>
                         <p>
-                            Cancellations must be made in writing. Refund policies vary depending on the service provider (airlines, hotels, etc.) and the timing of the cancellation. Administration fees may apply.
+                            By submitting a request, you agree that NuurPath may contact you by phone, email, or WhatsApp to confirm details, request documents, share updates, or continue service coordination.
                         </p>
                     </div>
 
                     <div style={sectionStyle}>
                         <h3 style={sectionTitleStyle}>4. Travel Documents</h3>
                         <p>
-                            It is the traveler's responsibility to ensure that all travel documents, including passports and visas, are valid and complete. NuurPath International Limited is not liable for any failure to obtain necessary documents.
+                            It is the traveler&apos;s responsibility to ensure that all travel documents, including passports and visas, are valid and complete. NuurPath may provide guidance, reminders, or application support, but we do not guarantee visa issuance, passport approval, or other government decisions.
                         </p>
                     </div>
 
                     <div style={sectionStyle}>
-                        <h3 style={sectionTitleStyle}>5. Liability</h3>
+                        <h3 style={sectionTitleStyle}>5. Changes, Cancellations, and Supplier Terms</h3>
                         <p>
-                            NuurPath International Limited acts only as an agent for the various independent suppliers that provide hotel accommodations, transportation, sightseeing, activities, or other services connected with this itinerary. Such services are subject to the terms and conditions of those suppliers.
+                            Confirmed travel arrangements may be subject to airline, hotel, transport, embassy, or other third-party supplier rules. Cancellations, changes, refunds, and administration fees may vary depending on the supplier and the stage of your request or confirmed itinerary.
+                        </p>
+                    </div>
+
+                    <div style={sectionStyle}>
+                        <h3 style={sectionTitleStyle}>6. Liability</h3>
+                        <p>
+                            NuurPath International Limited acts as an intermediary and service coordinator for independent suppliers that provide transportation, accommodation, appointments, tours, documentation support, or related services. Those services remain subject to the suppliers&apos; own terms and conditions.
                         </p>
                     </div>
 
                     <div style={{ paddingTop: '2rem', borderTop: '1px solid #f3f4f6' }}>
                         <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-                            For any legal inquiries, please contact us at <a href="mailto:legal@nuurpathtravels.com" style={{ color: '#0B1C3E', fontWeight: 'bold', textDecoration: 'none' }}>legal@nuurpathtravels.com</a>.
+                            For legal or privacy inquiries, please contact us at <a href="mailto:legal@nuurpathtravels.com" style={{ color: '#0B1C3E', fontWeight: 'bold', textDecoration: 'none' }}>legal@nuurpathtravels.com</a>. You can also review our <a href="/privacy" style={{ color: '#0B1C3E', fontWeight: 'bold', textDecoration: 'none' }}>Privacy Policy</a>.
                         </p>
                     </div>
                 </div>

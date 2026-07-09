@@ -1,5 +1,6 @@
 const prisma = require('../db');
 const { createNotification } = require('./notificationService');
+const { getNotificationRoomForUser } = require('./socketRooms');
 
 function requireNotificationText(value, fieldName) {
     if (typeof value !== 'string' || !value.trim()) {
@@ -31,9 +32,9 @@ async function notifyAdmins(app, data) {
                 bookingId,
             });
 
-            if (io && admin.email) {
+            if (io) {
                 try {
-                    io.to(admin.email).emit('receive_notification', notification);
+                    io.to(getNotificationRoomForUser(admin.id)).emit('receive_notification', notification);
                 } catch (emitError) {
                     console.error(`[AdminNotifier] Failed to emit notification to ${admin.email}:`, emitError.message);
                 }

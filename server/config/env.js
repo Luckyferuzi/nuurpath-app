@@ -66,13 +66,20 @@ const ALLOWED_ORIGINS = Array.from(
 const env = {
   NODE_ENV,
   isProduction,
-  PORT: Number(optionalEnv('PORT', 5001)),
+  PORT: Number(optionalEnv('PORT', 5000)),
   CLIENT_URL: optionalEnv('CLIENT_URL', 'http://localhost:3000'),
-  API_BASE_URL: optionalEnv('API_BASE_URL', 'http://localhost:5001'),
+  API_BASE_URL: optionalEnv('API_BASE_URL', 'http://localhost:5000'),
   DATABASE_URL: process.env.DATABASE_URL,
   JWT_SECRET: process.env.JWT_SECRET,
   ALLOWED_ORIGINS,
   UPLOAD_ROOT: optionalEnv('UPLOAD_ROOT', ''),
+  EMAIL_HOST: optionalEnv('EMAIL_HOST', ''),
+  EMAIL_PORT: optionalEnv('EMAIL_PORT', ''),
+  EMAIL_USER: optionalEnv('EMAIL_USER', ''),
+  EMAIL_PASS: optionalEnv('EMAIL_PASS', ''),
+  EMAIL_FROM: optionalEnv('EMAIL_FROM', ''),
+  ADMIN_EMAIL: optionalEnv('ADMIN_EMAIL', ''),
+  GOOGLE_CLIENT_ID: optionalEnv('GOOGLE_CLIENT_ID', ''),
 };
 
 if (isProduction) {
@@ -80,9 +87,14 @@ if (isProduction) {
   requireEnv('JWT_SECRET');
   requireEnv('CLIENT_URL');
   requireEnv('API_BASE_URL');
+  requireEnv('UPLOAD_ROOT');
 
   if (env.JWT_SECRET === 'secret' || env.JWT_SECRET === 'your-secret-key' || env.JWT_SECRET.length < 32) {
     throw new Error('JWT_SECRET must be a strong production secret with at least 32 characters.');
+  }
+
+  if (!path.isAbsolute(env.UPLOAD_ROOT)) {
+    throw new Error('UPLOAD_ROOT must be an absolute filesystem path in production.');
   }
 
   if (!env.CLIENT_URL.startsWith('https://')) {
@@ -102,6 +114,22 @@ if (isProduction) {
       throw new Error(`ALLOWED_ORIGINS must use https:// in production. Invalid origin: ${origin}`);
     }
   });
+
+  const emailFieldNames = ['EMAIL_HOST', 'EMAIL_PORT', 'EMAIL_USER', 'EMAIL_PASS'];
+  const configuredEmailFieldCount = emailFieldNames.filter((fieldName) => Boolean(String(process.env[fieldName] || '').trim())).length;
+
+  if (configuredEmailFieldCount > 0 && configuredEmailFieldCount < emailFieldNames.length) {
+    throw new Error('EMAIL_HOST, EMAIL_PORT, EMAIL_USER, and EMAIL_PASS must all be configured together in production.');
+  }
+
+  if (configuredEmailFieldCount === emailFieldNames.length) {
+    requireEnv('ADMIN_EMAIL');
+
+    const parsedEmailPort = Number.parseInt(env.EMAIL_PORT, 10);
+    if (!Number.isInteger(parsedEmailPort) || parsedEmailPort <= 0) {
+      throw new Error('EMAIL_PORT must be a valid positive integer in production.');
+    }
+  }
 }
 
 module.exports = env;

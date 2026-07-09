@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import axios from '../lib/api';
 import { Link } from 'react-router-dom';
 
 const ManageServices = () => {
@@ -15,7 +15,7 @@ const ManageServices = () => {
 
     const fetchServices = async () => {
         try {
-            const res = await axios.get('/api/services');
+            const res = await axios.get('/services');
             setServices(res.data);
             setError(null); // Clear previous errors on success
             setLoading(false);
@@ -34,7 +34,7 @@ const ManageServices = () => {
         e.preventDefault();
         setSubmitting(true);
         try {
-            const res = await axios.post('/api/services', formData);
+            const res = await axios.post('/services', formData);
             setError(null); // Clear previous errors on success
             setServices([...services, res.data]);
             setFormData({ title: '', description: '', icon: '' });
@@ -49,7 +49,7 @@ const ManageServices = () => {
     const handleDelete = async (id) => {
         if (!window.confirm('Are you sure you want to delete this service?')) return;
         try {
-            await axios.delete(`/api/services/${id}`);
+            await axios.delete(`/services/${id}`);
             setError(null); // Clear previous errors on success
             setServices(services.filter(s => s.id !== id));
         } catch (err) {
@@ -74,7 +74,10 @@ const ManageServices = () => {
         <div style={containerStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>
                 <h2 style={{ margin: 0 }}>Manage Services</h2>
-                <Link to="/admin" style={{ textDecoration: 'none', color: '#0056b3', fontWeight: 'bold' }}>&larr; Back to Dashboard</Link>
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                    <Link to="/admin/service-inquiries" style={{ textDecoration: 'none', color: '#006837', fontWeight: 'bold' }}>View Service Inquiries</Link>
+                    <Link to="/admin" style={{ textDecoration: 'none', color: '#0056b3', fontWeight: 'bold' }}>&larr; Back to Dashboard</Link>
+                </div>
             </div>
 
             {error && <div style={{ color: 'red', marginBottom: '20px' }}>{error}</div>}

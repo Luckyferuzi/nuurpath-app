@@ -63,6 +63,7 @@ async function getVerifiedUserFromToken(token) {
     where: { id: normalizedUser.id },
     select: {
       id: true,
+      name: true,
       email: true,
       role: true,
       passwordChangedAt: true,
@@ -84,6 +85,7 @@ async function getVerifiedUserFromToken(token) {
   return {
     id: user.id,
     userId: user.id,
+    name: user.name,
     email: user.email,
     role: String(user.role || 'user').toLowerCase(),
   };
@@ -97,7 +99,7 @@ async function auth(req, res, next) {
   const token = getTokenFromRequest(req);
 
   if (!token) {
-    return res.status(401).json({ msg: 'No token, authorization denied' });
+    return res.status(401).json({ msg: 'Authentication required' });
   }
 
   try {
@@ -106,7 +108,7 @@ async function auth(req, res, next) {
     return next();
   } catch (err) {
     if (err.statusCode === 401) {
-      return res.status(401).json({ msg: err.message });
+      return res.status(401).json({ msg: 'Invalid or expired authentication token' });
     }
 
     return res.status(500).json({ msg: 'Server Error' });

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { CONFIG } from '../config';
+import axios, { resolveBackendUrl } from '../lib/api';
 
 const ManagePackages = () => {
   const [packages, setPackages] = useState([]);
@@ -29,7 +28,7 @@ const ManagePackages = () => {
 
   const fetchPackages = async () => {
     try {
-      const response = await axios.get(`${CONFIG.API_BASE_URL}/packages`);
+      const response = await axios.get(`/packages`);
       setPackages(Array.isArray(response.data) ? response.data : response.data.packages || []);
       setError(null); // Clear general error on successful fetch
     } catch (error) {
@@ -52,9 +51,6 @@ const ManagePackages = () => {
     setIsSubmitting(true);
     setFormError(null); // Clear previous form errors
     try {
-      const token = localStorage.getItem('token');
-      const headers = { 'x-auth-token': token };
-      
       // Use structured itinerary if available, otherwise use the text field
       const finalItinerary = itineraryItems.length > 0 ? JSON.stringify(itineraryItems) : formData.itinerary;
       
@@ -67,18 +63,17 @@ const ManagePackages = () => {
         submitData.append('image', image);
 
         if (editingId) {
-          await axios.put(`${CONFIG.API_BASE_URL}/packages/${editingId}`, submitData, { headers });
+          await axios.put(`/packages/${editingId}`, submitData);
         } else {
-          await axios.post(`${CONFIG.API_BASE_URL}/packages`, submitData, { headers });
+          await axios.post('/packages', submitData);
         }
       } else {
         const payload = { ...formData, itinerary: finalItinerary };
-        headers['Content-Type'] = 'application/json';
         
         if (editingId) {
-          await axios.put(`${CONFIG.API_BASE_URL}/packages/${editingId}`, payload, { headers });
+          await axios.put(`/packages/${editingId}`, payload);
         } else {
-          await axios.post(`${CONFIG.API_BASE_URL}/packages`, payload, { headers });
+          await axios.post('/packages', payload);
         }
       }
       
@@ -173,9 +168,8 @@ const ManagePackages = () => {
     uploadData.append('image', file);
 
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.post(`${CONFIG.API_BASE_URL}/packages/upload-image`, uploadData, {
-        headers: { 'x-auth-token': token, 'Content-Type': 'multipart/form-data' }
+      const res = await axios.post('/packages/upload-image', uploadData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
       updateItineraryDay(index, 'image', res.data.url);
     } catch (err) {
@@ -190,10 +184,7 @@ const ManagePackages = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this package?')) {
       try {
-        const token = localStorage.getItem('token');
-        await axios.delete(`${CONFIG.API_BASE_URL}/packages/${id}`, {
-          headers: { 'x-auth-token': token }
-        });
+        await axios.delete(`/packages/${id}`);
         fetchPackages();
       } catch (error) {
         setError(error.response?.data?.msg || error.message || 'Failed to delete package.'); // User-facing error
@@ -292,7 +283,7 @@ const ManagePackages = () => {
                         {uploadingItineraryIndex === index ? (
                           <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#0B1C3E]"></div>
                         ) : (
-                          item.image && <img src={item.image.startsWith('http') ? item.image : `${CONFIG.API_BASE_URL.replace('/api', '')}${item.image.startsWith('/') ? '' : '/'}${item.image}`} alt="Preview" className="h-10 w-10 object-cover rounded border" />
+                          item.image && <img src={resolveBackendUrl(item.image)} alt="Preview" className="h-10 w-10 object-cover rounded border" />
                         )}
                       </div>
                     </div>

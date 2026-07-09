@@ -1,5 +1,10 @@
 const nodemailer = require('nodemailer');
 const env = require('../config/env');
+const {
+    escapeHtml,
+    formatPlainTextForHtml,
+    sanitizeEmailHeaderValue,
+} = require('./security');
 
 function normalizeEmailOptions(optionsOrTo, legacySubject, legacyHtml, legacyAttachments) {
     if (typeof optionsOrTo === 'string') {
@@ -101,7 +106,7 @@ function formatBookingDate(value) {
 async function sendEmail(optionsOrTo, legacySubject, legacyHtml, legacyAttachments) {
     const options = normalizeEmailOptions(optionsOrTo, legacySubject, legacyHtml, legacyAttachments);
     const to = requireNonEmptyString(options.to, 'Email recipient');
-    const subject = requireNonEmptyString(options.subject, 'Email subject');
+    const subject = sanitizeEmailHeaderValue(requireNonEmptyString(options.subject, 'Email subject'));
     const text = typeof options.text === 'string' ? options.text.trim() : '';
     const html = typeof options.html === 'string' ? options.html : '';
 
@@ -157,17 +162,22 @@ async function sendBookingConfirmationEmail(booking, pdfBuffer) {
     const bookingReference = booking.id ? `#${booking.id}` : 'your booking';
     const travelDate = formatBookingDate(booking.travelDate);
     const status = booking.status || 'Confirmed';
+    const safeContactName = escapeHtml(contactName);
+    const safePackageLabel = escapeHtml(packageLabel);
+    const safeBookingReference = escapeHtml(bookingReference);
+    const safeTravelDate = escapeHtml(travelDate);
+    const safeStatus = escapeHtml(status);
 
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333;">
             <h2 style="color: #0B1C3E;">Booking Confirmation</h2>
-            <p>Dear <strong>${contactName}</strong>,</p>
+            <p>Dear <strong>${safeContactName}</strong>,</p>
             <p>Your booking request has been confirmed by the NuurPath Travels team.</p>
             <div style="background: #f4f4f4; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                <p><strong>Booking ID:</strong> ${bookingReference}</p>
-                <p><strong>Package:</strong> ${packageLabel}</p>
-                <p><strong>Travel Date:</strong> ${travelDate}</p>
-                <p><strong>Status:</strong> ${status}</p>
+                <p><strong>Booking ID:</strong> ${safeBookingReference}</p>
+                <p><strong>Package:</strong> ${safePackageLabel}</p>
+                <p><strong>Travel Date:</strong> ${safeTravelDate}</p>
+                <p><strong>Status:</strong> ${safeStatus}</p>
             </div>
             <p>Please keep this email for your records. If you have any questions, reply to this message or contact our team.</p>
             <p>Best regards,<br><strong>NuurPath Travels Team</strong></p>
@@ -184,8 +194,19 @@ async function sendBookingConfirmationEmail(booking, pdfBuffer) {
 
     return sendEmail({
         to: requireNonEmptyString(recipient, 'Booking confirmation email recipient'),
-        subject: `Booking Confirmed - ${bookingReference}`,
+        subject: `Booking Confirmed - ${sanitizeEmailHeaderValue(bookingReference, 'Booking Confirmation')}`,
         html,
+        text: [
+            `Dear ${contactName},`,
+            'Your booking request has been confirmed by the NuurPath Travels team.',
+            `Booking ID: ${bookingReference}`,
+            `Package: ${packageLabel}`,
+            `Travel Date: ${travelDate}`,
+            `Status: ${status}`,
+            'Please keep this email for your records. If you have any questions, reply to this message or contact our team.',
+            'Best regards,',
+            'NuurPath Travels Team',
+        ].join('\n'),
         attachments,
     });
 }
@@ -193,3 +214,5 @@ async function sendBookingConfirmationEmail(booking, pdfBuffer) {
 module.exports = sendEmail;
 module.exports.sendEmail = sendEmail;
 module.exports.sendBookingConfirmationEmail = sendBookingConfirmationEmail;
+module.exports.escapeHtml = escapeHtml;
+module.exports.formatPlainTextForHtml = formatPlainTextForHtml;

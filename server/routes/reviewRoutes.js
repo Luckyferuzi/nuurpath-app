@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../db');
 const auth = require('../middleware/auth');
-const adminAuth = require('../middleware/adminAuth');
+const { requireAdmin, requireAdminOrManager } = require('../middleware/adminAuth');
 const {
     isNonEmptyString,
     sendInvalidId,
@@ -19,18 +19,18 @@ const {
     validateReviewMediaSizes,
 } = require('../utils/upload');
 
-function requireAdminForAllReviews(req, res, next) {
+function requireStaffForAllReviews(req, res, next) {
     if (req.query.all !== 'true') {
         return next();
     }
 
-    return auth(req, res, () => adminAuth(req, res, next));
+    return auth(req, res, () => requireAdminOrManager(req, res, next));
 }
 
 // @route   GET api/reviews
 // @desc    Get all visible reviews/testimonials (Memories)
 // @access  Public
-router.get('/', requireAdminForAllReviews, async (req, res) => {
+router.get('/', requireStaffForAllReviews, async (req, res) => {
     try {
         const { all } = req.query;
         const where = all === 'true' ? {} : { isVisible: true };
@@ -164,7 +164,7 @@ router.post('/', auth, async (req, res) => {
 // @route   PUT api/reviews/:id/toggle
 // @desc    Toggle review visibility
 // @access  Private (Admin)
-router.put('/:id/toggle', auth, adminAuth, async (req, res) => {
+router.put('/:id/toggle', auth, requireAdminOrManager, async (req, res) => {
     try {
         const id = toPositiveInteger(req.params.id);
         if (id === null) {
@@ -189,7 +189,7 @@ router.put('/:id/toggle', auth, adminAuth, async (req, res) => {
 // @route   DELETE api/reviews/:id
 // @desc    Delete review
 // @access  Private (Admin)
-router.delete('/:id', auth, adminAuth, async (req, res) => {
+router.delete('/:id', auth, requireAdmin, async (req, res) => {
     try {
         const id = toPositiveInteger(req.params.id);
         if (id === null) {

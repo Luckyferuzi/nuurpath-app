@@ -1,3 +1,4 @@
+const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -7,9 +8,11 @@ const { Server } = require('socket.io');
 const asyncHandler = require('./middleware/asyncHandler');
 const auth = require('./middleware/auth');
 const adminAuth = require('./middleware/adminAuth');
+const softAuth = require('./middleware/softAuth');
 const errorHandler = require('./middleware/errorHandler');
 const requestId = require('./middleware/requestId');
 const logger = require('./utils/logger');
+const { getVerifiedUserFromToken } = require('./middleware/auth');
 const {
     bookingDocumentUpload,
     chatUpload,
@@ -17,9 +20,18 @@ const {
     publicUploadRoot,
     runUpload,
     sendUploadError,
+    resolvePrivateChatUploadPath,
+    toProtectedChatUploadUrl,
     toProtectedBookingDocumentUrl,
     toPublicUploadUrl,
 } = require('./utils/upload');
+const {
+    buildChatPresence,
+    canManageSupportChats,
+    getNotificationRoomForUser,
+    getStaffChatRoom,
+    getSupportRoomForUser,
+} = require('./utils/socketRooms');
 
 const app = express();
 const allowedOriginSet = new Set(env.ALLOWED_ORIGINS);
@@ -117,6 +129,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(publicUploadRoot));
 
 const PORT = env.PORT;
+const CHAT_HISTORY_LIMIT = 50;
+const CHAT_MESSAGE_LIMIT_WINDOW_MS = 60 * 1000;
+const CHAT_MESSAGE_LIMIT_MAX = 20;
 
 process.on('uncaughtException', (error) => {
     handleFatalError('uncaught_exception', error);
@@ -125,6 +140,145 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (error) => {
     handleFatalError('unhandled_rejection', error);
 });
+
+function getSocketAuthToken(socket) {
+    const handshakeToken = socket.handshake?.auth?.token;
+    if (handshakeToken && String(handshakeToken).trim()) {
+        return String(handshakeToken).trim();
+    }
+
+    const authorizationHeader = socket.handshake?.headers?.authorization;
+    if (authorizationHeader && authorizationHeader.toLowerCase().startsWith('bearer ')) {
+        const bearerToken = authorizationHeader.slice(7).trim();
+        if (bearerToken) {
+            return bearerToken;
+        }
+    }
+
+    const headerToken = socket.handshake?.headers?.['x-auth-token'];
+    if (headerToken && String(headerToken).trim()) {
+        return String(headerToken).trim();
+    }
+
+    return null;
+}
+
+function toPositiveInteger(value) {
+    const normalized = Number.parseInt(value, 10);
+
+    if (!Number.isInteger(normalized) || normalized <= 0) {
+        return null;
+    }
+
+    return normalized;
+}
+
+function emitChatError(socket, message) {
+    socket.emit('chat_error', {
+        message,
+    });
+}
+
+function buildWelcomeMessage(room) {
+    return {
+        room,
+        author: 'Support Bot',
+        email: 'bot@nuurpath.com',
+        message: 'Welcome to NuurPath Travels! How can we assist you today?',
+        time: new Date().toISOString(),
+    };
+}
+
+function emitActiveUsersToStaff(io, onlineChatUsers) {
+    const activeUsersMap = new Map();
+
+    Array.from(onlineChatUsers.values()).forEach((presence) => {
+        if (!presence || canManageSupportChats(presence)) {
+            return;
+        }
+
+        activeUsersMap.set(presence.userId, presence);
+    });
+
+    io.to(getStaffChatRoom()).emit('active_users', Array.from(activeUsersMap.values()));
+}
+
+function registerChatPresence(socket, io, onlineChatUsers) {
+    const presence = buildChatPresence(socket.user);
+    if (!presence) {
+        emitChatError(socket, 'Authentication is required to use chat.');
+        return;
+    }
+
+    socket.join(getSupportRoomForUser(socket.user.id));
+
+    if (canManageSupportChats(socket.user)) {
+        socket.join(getStaffChatRoom());
+    } else {
+        onlineChatUsers.set(socket.id, presence);
+    }
+
+    emitActiveUsersToStaff(io, onlineChatUsers);
+}
+
+function unregisterChatPresence(socket, io, onlineChatUsers) {
+    if (onlineChatUsers.delete(socket.id)) {
+        emitActiveUsersToStaff(io, onlineChatUsers);
+    }
+}
+
+function resolveAuthorizedSupportRoom(socket, payload, { allowStaffSelf = false } = {}) {
+    if (!socket.user || !socket.user.id) {
+        return { error: 'Authentication is required to use chat.' };
+    }
+
+    if (!canManageSupportChats(socket.user)) {
+        return {
+            room: getSupportRoomForUser(socket.user.id),
+            targetUserId: socket.user.id,
+            isStaff: false,
+        };
+    }
+
+    const rawTargetUserId = payload && typeof payload === 'object'
+        ? (payload.targetUserId ?? payload.userId ?? payload.roomUserId)
+        : payload;
+    const targetUserId = toPositiveInteger(rawTargetUserId);
+
+    if (targetUserId === null) {
+        if (allowStaffSelf) {
+            return {
+                room: getSupportRoomForUser(socket.user.id),
+                targetUserId: socket.user.id,
+                isStaff: true,
+            };
+        }
+
+        return { error: 'A valid chat target is required.' };
+    }
+
+    return {
+        room: getSupportRoomForUser(targetUserId),
+        targetUserId,
+        isStaff: true,
+    };
+}
+
+function canSendAnotherChatMessage(socket) {
+    const now = Date.now();
+    const timestamps = Array.isArray(socket.data?.chatMessageTimestamps)
+        ? socket.data.chatMessageTimestamps.filter((timestamp) => now - timestamp < CHAT_MESSAGE_LIMIT_WINDOW_MS)
+        : [];
+
+    if (timestamps.length >= CHAT_MESSAGE_LIMIT_MAX) {
+        socket.data.chatMessageTimestamps = timestamps;
+        return false;
+    }
+
+    timestamps.push(now);
+    socket.data.chatMessageTimestamps = timestamps;
+    return true;
+}
 
 async function startServer() {
     const dbUrl = env.DATABASE_URL || '';
@@ -216,7 +370,7 @@ async function startServer() {
             return res.status(400).json({ success: false, message: 'No file uploaded.', msg: 'No file uploaded.' });
         }
 
-        const fileUrl = toPublicUploadUrl('chat', req.file.filename);
+        const fileUrl = toProtectedChatUploadUrl(req.file.filename);
 
         return res.json({
             success: true,
@@ -227,6 +381,30 @@ async function startServer() {
                 type: req.file.mimetype,
             },
         });
+    }));
+
+    app.get('/api/chat/files/:filename', auth, asyncHandler(async (req, res) => {
+        const filePath = resolvePrivateChatUploadPath(req.params.filename);
+        if (!filePath || !fs.existsSync(filePath)) {
+            return res.status(404).json({ success: false, message: 'File not found.' });
+        }
+
+        if (!canManageSupportChats(req.user)) {
+            const expectedMessagePath = toProtectedChatUploadUrl(req.params.filename);
+            const isAuthorized = await prisma.chatMessage.findFirst({
+                where: {
+                    room: getSupportRoomForUser(req.user.id),
+                    message: expectedMessagePath,
+                },
+                select: { id: true },
+            });
+
+            if (!isAuthorized) {
+                return res.status(403).json({ success: false, message: 'You do not have permission to access this file.' });
+            }
+        }
+
+        return res.sendFile(filePath);
     }));
 
     app.post('/api/packages/upload-image', auth, adminAuth, asyncHandler(async (req, res) => {
@@ -252,7 +430,7 @@ async function startServer() {
         });
     }));
 
-    app.post('/api/bookings/upload', auth, asyncHandler(async (req, res) => {
+    app.post('/api/bookings/upload', softAuth, asyncHandler(async (req, res) => {
         try {
             await runUpload(bookingDocumentUpload.single('passport'), req, res);
         } catch (error) {
@@ -287,7 +465,7 @@ async function startServer() {
         });
     });
 
-    const onlineUsers = new Map();
+    const onlineChatUsers = new Map();
 
     const io = new Server(server, {
         cors: {
@@ -298,81 +476,132 @@ async function startServer() {
 
     app.set('io', io);
 
+    io.use(async (socket, next) => {
+        const token = getSocketAuthToken(socket);
+
+        if (!token) {
+            next(new Error('Authentication required'));
+            return;
+        }
+
+        try {
+            socket.user = await getVerifiedUserFromToken(token);
+            next();
+        } catch (error) {
+            logger.warn('socket_auth_failed', {
+                socketId: socket.id,
+                error,
+            });
+            next(new Error('Authentication failed'));
+        }
+    });
+
     io.on('connection', (socket) => {
+        socket.join(getNotificationRoomForUser(socket.user.id));
+        socket.data.chatMessageTimestamps = [];
+
         logger.info('socket_connected', {
             socketId: socket.id,
+            userId: socket.user?.id,
+            role: socket.user?.role,
         });
 
-        socket.on('register_user', (userData) => {
-            const user = { ...userData, socketId: socket.id };
-            onlineUsers.set(socket.id, user);
+        socket.on('register_user', () => {
+            registerChatPresence(socket, io, onlineChatUsers);
+        });
 
-            if (userData.email) {
-                socket.join(userData.email);
+        socket.on('join_room', async (payload) => {
+            const authorizedRoom = resolveAuthorizedSupportRoom(socket, payload);
+            if (authorizedRoom.error) {
+                emitChatError(socket, authorizedRoom.error);
+                return;
             }
 
-            io.emit('active_users', Array.from(onlineUsers.values()));
-        });
-
-        socket.on('join_room', async (room) => {
-            socket.join(room);
+            socket.join(authorizedRoom.room);
             try {
                 const messages = await prisma.chatMessage.findMany({
-                    where: { room },
+                    where: { room: authorizedRoom.room },
                     orderBy: { createdAt: 'asc' },
-                    take: 50,
+                    take: CHAT_HISTORY_LIMIT,
                 });
                 socket.emit('load_messages', messages);
 
-                if (messages.length === 0) {
-                    const welcomeMsg = {
-                        room,
-                        author: 'Support Bot',
-                        email: 'bot@nuurpath.com',
-                        message: 'Welcome to NuurPath Travels! How can we assist you today?',
-                        time: new Date().toISOString(),
-                    };
+                if (messages.length === 0 && !authorizedRoom.isStaff) {
+                    const welcomeMsg = buildWelcomeMessage(authorizedRoom.room);
 
                     await prisma.chatMessage.create({
                         data: { ...welcomeMsg },
                     });
 
-                    io.to(room).emit('receive_message', welcomeMsg);
+                    io.to(authorizedRoom.room).emit('receive_message', welcomeMsg);
                 }
             } catch (error) {
                 logger.error('chat_history_load_failed', {
-                    room,
+                    room: authorizedRoom.room,
                     socketId: socket.id,
                     error,
                 });
             }
         });
 
-        socket.on('typing', (data) => {
-            socket.to(data.room).emit('display_typing', data);
+        socket.on('typing', (payload) => {
+            const authorizedRoom = resolveAuthorizedSupportRoom(socket, payload);
+            if (authorizedRoom.error) {
+                return;
+            }
+
+            socket.to(authorizedRoom.room).emit('display_typing', {
+                room: authorizedRoom.room,
+                userId: socket.user.id,
+            });
         });
 
-        socket.on('stop_typing', (data) => {
-            socket.to(data.room).emit('hide_typing', data);
+        socket.on('stop_typing', (payload) => {
+            const authorizedRoom = resolveAuthorizedSupportRoom(socket, payload);
+            if (authorizedRoom.error) {
+                return;
+            }
+
+            socket.to(authorizedRoom.room).emit('hide_typing', {
+                room: authorizedRoom.room,
+                userId: socket.user.id,
+            });
         });
 
-        socket.on('send_message', async (data) => {
-            socket.to(data.room).emit('receive_message', data);
+        socket.on('send_message', async (payload) => {
+            const authorizedRoom = resolveAuthorizedSupportRoom(socket, payload);
+            if (authorizedRoom.error) {
+                emitChatError(socket, authorizedRoom.error);
+                return;
+            }
+
+            if (!canSendAnotherChatMessage(socket)) {
+                emitChatError(socket, 'You are sending messages too quickly. Please wait a moment and try again.');
+                return;
+            }
 
             try {
-                const messageContent = data.message || (data.file ? `Sent a file: ${data.file.name}` : '');
+                const messageContent = typeof payload?.message === 'string' ? payload.message.trim() : '';
+                if (!messageContent) {
+                    emitChatError(socket, 'Message content is required.');
+                    return;
+                }
+
+                const savedMessage = {
+                    room: authorizedRoom.room,
+                    author: socket.user.name || (authorizedRoom.isStaff ? 'Support Team' : 'Customer'),
+                    email: socket.user.email,
+                    message: messageContent,
+                    time: new Date().toISOString(),
+                };
 
                 await prisma.chatMessage.create({
-                    data: {
-                        room: data.room,
-                        author: data.author,
-                        email: data.email,
-                        message: messageContent,
-                        time: data.time,
-                    },
+                    data: savedMessage,
                 });
 
-                if (data.email === data.room && data.author !== 'Support Bot') {
+                io.to(authorizedRoom.room).emit('receive_message', savedMessage);
+
+                if (!authorizedRoom.isStaff) {
                     const lowerMsg = (messageContent || '').toLowerCase();
                     let botResponseText = null;
 
@@ -388,7 +617,7 @@ async function startServer() {
 
                     if (botResponseText) {
                         const botMsg = {
-                            room: data.room,
+                            room: authorizedRoom.room,
                             author: 'Support Bot',
                             email: 'bot@nuurpath.com',
                             message: botResponseText,
@@ -396,12 +625,12 @@ async function startServer() {
                         };
 
                         setTimeout(async () => {
-                            io.to(data.room).emit('receive_message', botMsg);
+                            io.to(authorizedRoom.room).emit('receive_message', botMsg);
                             try {
                                 await prisma.chatMessage.create({ data: botMsg });
                             } catch (error) {
                                 logger.error('chat_bot_response_save_failed', {
-                                    room: data.room,
+                                    room: authorizedRoom.room,
                                     socketId: socket.id,
                                     error,
                                 });
@@ -411,42 +640,55 @@ async function startServer() {
                 }
             } catch (error) {
                 logger.error('chat_message_save_failed', {
-                    room: data.room,
+                    room: authorizedRoom.room,
                     socketId: socket.id,
                     error,
                 });
-            }
-
-            if (data.recipientEmail) {
-                socket.to(data.recipientEmail).emit('receive_message', data);
+                emitChatError(socket, 'Unable to send your message right now. Please try again.');
             }
         });
 
-        socket.on('mark_read', async (data) => {
-            const { room, readerEmail } = data;
+        socket.on('mark_read', async (payload) => {
+            const authorizedRoom = resolveAuthorizedSupportRoom(socket, payload);
+            if (authorizedRoom.error) {
+                emitChatError(socket, authorizedRoom.error);
+                return;
+            }
+
             try {
                 await prisma.chatMessage.updateMany({
                     where: {
-                        room,
-                        email: { not: readerEmail },
+                        room: authorizedRoom.room,
+                        email: { not: socket.user.email },
                         read: false,
                     },
                     data: { read: true },
                 });
 
-                socket.to(room).emit('messages_read', { room });
+                io.to(authorizedRoom.room).emit('messages_read', { room: authorizedRoom.room });
             } catch (error) {
                 logger.error('chat_mark_read_failed', {
-                    room,
+                    room: authorizedRoom.room,
                     socketId: socket.id,
                     error,
                 });
             }
         });
 
-        socket.on('resolve_chat', async ({ room }) => {
+        socket.on('resolve_chat', async (payload) => {
+            if (!canManageSupportChats(socket.user)) {
+                emitChatError(socket, 'You do not have permission to resolve this chat.');
+                return;
+            }
+
+            const authorizedRoom = resolveAuthorizedSupportRoom(socket, payload);
+            if (authorizedRoom.error) {
+                emitChatError(socket, authorizedRoom.error);
+                return;
+            }
+
             const systemMsg = {
-                room,
+                room: authorizedRoom.room,
                 author: 'System',
                 email: 'system@nuurpath.com',
                 message: 'This chat has been marked as resolved.',
@@ -455,10 +697,10 @@ async function startServer() {
 
             try {
                 await prisma.chatMessage.create({ data: systemMsg });
-                io.to(room).emit('receive_message', systemMsg);
+                io.to(authorizedRoom.room).emit('receive_message', systemMsg);
             } catch (error) {
                 logger.error('chat_resolve_failed', {
-                    room,
+                    room: authorizedRoom.room,
                     socketId: socket.id,
                     error,
                 });
@@ -468,9 +710,9 @@ async function startServer() {
         socket.on('disconnect', () => {
             logger.info('socket_disconnected', {
                 socketId: socket.id,
+                userId: socket.user?.id,
             });
-            onlineUsers.delete(socket.id);
-            io.emit('active_users', Array.from(onlineUsers.values()));
+            unregisterChatPresence(socket, io, onlineChatUsers);
         });
     });
 }

@@ -51,3 +51,21 @@ exports.privateConsultationLimiter = createJsonRateLimiter({
     max: 5,
     message: 'Too many consultation requests from this IP. Please try again later.',
 });
+
+exports.packageRequestLimiter = createJsonRateLimiter({
+    windowMs: 60 * 60 * 1000,
+    max: 10,
+    message: 'Too many package requests from this IP. Please try again later.',
+});
+
+exports.flightRequestLimiter = createJsonRateLimiter({
+    windowMs: 60 * 60 * 1000,
+    max: 10,
+    message: 'Too many flight requests from this IP. Please try again later.',
+});
+
+exports.serviceInquiryLimiter = createJsonRateLimiter({
+    windowMs: 60 * 60 * 1000,
+    max: 10,
+    message: 'Too many service requests from this IP. Please try again later.',
+});

@@ -13,6 +13,7 @@ const privateUploadRoot = configuredUploadRoot
     ? path.resolve(configuredUploadRoot, 'private')
     : path.join(serverRoot, 'private', 'uploads');
 const privateBookingDocumentDir = path.join(privateUploadRoot, 'bookings');
+const privateChatUploadDir = path.join(privateUploadRoot, 'chat');
 
 const mimeToExtension = {
     'application/pdf': 'pdf',
@@ -21,6 +22,15 @@ const mimeToExtension = {
     'image/webp': 'webp',
     'video/mp4': 'mp4',
     'video/webm': 'webm',
+};
+
+const mimeToAllowedExtensions = {
+    'application/pdf': new Set(['.pdf']),
+    'image/jpeg': new Set(['.jpg', '.jpeg']),
+    'image/png': new Set(['.png']),
+    'image/webp': new Set(['.webp']),
+    'video/mp4': new Set(['.mp4']),
+    'video/webm': new Set(['.webm']),
 };
 
 const publicImageMimeTypes = new Set([
@@ -78,6 +88,21 @@ function buildSafeFilename(file) {
     return `${fieldName}-${Date.now()}-${randomSuffix}.${extension}`;
 }
 
+function isAllowedFileType(file, allowedMimeTypes) {
+    if (!file || !file.mimetype || !allowedMimeTypes?.has(file.mimetype)) {
+        return false;
+    }
+
+    const originalExtension = path.extname(String(file.originalname || '')).toLowerCase();
+    const allowedExtensions = mimeToAllowedExtensions[file.mimetype];
+
+    if (!allowedExtensions || allowedExtensions.size === 0) {
+        return false;
+    }
+
+    return allowedExtensions.has(originalExtension);
+}
+
 function createDiskStorage(rootDirectory, subdirectory) {
     const targetDirectory = path.join(rootDirectory, subdirectory);
     ensureDirectoryExists(targetDirectory);
@@ -110,7 +135,7 @@ function createUploadHandler({
             fileSize: maxFileSize,
         },
         fileFilter(req, file, cb) {
-            if (!allowedMimeTypes.has(file.mimetype)) {
+            if (!isAllowedFileType(file, allowedMimeTypes)) {
                 return cb(new Error(invalidTypeMessage));
             }
 
@@ -210,6 +235,10 @@ function toProtectedBookingDocumentUrl(filename) {
     return `/api/bookings/documents/${filename}`;
 }
 
+function toProtectedChatUploadUrl(filename) {
+    return `/api/chat/files/${filename}`;
+}
+
 function isSafeStoredFilename(filename) {
     return /^[a-z0-9-]+\.[a-z0-9]+$/i.test(String(filename || ''));
 }
@@ -260,8 +289,25 @@ function resolvePrivateBookingDocumentPath(filename) {
     return resolvedPath;
 }
 
+function resolvePrivateChatUploadPath(filename) {
+    if (!isSafeStoredFilename(filename)) {
+        return null;
+    }
+
+    const baseDirectory = path.resolve(privateChatUploadDir);
+    const resolvedPath = path.resolve(baseDirectory, filename);
+    const normalizedBase = `${baseDirectory.toLowerCase()}${path.sep}`;
+    const normalizedResolved = resolvedPath.toLowerCase();
+
+    if (normalizedResolved !== baseDirectory.toLowerCase() && !normalizedResolved.startsWith(normalizedBase)) {
+        return null;
+    }
+
+    return resolvedPath;
+}
+
 const chatUpload = createUploadHandler({
-    rootDirectory: publicUploadRoot,
+    rootDirectory: privateUploadRoot,
     subdirectory: 'chat',
     allowedMimeTypes: chatMimeTypes,
     invalidTypeMessage: 'Invalid file type. Only JPEG, PNG, and WebP images are allowed.',
@@ -302,6 +348,7 @@ const bookingDocumentUpload = createUploadHandler({
 
 ensureDirectoryExists(publicUploadRoot);
 ensureDirectoryExists(privateBookingDocumentDir);
+ensureDirectoryExists(privateChatUploadDir);
 
 module.exports = {
     bookingDocumentUpload,
@@ -309,14 +356,18 @@ module.exports = {
     extractSafeFilenameFromReference,
     packageImageUpload,
     privateBookingDocumentDir,
+    privateChatUploadDir,
     privateUploadRoot,
     profileImageUpload,
     publicUploadRoot,
     removeUploadedFiles,
     resolvePrivateBookingDocumentPath,
+    resolvePrivateChatUploadPath,
     reviewMediaUpload,
     runUpload,
     sendUploadError,
+    isAllowedFileType,
+    toProtectedChatUploadUrl,
     toProtectedBookingDocumentUrl,
     toPublicUploadUrl,
     validateReviewMediaSizes,

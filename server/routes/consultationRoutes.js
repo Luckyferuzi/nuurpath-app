@@ -2,56 +2,93 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../db');
 const auth = require('../middleware/auth');
-const adminAuth = require('../middleware/adminAuth');
+const { requireAdminOrManager } = require('../middleware/adminAuth');
 const {
-  normalizeStatus,
+  normalizeOperationalStatus,
+  shouldSetLastContactedAt,
+} = require('../utils/operationalPipeline');
+const {
   sendInvalidId,
   sendValidationError,
   toPositiveInteger,
+  isNonEmptyString,
+  toTrimmedString,
 } = require('../utils/validation');
 
-const CONSULTATION_STATUSES = ['Pending', 'Contacted', 'Completed', 'Cancelled'];
+function serializeConsultationForStaff(consultation) {
+  if (!consultation || typeof consultation !== 'object') {
+    return consultation;
+  }
 
-// 1. Get ALL Private Consultations
+  return {
+    ...consultation,
+    requestId: consultation.id,
+    status: normalizeOperationalStatus(consultation.status) || 'New',
+  };
+}
+
 // @route   GET /api/consultations
-// @access  Private (Admin)
-router.get('/', auth, adminAuth, async (req, res) => {
+// @access  Private (Admin/Manager)
+router.get('/', auth, requireAdminOrManager, async (req, res) => {
   try {
     const consultations = await prisma.privateConsultation.findMany({
-      orderBy: { createdAt: 'desc' }, // Newest first
-      include: { user: true }         // Also fetch the user details (like email)
+      orderBy: { createdAt: 'desc' },
+      include: { user: true },
     });
-    res.json(consultations);
+
+    return res.json(consultations.map(serializeConsultationForStaff));
   } catch (err) {
     console.error(err);
-    res.status(500).send('Server Error');
+    return res.status(500).send('Server Error');
   }
 });
 
-// 2. Update Status (Pending -> Completed)
 // @route   PUT /api/consultations/:id
-// @access  Private (Admin)
-router.put('/:id', auth, adminAuth, async (req, res) => {
-  const { status } = req.body;
+// @access  Private (Admin/Manager)
+router.put('/:id', auth, requireAdminOrManager, async (req, res) => {
   try {
     const id = toPositiveInteger(req.params.id);
     if (id === null) {
       return sendInvalidId(res);
     }
 
-    const normalizedStatus = normalizeStatus(status, CONSULTATION_STATUSES);
-    if (!normalizedStatus) {
-      return sendValidationError(res, 'Status must be Pending, Contacted, Completed, or Cancelled.');
+    const { status, adminNotes } = req.body;
+    const updateData = {};
+
+    if (status !== undefined) {
+      const normalizedStatus = normalizeOperationalStatus(status);
+      if (!normalizedStatus) {
+        return sendValidationError(res, 'Status must match the operational pipeline.');
+      }
+
+      updateData.status = normalizedStatus;
+      if (shouldSetLastContactedAt(normalizedStatus)) {
+        updateData.lastContactedAt = new Date();
+      }
+    }
+
+    if (adminNotes !== undefined) {
+      updateData.adminNotes = isNonEmptyString(adminNotes) ? toTrimmedString(adminNotes) : null;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return sendValidationError(res, 'No valid consultation fields were provided for update.');
     }
 
     const updated = await prisma.privateConsultation.update({
       where: { id },
-      data: { status: normalizedStatus }
+      data: updateData,
+      include: { user: true },
     });
-    res.json(updated);
+
+    return res.json(serializeConsultationForStaff(updated));
   } catch (err) {
     console.error(err);
-    res.status(500).send('Server Error');
+    if (err.code === 'P2025') {
+      return res.status(404).json({ msg: 'Consultation request not found' });
+    }
+
+    return res.status(500).send('Server Error');
   }
 });
 

@@ -40,7 +40,7 @@ const Navbar = () => {
                 <ul className="hidden lg:flex items-center space-x-8 text-[11px] font-bold uppercase tracking-widest list-none m-0">
                     <li><Link to="/" className="hover:text-[#D4AF37] transition-colors">{t('home')}</Link></li>
                     <li><Link to="/packages" className="hover:text-[#D4AF37] transition-colors">{t('packages')}</Link></li>
-                    <li><Link to="/book-flight" className="hover:text-[#D4AF37] transition-colors">Book Flight</Link></li>
+                    <li><Link to="/book-flight" className="hover:text-[#D4AF37] transition-colors">Request Flight</Link></li>
                     <li><Link to="/contact" className="hover:text-[#D4AF37] transition-colors">{t('contact')}</Link></li>
                     <li>
                         <select
@@ -76,7 +76,7 @@ const Navbar = () => {
                 <ul className="px-4 py-6 space-y-4 text-sm font-bold uppercase tracking-widest list-none p-0">
                     <li><Link to="/" onClick={() => setIsMenuOpen(false)} className="block py-2">{t('home')}</Link></li>
                     <li><Link to="/packages" onClick={() => setIsMenuOpen(false)} className="block py-2">{t('packages')}</Link></li>
-                    <li><Link to="/book-flight" onClick={() => setIsMenuOpen(false)} className="block py-2">Book Flight</Link></li>
+                    <li><Link to="/book-flight" onClick={() => setIsMenuOpen(false)} className="block py-2">Request Flight</Link></li>
                     <li><Link to="/contact" onClick={() => setIsMenuOpen(false)} className="block py-2">{t('contact')}</Link></li>
                     <li className="py-2">
                         <select

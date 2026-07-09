@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.jsx';
-import axios from 'axios';
+import GoogleLoginButton from './GoogleLoginButton.jsx';
 
 const Register = () => {
     const [formData, setFormData] = useState({
@@ -14,11 +14,10 @@ const Register = () => {
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
-    const [resendMessage, setResendMessage] = useState('');
-    const [isResending, setIsResending] = useState(false);
+    const [emailNotice, setEmailNotice] = useState('');
     
     const navigate = useNavigate();
-    const { register } = useAuth(); // Get register directly
+    const { register } = useAuth();
 
     const { name, email, password, confirmPassword } = formData;
 
@@ -27,6 +26,8 @@ const Register = () => {
     const onSubmit = async e => {
         e.preventDefault();
         setError('');
+        setSuccessMessage('');
+        setEmailNotice('');
 
         if (password !== confirmPassword) {
             setError('Passwords do not match');
@@ -35,33 +36,19 @@ const Register = () => {
 
         setLoading(true);
 
-        // Use context function
         const result = await register(name, email, password);
 
         if (result.success) {
             if (result.message) {
                 setSuccessMessage(result.message);
+                setEmailNotice(result.emailNotice || '');
+                setLoading(false);
             } else {
                 navigate('/dashboard');
             }
         } else {
             setError(result.error || 'Registration failed. Please try again.');
             setLoading(false);
-        }
-    };
-
-    const handleResendEmail = async () => {
-        setIsResending(true);
-        setResendMessage('');
-        setError('');
-
-        try {
-            const res = await axios.post('/api/auth/resend-verification', { email });
-            setResendMessage(res.data.msg);
-        } catch (err) {
-            setError(err.response?.data?.msg || 'Failed to resend verification email.');
-        } finally {
-            setIsResending(false);
         }
     };
 
@@ -100,23 +87,15 @@ const Register = () => {
 
     return (
         <div style={containerStyle}>
-            <h2 style={{ textAlign: 'center', marginBottom: '20px' }}>Register</h2>
+            <h2 style={{ textAlign: 'center', marginBottom: '12px' }}>Create Your Account</h2>
+            <p style={{ textAlign: 'center', marginBottom: '20px', color: '#6c757d', fontSize: '14px', lineHeight: '1.5' }}>
+                An account makes it easier to track requests, view history, and receive future offers. You do not need an account to browse packages or start a request.
+            </p>
             {successMessage ? (
                 <div className="alert alert-success" style={{ color: '#155724', backgroundColor: '#d4edda', padding: '10px', borderRadius: '4px', marginBottom: '15px' }}>
                     {successMessage}
-                    {resendMessage && <p style={{ marginTop: '10px', fontSize: '13px', fontWeight: 'bold' }}>{resendMessage}</p>}
-                    <div style={{ marginTop: '15px', borderTop: '1px solid rgba(21, 87, 36, 0.2)', paddingTop: '10px' }}>
-                        <p style={{ fontSize: '13px', marginBottom: '5px' }}>Didn't receive the email?</p>
-                        <button 
-                            type="button" 
-                            onClick={handleResendEmail}
-                            disabled={isResending}
-                            style={{ background: 'none', border: 'none', color: '#0c5460', cursor: 'pointer', textDecoration: 'underline', fontSize: '14px', padding: 0, fontWeight: 'bold' }}
-                        >
-                            {isResending ? 'Sending...' : 'Resend Verification Link'}
-                        </button>
-                    </div>
-                    <p style={{marginTop: '10px'}}><Link to="/login" style={{color: '#155724', fontWeight: 'bold'}}>Proceed to Login</Link></p>
+                    {emailNotice && <p style={{ marginTop: '10px', fontSize: '13px', fontWeight: 'bold' }}>{emailNotice}</p>}
+                    <p style={{marginTop: '10px'}}><Link to="/login" style={{color: '#155724', fontWeight: 'bold'}}>Continue to Sign In</Link></p>
                 </div>
             ) : (
             <>
@@ -214,15 +193,19 @@ const Register = () => {
                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" style={{ opacity: 0.25 }}></circle>
                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" style={{ opacity: 0.75 }}></path>
                             </svg>
-                            Registering...
+                            Creating account...
                         </>
-                    ) : 'Register'}
+                    ) : 'Create Account'}
                 </button>
             </form>
+            <div style={{ marginTop: '18px', textAlign: 'center', color: '#6c757d', fontSize: '13px', fontWeight: 'bold' }}>
+                or continue with Google
+            </div>
+            <GoogleLoginButton onErrorMessage={setError} />
             </>
             )}
             <p style={{ marginTop: '15px', textAlign: 'center' }}>
-                Already have an account? <Link to="/login" style={{ color: '#007bff' }}>Login</Link>
+                Already have an account? <Link to="/login" style={{ color: '#007bff' }}>Sign in</Link>
             </p>
         </div>
     );

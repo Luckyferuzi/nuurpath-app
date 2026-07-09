@@ -1,21 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.jsx';
-import axios from 'axios';
+import GoogleLoginButton from './GoogleLoginButton.jsx';
 
 const Login = () => {
     const [formData, setFormData] = useState({
         email: '',
         password: ''
     });
-    // Remove local error/loading state if you want to use the one from context, 
-    // or keep local state to avoid global flicker. Here we use local for UI control.
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-    const [resendMessage, setResendMessage] = useState('');
-    const [isResending, setIsResending] = useState(false);
-    const [needsVerification, setNeedsVerification] = useState(false);
     
     const navigate = useNavigate();
     const { login, isAuthenticated } = useAuth();
@@ -31,49 +26,20 @@ const Login = () => {
     const onChange = e => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
         if (error) setError('');
-        if (needsVerification) setNeedsVerification(false);
     };
 
     const onSubmit = async e => {
         e.preventDefault();
         setError('');
-        setResendMessage('');
-        setNeedsVerification(false);
         setLoading(true);
 
-        // Use the context function which handles the API call via axios (and correct baseURL)
         const result = await login(email, password);
 
         if (result.success) {
             navigate('/dashboard');
         } else {
-            if (result.error === 'Please verify your email before logging in.') {
-                setError("Account not verified. Please check your inbox or use the link below.");
-                setNeedsVerification(true);
-            } else {
-                setError(result.error || 'Login failed. Please check your credentials.');
-            }
+            setError(result.error || 'Sign-in failed. Please check your details and try again.');
             setLoading(false);
-        }
-    };
-
-    const handleResendEmail = async () => {
-        if (!email) {
-            setError('Please enter your email address to resend the verification link.');
-            return;
-        }
-        
-        setIsResending(true);
-        setResendMessage('');
-        setError('');
-
-        try {
-            const res = await axios.post('/api/auth/resend-verification', { email });
-            setResendMessage(res.data.msg);
-        } catch (err) {
-            setError(err.response?.data?.msg || 'Failed to resend verification email.');
-        } finally {
-            setIsResending(false);
         }
     };
 
@@ -89,26 +55,11 @@ const Login = () => {
 
     return (
         <div style={containerStyle}>
-            <h2 style={{ textAlign: 'center', marginBottom: '20px' }}>Login</h2>
+            <h2 style={{ textAlign: 'center', marginBottom: '12px' }}>Sign In</h2>
+            <p style={{ textAlign: 'center', marginBottom: '20px', color: '#6c757d', fontSize: '14px', lineHeight: '1.5' }}>
+                Your account helps you track requests, save packages, and view updates. You can still browse packages and start a request without signing in.
+            </p>
             {error && <div className="alert alert-danger" style={{ color: '#721c24', backgroundColor: '#f8d7da', padding: '10px', borderRadius: '4px', marginBottom: '15px', fontSize: '14px', border: '1px solid #f5c6cb' }}>{error}</div>}
-            
-            {needsVerification && (
-                <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#fff3cd', border: '1px solid #ffeeba', borderRadius: '4px', textAlign: 'center' }}>
-                    <p style={{ fontSize: '14px', marginBottom: '10px', color: '#856404', fontWeight: 'bold' }}>
-                        Didn't receive the verification email?
-                    </p>
-                    <button 
-                        type="button" 
-                        onClick={handleResendEmail}
-                        disabled={isResending}
-                        style={{ width: '100%', padding: '8px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}
-                    >
-                        {isResending ? 'Sending...' : 'Resend Verification Link'}
-                    </button>
-                </div>
-            )}
-
-            {resendMessage && <div className="alert alert-success" style={{ color: '#155724', backgroundColor: '#d4edda', padding: '10px', borderRadius: '4px', marginBottom: '15px' }}>{resendMessage}</div>}
             <form onSubmit={onSubmit}>
                 <div className="mb-3" style={{ marginBottom: '15px' }}>
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Email Address</label>
@@ -152,26 +103,20 @@ const Login = () => {
                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" style={{ opacity: 0.25 }}></circle>
                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" style={{ opacity: 0.75 }}></path>
                             </svg>
-                            Logging in...
+                            Signing in...
                         </>
-                    ) : 'Login'}
+                    ) : 'Sign In'}
                 </button>
             </form>
+            <div style={{ marginTop: '18px', textAlign: 'center', color: '#6c757d', fontSize: '13px', fontWeight: 'bold' }}>
+                or continue with Google
+            </div>
+            <GoogleLoginButton onErrorMessage={setError} />
             <p style={{ marginTop: '15px', textAlign: 'center' }}>
-                <Link to="/forgot-password" style={{ color: '#007bff' }}>Forgot Password?</Link>
-            </p>
-            <p style={{ marginTop: '10px', textAlign: 'center' }}>
-                <button 
-                    type="button" 
-                    onClick={handleResendEmail}
-                    disabled={isResending}
-                    style={{ background: 'none', border: 'none', color: '#6c757d', cursor: 'pointer', textDecoration: 'underline', fontSize: '14px' }}
-                >
-                    {isResending ? 'Sending...' : 'Resend Verification Email'}
-                </button>
+                <Link to="/forgot-password" style={{ color: '#007bff' }}>Forgot your password?</Link>
             </p>
             <p style={{ marginTop: '5px', textAlign: 'center' }}>
-                Don't have an account? <Link to="/register" style={{ color: '#007bff' }}>Register</Link>
+                Need an account for tracking and saved packages? <Link to="/register" style={{ color: '#007bff' }}>Create one</Link>
             </p>
         </div>
     );

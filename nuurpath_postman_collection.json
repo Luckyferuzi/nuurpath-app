@@ -8,7 +8,7 @@
 	"variable": [
 		{
 			"key": "baseUrl",
-			"value": "http://localhost:5001/api",
+			"value": "http://localhost:5000/api",
 			"type": "string"
 		},
 		{
@@ -280,13 +280,12 @@
 							}
 						],
 						"url": {
-							"raw": "{{baseUrl}}/bookings/all",
+							"raw": "{{baseUrl}}/package-bookings",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
-								"bookings",
-								"all"
+								"package-bookings"
 							]
 						}
 					},
@@ -305,7 +304,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"status\": \"Confirmed\"\n}",
+							"raw": "{\n    \"status\": \"Quoted\",\n    \"adminNotes\": \"Follow up on WhatsApp\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -313,14 +312,13 @@
 							}
 						},
 						"url": {
-							"raw": "{{baseUrl}}/bookings/:id/status",
+							"raw": "{{baseUrl}}/package-bookings/:id",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
-								"bookings",
-								":id",
-								"status"
+								"package-bookings",
+								":id"
 							],
 							"variable": [
 								{
@@ -350,7 +348,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"from\": \"JFK\",\n    \"to\": \"DXB\",\n    \"departureDate\": \"2025-10-10\",\n    \"cabinClass\": \"Business\",\n    \"passengerDetails\": { \"count\": 1 }\n}",
+							"raw": "{\n    \"from\": \"DAR\",\n    \"to\": \"JED\",\n    \"departureDate\": \"2026-11-15\",\n    \"returnDate\": \"2026-11-28\",\n    \"passengers\": 1,\n    \"travelClass\": \"Economy\",\n    \"contactName\": \"Flight Guest\",\n    \"contactEmail\": \"flight@example.com\",\n    \"contactPhone\": \"+255700000003\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -381,13 +379,12 @@
 							}
 						],
 						"url": {
-							"raw": "{{baseUrl}}/flights/me",
+							"raw": "{{baseUrl}}/flights",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
-								"flights",
-								"me"
+								"flights"
 							]
 						}
 					},
@@ -422,7 +419,7 @@
 			"name": "Appointments",
 			"item": [
 				{
-					"name": "Create Appointment",
+					"name": "Create Private Consultation",
 					"request": {
 						"method": "POST",
 						"header": [
@@ -434,7 +431,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"serviceType\": \"Consultation\",\n    \"appointmentDate\": \"2025-12-01T10:00:00.000Z\",\n    \"notes\": \"Discussing Hajj packages\"\n}",
+							"raw": "{\n    \"name\": \"Consultation Guest\",\n    \"email\": \"consultation@example.com\",\n    \"phone\": \"+255700000007\",\n    \"description\": \"Need help planning Umrah travel.\",\n    \"date\": \"2026-12-01\",\n    \"time\": \"10:00\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -442,43 +439,20 @@
 							}
 						},
 						"url": {
-							"raw": "{{baseUrl}}/appointments",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"appointments"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Get My Appointments",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "x-auth-token",
-								"value": "{{authToken}}",
-								"type": "text"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/appointments/me",
+							"raw": "{{baseUrl}}/appointments/private",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
 								"appointments",
-								"me"
+								"private"
 							]
 						}
 					},
 					"response": []
 				},
 				{
-					"name": "Get All Appointments (Admin)",
+					"name": "Get Private Consultations",
 					"request": {
 						"method": "GET",
 						"header": [
@@ -489,12 +463,37 @@
 							}
 						],
 						"url": {
-							"raw": "{{baseUrl}}/appointments",
+							"raw": "{{baseUrl}}/appointments/private",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
-								"appointments"
+								"appointments",
+								"private"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Private Consultations (Admin/Manager)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "x-auth-token",
+								"value": "{{authToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/appointments/private",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"appointments",
+								"private"
 							]
 						}
 					},
@@ -541,12 +540,11 @@
 							}
 						],
 						"url": {
-							"raw": "{{baseUrl}}/admin/users",
+							"raw": "{{baseUrl}}/users",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
-								"admin",
 								"users"
 							]
 						}
@@ -566,7 +564,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"role\": \"admin\"\n}",
+							"raw": "{\n    \"role\": \"manager\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -574,19 +572,17 @@
 							}
 						},
 						"url": {
-							"raw": "{{baseUrl}}/admin/users/:userId/role",
+							"raw": "{{baseUrl}}/users/:id",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
-								"admin",
 								"users",
-								":userId",
-								"role"
+								":id"
 							],
 							"variable": [
 								{
-									"key": "userId",
+									"key": "id",
 									"value": "1"
 								}
 							]

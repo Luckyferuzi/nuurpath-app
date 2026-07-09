@@ -82,7 +82,7 @@ const PackageComparison = ({ packages, onRemove }) => {
                   to={`/packages/${pkg._id || pkg.id}`}
                   className="block w-full text-center bg-[#0B1C3E] text-white py-2 rounded hover:bg-[#1a2f55] transition-colors font-bold"
                 >
-                  View Details
+                  View Package
                 </Link>
               </td>
             ))}

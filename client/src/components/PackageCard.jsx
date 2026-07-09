@@ -36,16 +36,22 @@ const PackageCard = ({ packageItem = {} }) => { // Added default empty object fo
                     </p>
                 )}
                 <div className="flex justify-between items-center mt-4">
-                    <span className="text-2xl font-bold text-green-700">
-                        ${price.toLocaleString()}
-                    </span>
+                    <div>
+                        <div className="text-xs uppercase tracking-[2px] text-gray-500 font-bold">Starting from</div>
+                        <span className="text-2xl font-bold text-green-700">
+                            ${price.toLocaleString()}
+                        </span>
+                    </div>
                     <Link
                         to={`/packages/${_id}`}
                         className="bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 transition-colors duration-300"
                     >
-                        View Details
+                        Ask About This Package
                     </Link>
                 </div>
+                <p className="text-xs text-gray-500 mt-3">
+                    Our team reviews availability and next steps after you submit your request.
+                </p>
             </div>
         </div>
     );

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { CONFIG } from '../config';
+import axios, { resolveBackendUrl } from '../lib/api';
 
 const FeaturedPackagesCarousel = () => {
   const [packages, setPackages] = useState([]);
@@ -11,16 +11,14 @@ const FeaturedPackagesCarousel = () => {
   useEffect(() => {
     const fetchPackages = async () => {
       try {
-        const response = await fetch(`${CONFIG.API_BASE_URL}/packages`);
-        if (response.ok) {
-          const data = await response.json();
-          const allPackages = Array.isArray(data) ? data : (data.packages || []);
-          const featured = allPackages.filter(pkg => pkg.isFeatured);
-          setPackages(featured);
-          setError(null);
-        }
+        const response = await axios.get('/packages');
+        const data = response.data;
+        const allPackages = Array.isArray(data) ? data : (data.packages || []);
+        const featured = allPackages.filter(pkg => pkg.isFeatured);
+        setPackages(featured);
+        setError(null);
       } catch (error) {
-        setError('Failed to load featured packages.');
+        setError('Featured packages are unavailable right now. Please try again shortly.');
         console.error("Error fetching featured packages:", error);
       } finally {
         setLoading(false);
@@ -60,7 +58,7 @@ const FeaturedPackagesCarousel = () => {
 
   const currentPackage = packages[currentIndex];
   const imageUrl = currentPackage.images && currentPackage.images.length > 0 
-    ? currentPackage.images[0] 
+    ? resolveBackendUrl(currentPackage.images[0])
     : 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80'; // Fallback
 
   return (
@@ -77,7 +75,7 @@ const FeaturedPackagesCarousel = () => {
       <div className="absolute bottom-0 left-0 w-full p-8 md:p-12 text-white z-10">
         <div className="max-w-3xl animate-fadeInUp">
           <span className="inline-block px-3 py-1 mb-4 text-xs font-bold tracking-widest uppercase bg-[#D4AF37] text-[#0B1C3E] rounded-full">
-            Featured Experience
+            Featured Package
           </span>
           <h2 className="text-4xl md:text-6xl font-black mb-4 leading-tight drop-shadow-lg">
             {currentPackage.title}
@@ -85,18 +83,21 @@ const FeaturedPackagesCarousel = () => {
           <p className="text-lg md:text-xl text-gray-200 mb-8 line-clamp-2 drop-shadow-md max-w-2xl">
             {currentPackage.description}
           </p>
+          <p className="text-sm md:text-base text-gray-200 mb-6 max-w-2xl">
+            Submit a request online and continue with the NuurPath team on WhatsApp for availability and next steps.
+          </p>
           <div className="flex flex-wrap gap-4">
             <Link 
               to={`/packages/${currentPackage._id || currentPackage.id}`}
               className="px-8 py-3 bg-[#D4AF37] text-[#0B1C3E] font-bold rounded-lg hover:bg-white transition-colors shadow-lg"
             >
-              View Details
+              View Package
             </Link>
             <Link 
               to={`/book/${currentPackage._id || currentPackage.id}`}
               className="px-8 py-3 bg-transparent border-2 border-white text-white font-bold rounded-lg hover:bg-white hover:text-[#0B1C3E] transition-colors shadow-lg"
             >
-              Book Now
+              Request Package
             </Link>
           </div>
         </div>
