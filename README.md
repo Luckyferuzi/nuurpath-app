@@ -321,5 +321,9 @@ Current automated backend coverage focuses on:
 - Keep CORS origins aligned with the real frontend domains
 - Apply the latest Prisma migration so the `StoredFile` table exists in Neon
 - Render no longer needs a Persistent Disk for application uploads
+- For the live Render frontend, add a Rewrite rule from `/*` to `/index.html` under Redirects/Rewrites so direct links and browser refreshes work for React routes like `/staff/setup`, `/staff/login`, `/packages/:id`, and `/dashboard`
+- `render.yaml` now keeps that same SPA rewrite in the repo for future Blueprint-managed Render deployments
+- The frontend now includes a catch-all React route, so truly invalid URLs show a friendly fallback page instead of a blank screen
+- No extra environment variables are required for this routing fix
 - Back up the database before production migrations
 - Test email delivery, Google OAuth, and WhatsApp links in the live environment

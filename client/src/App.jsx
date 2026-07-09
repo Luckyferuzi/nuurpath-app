@@ -42,6 +42,7 @@ import WishlistPage from './components/WishlistPage.jsx';
 import Team from './components/Team.jsx';
 import VerifyEmail from './components/VerifyEmail.jsx';
 import StaffPortalHeader from './components/StaffPortalHeader.jsx';
+import NotFoundPage from './components/NotFoundPage.jsx';
 import './App.css';
 
 const GOOGLE_CLIENT_ID = (process.env.REACT_APP_GOOGLE_CLIENT_ID || '').trim();
@@ -103,6 +104,7 @@ function AppFrame() {
           <Route path="/admin/services" element={<ManageServices />} />
           <Route path="/admin/packages" element={<ManagePackages />} />
         </Route>
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
       {!isStaffPortalRoute && (
         <>
