@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import PackageComparison from './PackageComparison';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { usePublicContent } from '../contexts/PublicContentContext.jsx';
 import axios, { resolveBackendUrl } from '../lib/api';
 
 const ICONS = {
@@ -32,6 +33,8 @@ const PackageCard = ({ pkg, wishlist, toggleWishlist, compareList, toggleCompare
           src={pkg.images && pkg.images.length > 0 ? getImageUrl(pkg.images[0]) : 'https://placehold.co/600x400?text=No+Image'}
           alt={pkg.title}
           className="h-full w-full object-cover transition-transform duration-500 hover:scale-110"
+          loading="lazy"
+          decoding="async"
         />
         {pkg.isFeatured && (
           <span className="absolute left-2 top-2 z-10 rounded-full bg-[#D4AF37] px-2 py-1 text-xs text-white">
@@ -118,79 +121,83 @@ const PackageCard = ({ pkg, wishlist, toggleWishlist, compareList, toggleCompare
 
 const PackageList = () => {
   const { isAuthenticated } = useAuth();
-  const [displayPackages, setDisplayPackages] = useState([]);
-  const [totalPackages, setTotalPackages] = useState(0);
+  const {
+    packages,
+    packagesLoading,
+    packagesError,
+  } = usePublicContent();
   const [wishlist, setWishlist] = useState(new Set());
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [destinationFilter, setDestinationFilter] = useState('');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [compareList, setCompareList] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const itemsPerPage = 6;
 
   useEffect(() => {
-    const fetchPackages = async () => {
-      setLoading(true);
-      setError(null);
+    if (!isAuthenticated) {
+      setWishlist(new Set());
+      return undefined;
+    }
 
+    let isActive = true;
+    const fetchWishlist = async () => {
       try {
-        const params = new URLSearchParams({
-          page: currentPage,
-          limit: itemsPerPage,
-        });
-
-        if (destinationFilter) {
-          params.append('search', destinationFilter);
+        const wishlistRes = await axios.get('/wishlist');
+        if (!isActive || !wishlistRes.data) {
+          return;
         }
 
-        if (minPrice) {
-          params.append('minPrice', minPrice);
-        }
-
-        if (maxPrice) {
-          params.append('maxPrice', maxPrice);
-        }
-
-        const response = await axios.get('/packages', { params });
-        const data = response.data;
-
-        if (data.packages) {
-          setDisplayPackages(data.packages);
-          setTotalPages(data.totalPages);
-          setTotalPackages(data.totalPackages);
-        } else {
-          setDisplayPackages([]);
-          setTotalPages(1);
-          setTotalPackages(0);
-        }
-
-        if (isAuthenticated) {
-          try {
-            const wishlistRes = await axios.get('/wishlist');
-            if (wishlistRes.data) {
-              setWishlist(new Set(wishlistRes.data.map((item) => item.packageId)));
-            }
-          } catch (wishlistErr) {
-            console.error('Failed to fetch wishlist:', wishlistErr);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to fetch packages:', err);
-        setError('Something went wrong while loading packages. Please try again or contact us on WhatsApp.');
-      } finally {
-        setLoading(false);
+        setWishlist(new Set(wishlistRes.data.map((item) => item.packageId)));
+      } catch (wishlistErr) {
+        console.error('Failed to fetch wishlist:', wishlistErr);
       }
     };
 
-    fetchPackages();
-  }, [isAuthenticated, currentPage, destinationFilter, minPrice, maxPrice]);
+    fetchWishlist();
+
+    return () => {
+      isActive = false;
+    };
+  }, [isAuthenticated]);
+
+  const filteredPackages = useMemo(() => {
+    const normalizedSearch = destinationFilter.trim().toLowerCase();
+    const parsedMinPrice = minPrice === '' ? null : Number(minPrice);
+    const parsedMaxPrice = maxPrice === '' ? null : Number(maxPrice);
+
+    return packages.filter((pkg) => {
+      const packageTitle = String(pkg?.title || '').toLowerCase();
+      const packageDestination = String(pkg?.destination || '').toLowerCase();
+      const matchesSearch = !normalizedSearch
+        || packageTitle.includes(normalizedSearch)
+        || packageDestination.includes(normalizedSearch);
+      const numericPrice = typeof pkg?.price === 'number' ? pkg.price : Number(pkg?.price);
+      const hasNumericPrice = Number.isFinite(numericPrice);
+      const matchesMinPrice = parsedMinPrice === null || (hasNumericPrice && numericPrice >= parsedMinPrice);
+      const matchesMaxPrice = parsedMaxPrice === null || (hasNumericPrice && numericPrice <= parsedMaxPrice);
+
+      return matchesSearch && matchesMinPrice && matchesMaxPrice;
+    });
+  }, [packages, destinationFilter, minPrice, maxPrice]);
+
+  const totalPackages = filteredPackages.length;
+  const totalPages = Math.max(1, Math.ceil(totalPackages / itemsPerPage));
+  const visiblePackages = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredPackages.slice(startIndex, startIndex + itemsPerPage);
+  }, [currentPage, filteredPackages]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [destinationFilter, minPrice, maxPrice]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const toggleWishlist = async (pkgId) => {
     if (!isAuthenticated) {
@@ -209,8 +216,9 @@ const PackageList = () => {
         }
         return next;
       });
-    } catch (err) {
-      console.error('Wishlist error:', err);
+    } catch (wishlistErr) {
+      console.error('Wishlist error:', wishlistErr);
+      setError('Unable to update your saved packages right now. Please try again.');
     }
   };
 
@@ -232,12 +240,14 @@ const PackageList = () => {
     });
   };
 
-  if (loading) {
+  const blockingError = error || (packages.length === 0 ? packagesError : null);
+
+  if (packagesLoading && packages.length === 0) {
     return <div className="p-10 text-center">Loading packages and request options...</div>;
   }
 
-  if (error) {
-    return <div className="p-10 text-center text-red-500">{error}</div>;
+  if (blockingError) {
+    return <div className="p-10 text-center text-red-500">{blockingError}</div>;
   }
 
   return (
@@ -248,6 +258,12 @@ const PackageList = () => {
           Browse Umrah and travel package options, then start your request online. Our team confirms availability, guidance, and next steps on WhatsApp.
         </p>
       </div>
+
+      {packagesError && packages.length > 0 && (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Live updates are temporarily delayed, but the current package list is still available.
+        </div>
+      )}
 
       <div className="mb-8 flex flex-col items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:flex-row">
         <div className="w-full md:w-1/3">
@@ -276,7 +292,7 @@ const PackageList = () => {
           />
         </div>
         <div className="text-sm text-gray-500">
-          Showing {displayPackages.length} of {totalPackages} package options
+          Showing {visiblePackages.length} of {totalPackages} package options
         </div>
       </div>
 
@@ -288,8 +304,8 @@ const PackageList = () => {
       )}
 
       <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-        {displayPackages.length > 0 ? (
-          displayPackages.map((pkg) => (
+        {visiblePackages.length > 0 ? (
+          visiblePackages.map((pkg) => (
             <PackageCard
               key={pkg._id || pkg.id}
               pkg={pkg}
@@ -301,7 +317,7 @@ const PackageList = () => {
           ))
         ) : (
           <div className="col-span-full text-center text-gray-500">
-            No packages are available right now. Please check again soon or contact us on WhatsApp.
+            No packages match this search right now. Try a different destination or price range.
           </div>
         )}
       </div>

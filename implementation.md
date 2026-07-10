@@ -6,7 +6,8 @@ It is written to be useful for both product discussion and development execution
 
 Current status:
 - Phase 1 is completed.
-- Phases 2 through 7 are still planned.
+- Phase 2 is completed.
+- Phases 3 through 7 are still planned.
 - When resuming work later, read this file first and then continue from the next approved phase.
 
 ## How To Use This Document
@@ -240,7 +241,7 @@ Frontend:
 ## Phase 2: Public Performance, Caching, and Automatic Refresh
 
 Status:
-- Planned
+- Completed
 
 ### Objective
 
@@ -334,6 +335,25 @@ Backend:
 - package images do not make the page feel heavy
 - non-essential widgets do not delay the main package content
 - customers can receive new package visibility without manual hard refresh in the designed scenarios
+
+### Completed Work
+
+- Added a shared public content provider for packages and services so the customer-facing site no longer refetches the same catalog data separately in each main page.
+- Added session-backed cache hydration so previously loaded package and service data can render immediately after a refresh, followed by a quiet background refresh.
+- Added silent background polling and visibility-based refresh so new packages and service changes can appear without the customer manually refreshing the page.
+- Refactored the homepage to read package and service data from the shared cache instead of making its own direct requests.
+- Refactored the full package listing page to use cached catalog data with instant client-side search, price filtering, pagination, and automatic updates when the catalog changes.
+- Refactored package details to reuse cached package data immediately, avoid the extra full-catalog fetch for related packages, and still refresh the specific package record in the background.
+- Deferred and cached external exchange-rate loading so package pricing can render immediately with defaults and then improve quietly when fresh rates are available.
+- Deferred and cached the weather widget so the main package content renders first while weather data updates in the background.
+- Added lazy image loading and asynchronous decoding to package listing images, itinerary images, related package cards, and rotating homepage package slides where appropriate.
+
+### Implementation Notes
+
+- The shared public content layer currently uses session storage plus in-memory React state. This keeps refreshes feeling fast without requiring a heavier frontend data library.
+- Background refresh currently uses reliable polling rather than public Socket.IO events, because the existing socket setup is authentication-based and not suitable for anonymous public catalog updates yet.
+- Package filtering and pagination on the public package page now run against the cached full catalog in the browser. This is acceptable for the current expected package volume and keeps navigation responsive.
+- Exchange-rate and weather requests are treated as secondary enhancements rather than page-blocking data.
 
 ### Out Of Scope For Phase 2
 

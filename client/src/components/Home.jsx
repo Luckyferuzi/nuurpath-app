@@ -1,20 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import axios, { resolveBackendUrl } from '../lib/api';
+import { resolveBackendUrl } from '../lib/api';
+import { usePublicContent } from '../contexts/PublicContentContext.jsx';
 import GlobalSupport from './GlobalSupport';
 import BookingForm from './BookingForm';
 import MemoriesGallery from './MemoriesGallery';
 import ServiceInquiryForm from './ServiceInquiryForm';
 
 const Home = () => {
+  const {
+    packages,
+    featuredPackages,
+    services,
+    packagesLoading,
+    servicesLoading,
+    packagesError,
+    servicesError,
+  } = usePublicContent();
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [upcomingTrips, setUpcomingTrips] = useState([]);
-  const [services, setServices] = useState([]);
-  const [loadingServices, setLoadingServices] = useState(true);
-  const [loadingTrips, setLoadingTrips] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
-  const [tripsError, setTripsError] = useState(null);
-  const [servicesError, setServicesError] = useState(null);
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
   const minSwipeDistance = 50;
@@ -49,53 +53,31 @@ const Home = () => {
     'Tanzania-Based Support',
   ];
 
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) {
+      return 'https://placehold.co/1200x600/0B1C3E/D4AF37?text=NuurPath+Travels';
+    }
+
+    return resolveBackendUrl(imagePath);
+  };
+
+  const prioritizedTrips = featuredPackages.length > 0 ? featuredPackages : packages;
+  const upcomingTrips = prioritizedTrips.slice(0, 5).map((pkg) => ({
+    id: pkg._id || pkg.id,
+    title: pkg.title,
+    image: (pkg.images && pkg.images.length > 0)
+      ? getImageUrl(pkg.images[0])
+      : 'https://placehold.co/1200x600/0B1C3E/D4AF37?text=NuurPath+Travels',
+    link: `/packages/${pkg._id || pkg.id}`,
+  }));
+
   useEffect(() => {
-    const getImageUrl = (imagePath) => {
-      if (!imagePath) {
-        return 'https://placehold.co/1200x600/0B1C3E/D4AF37?text=NuurPath+Travels';
-      }
+    if (currentSlide < upcomingTrips.length) {
+      return;
+    }
 
-      return resolveBackendUrl(imagePath);
-    };
-
-    const fetchTrips = async () => {
-      try {
-        const response = await axios.get('/packages');
-        const data = Array.isArray(response.data) ? response.data : (response.data.packages || []);
-
-        const trips = data.slice(0, 5).map((pkg) => ({
-          id: pkg._id || pkg.id,
-          title: pkg.title,
-          image: (pkg.images && pkg.images.length > 0)
-            ? getImageUrl(pkg.images[0])
-            : 'https://placehold.co/1200x600/0B1C3E/D4AF37?text=NuurPath+Travels',
-          link: `/packages/${pkg._id || pkg.id}`,
-        }));
-
-        setUpcomingTrips(trips);
-      } catch (error) {
-        setTripsError('Something went wrong while loading packages. Please try again or contact us on WhatsApp.');
-        console.error('Failed to fetch upcoming trips', error);
-      } finally {
-        setLoadingTrips(false);
-      }
-    };
-
-    const fetchServices = async () => {
-      try {
-        const response = await axios.get('/services');
-        setServices(response.data);
-      } catch (error) {
-        setServicesError('Something went wrong while loading our services. Please try again or contact us on WhatsApp.');
-        console.error('Failed to fetch services', error);
-      } finally {
-        setLoadingServices(false);
-      }
-    };
-
-    fetchTrips();
-    fetchServices();
-  }, []);
+    setCurrentSlide(0);
+  }, [currentSlide, upcomingTrips.length]);
 
   useEffect(() => {
     if (upcomingTrips.length === 0 || isPaused) {
@@ -249,6 +231,9 @@ const Home = () => {
     setServiceInquiryModalOpen(false);
   };
 
+  const showTripSkeleton = packagesLoading && upcomingTrips.length === 0;
+  const showServicesSkeleton = servicesLoading && services.length === 0;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <style>{`
@@ -307,8 +292,8 @@ const Home = () => {
             Start with the packages we want customers to see first, then ask for availability, guidance, and next steps.
           </p>
         </div>
-        {tripsError && (
-          <div className="mb-8 text-center text-red-500">{tripsError}</div>
+        {packagesError && upcomingTrips.length === 0 && (
+          <div className="mb-8 text-center text-red-500">{packagesError}</div>
         )}
         <div
           className="group relative mx-auto aspect-video max-w-5xl overflow-hidden rounded-2xl bg-gray-200 shadow-2xl"
@@ -318,7 +303,7 @@ const Home = () => {
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
         >
-          {loadingTrips ? (
+          {showTripSkeleton ? (
             <div className="flex h-full w-full animate-pulse flex-col items-center justify-center bg-gray-300">
               <div className="mb-6 h-12 w-2/3 rounded bg-gray-400"></div>
               <div className="h-12 w-40 rounded-full bg-gray-400"></div>
@@ -330,7 +315,14 @@ const Home = () => {
                   key={trip.id}
                   className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentSlide ? 'opacity-100' : 'opacity-0'}`}
                 >
-                  <img src={trip.image} alt={trip.title} className="h-full w-full object-cover" />
+                  <img
+                    src={trip.image}
+                    alt={trip.title}
+                    className="h-full w-full object-cover"
+                    loading={index === currentSlide ? 'eager' : 'lazy'}
+                    fetchPriority={index === currentSlide ? 'high' : 'low'}
+                    decoding="async"
+                  />
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 p-4 text-white">
                     <h3 className="mb-4 text-center text-3xl font-black uppercase tracking-tighter md:text-5xl">{trip.title}</h3>
                     <div className="flex flex-col gap-4 md:flex-row">
@@ -422,11 +414,11 @@ const Home = () => {
               Need help beyond packages? Send a service request and our team will guide you on WhatsApp.
             </p>
           </div>
-          {servicesError && (
+          {servicesError && services.length === 0 && (
             <div className="mb-8 text-center text-red-500">{servicesError}</div>
           )}
           <div className="mx-auto grid max-w-4xl grid-cols-1 gap-8 md:grid-cols-2">
-            {loadingServices ? (
+            {showServicesSkeleton ? (
               [1, 2].map((i) => (
                 <div key={i} className="animate-pulse rounded-2xl border border-gray-100 bg-gray-50 p-8 text-center">
                   <div className="mx-auto mb-4 h-10 w-10 rounded-full bg-gray-200"></div>

@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider } from './contexts/AuthContext.jsx';
+import { PublicContentProvider } from './contexts/PublicContentContext.jsx';
 import PackageList from './components/PackageList.jsx';
 import PackageDetails from './components/PackageDetails.jsx';
 import Navbar from './components/Navbar.jsx';
@@ -52,58 +53,59 @@ function AppFrame() {
   return (
     <div className="App">
       {isStaffPortalRoute ? <StaffPortalHeader /> : <Navbar />}
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/packages" element={<PackageList />} />
-        <Route path="/packages/:id" element={<PackageDetails />} />
-        <Route path="/book/:packageId" element={<BookingForm />} />
-        <Route path="/book-consultation" element={<PrivateConsultationBooking />} />
-        <Route path="/book-flight" element={<FlightBookingForm />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password/:token" element={<ResetPassword />} />
-        <Route path="/contact" element={<ContactUs />} />
-        <Route path="/terms" element={<TermsAndConditions />} />
-        <Route path="/privacy" element={<PrivacyPolicy />} />
-        <Route path="/team" element={<Team />} />
-        <Route path="/verify-email/:token" element={<VerifyEmail />} />
-        <Route path="/staff/login" element={<StaffLogin />} />
-        <Route path="/staff/setup" element={<AdminSetup />} />
-        
-        <Route element={<PrivateRoute />}>
-          <Route path="/dashboard" element={<UserDashboard />} />
-          <Route path="/wishlist" element={<WishlistPage />} />
-          <Route path="/profile" element={<UserProfile />} />
-        </Route>
-      
+      <PublicContentProvider enabled={!isStaffPortalRoute}>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/packages" element={<PackageList />} />
+          <Route path="/packages/:id" element={<PackageDetails />} />
+          <Route path="/book/:packageId" element={<BookingForm />} />
+          <Route path="/book-consultation" element={<PrivateConsultationBooking />} />
+          <Route path="/book-flight" element={<FlightBookingForm />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password/:token" element={<ResetPassword />} />
+          <Route path="/contact" element={<ContactUs />} />
+          <Route path="/terms" element={<TermsAndConditions />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/team" element={<Team />} />
+          <Route path="/verify-email/:token" element={<VerifyEmail />} />
+          <Route path="/staff/login" element={<StaffLogin />} />
+          <Route path="/staff/setup" element={<AdminSetup />} />
 
-        {/* Admin Routes */}
-        <Route element={<AdminRoute allowedRoles={['admin', 'manager']} />}>
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/admin/consultations" element={<PrivateConsultationsAdmin />} />
-          <Route path="/admin/package-bookings" element={<PackageBookingsAdmin />} />
-          <Route path="/admin/flight-bookings" element={<FlightBookingsAdmin />} />
-          <Route path="/admin/service-inquiries" element={<ServiceInquiriesAdmin />} />
-          <Route path="/admin/reviews" element={<ManageReviews />} />
-          <Route path="/admin/chat" element={<ChatComponent />} />
-        </Route>
-        <Route
-          element={(
-            <AdminRoute
-              allowedRoles={['admin']}
-              permissionTitle="Admin Access Required"
-              permissionMessage="Only admin accounts can manage users, services, and package content."
-              fallbackPath="/admin"
-            />
-          )}
-        >
-          <Route path="/admin/users" element={<ManageUsers />} />
-          <Route path="/admin/services" element={<ManageServices />} />
-          <Route path="/admin/packages" element={<ManagePackages />} />
-        </Route>
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+          <Route element={<PrivateRoute />}>
+            <Route path="/dashboard" element={<UserDashboard />} />
+            <Route path="/wishlist" element={<WishlistPage />} />
+            <Route path="/profile" element={<UserProfile />} />
+          </Route>
+
+          {/* Admin Routes */}
+          <Route element={<AdminRoute allowedRoles={['admin', 'manager']} />}>
+            <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/admin/consultations" element={<PrivateConsultationsAdmin />} />
+            <Route path="/admin/package-bookings" element={<PackageBookingsAdmin />} />
+            <Route path="/admin/flight-bookings" element={<FlightBookingsAdmin />} />
+            <Route path="/admin/service-inquiries" element={<ServiceInquiriesAdmin />} />
+            <Route path="/admin/reviews" element={<ManageReviews />} />
+            <Route path="/admin/chat" element={<ChatComponent />} />
+          </Route>
+          <Route
+            element={(
+              <AdminRoute
+                allowedRoles={['admin']}
+                permissionTitle="Admin Access Required"
+                permissionMessage="Only admin accounts can manage users, services, and package content."
+                fallbackPath="/admin"
+              />
+            )}
+          >
+            <Route path="/admin/users" element={<ManageUsers />} />
+            <Route path="/admin/services" element={<ManageServices />} />
+            <Route path="/admin/packages" element={<ManagePackages />} />
+          </Route>
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </PublicContentProvider>
       {!isStaffPortalRoute && (
         <>
           <Footer />
