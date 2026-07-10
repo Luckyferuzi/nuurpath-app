@@ -4,95 +4,111 @@ import PackageComparison from './PackageComparison';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import axios, { resolveBackendUrl } from '../lib/api';
 
+const ICONS = {
+  wishlistFilled: '\u2665',
+  wishlistEmpty: '\u2661',
+  destination: '\u{1F4CD}',
+  duration: '\u23F1\uFE0F',
+};
+
 const PackageCard = ({ pkg, wishlist, toggleWishlist, compareList, toggleCompare }) => {
   const [showFullDescription, setShowFullDescription] = useState(false);
+  const packageId = pkg._id || pkg.id;
+  const isSaved = wishlist.has(packageId);
+  const isInCompare = compareList.some((item) => (item._id || item.id) === packageId);
 
-  // Helper to construct the correct image URL
   const getImageUrl = (imagePath) => {
-    if (!imagePath) return 'https://placehold.co/600x400?text=No+Image';
+    if (!imagePath) {
+      return 'https://placehold.co/600x400?text=No+Image';
+    }
+
     return resolveBackendUrl(imagePath);
   };
 
   return (
-    <div className="border border-gray-200 rounded-xl shadow-lg overflow-hidden bg-white relative group flex flex-col h-full">
-      {/* 1. Show Package Image */}
-      <div className="h-48 overflow-hidden relative">
-        <img 
-          src={pkg.images && pkg.images.length > 0 ? getImageUrl(pkg.images[0]) : 'https://placehold.co/600x400?text=No+Image'} 
+    <div className="group relative flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
+      <div className="relative h-48 overflow-hidden">
+        <img
+          src={pkg.images && pkg.images.length > 0 ? getImageUrl(pkg.images[0]) : 'https://placehold.co/600x400?text=No+Image'}
           alt={pkg.title}
-          className="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
+          className="h-full w-full object-cover transition-transform duration-500 hover:scale-110"
         />
         {pkg.isFeatured && (
-          <span className="absolute top-2 left-2 bg-[#D4AF37] text-white text-xs px-2 py-1 rounded-full z-10">
+          <span className="absolute left-2 top-2 z-10 rounded-full bg-[#D4AF37] px-2 py-1 text-xs text-white">
             Featured
           </span>
         )}
-        <button 
-          onClick={() => toggleWishlist(pkg._id || pkg.id)}
-          className="absolute top-2 right-2 z-10 bg-white/80 p-2 rounded-full shadow-sm hover:bg-white transition-all"
-          title={wishlist.has(pkg._id || pkg.id) ? "Remove from Wishlist" : "Add to Wishlist"}
+        <button
+          onClick={() => toggleWishlist(packageId)}
+          className="absolute right-2 top-2 z-10 rounded-full bg-white/80 p-2 shadow-sm transition-all hover:bg-white"
+          title={isSaved ? 'Remove from Wishlist' : 'Add to Wishlist'}
+          type="button"
         >
-          <span className={`text-xl ${wishlist.has(pkg._id || pkg.id) ? 'text-red-500' : 'text-gray-400'}`}>
-            {wishlist.has(pkg._id || pkg.id) ? '♥' : '♡'}
+          <span className={`text-xl ${isSaved ? 'text-red-500' : 'text-gray-400'}`}>
+            {isSaved ? ICONS.wishlistFilled : ICONS.wishlistEmpty}
           </span>
         </button>
       </div>
 
-      <div className="p-6 flex flex-col grow">
-        <div className="flex justify-between items-start mb-2">
+      <div className="flex grow flex-col p-6">
+        <div className="mb-2 flex items-start justify-between">
           <h3 className="text-xl font-bold text-[#0B1C3E]">{pkg.title}</h3>
           <div className="text-right">
-            <span className="block text-xs uppercase tracking-[2px] text-gray-500 font-bold">Starting from</span>
-            <span className="text-[#006837] font-bold text-lg">
+            <span className="block text-xs font-bold uppercase tracking-[2px] text-gray-500">Starting from</span>
+            <span className="text-lg font-bold text-[#006837]">
               {typeof pkg.price === 'number' ? `$${pkg.price.toLocaleString()}` : pkg.price}
             </span>
           </div>
         </div>
 
-        <div className="text-sm text-gray-500 mb-3 flex items-center gap-3">
-          {pkg.destination && <span>📍 {pkg.destination}</span>}
-          {pkg.duration && <span>⏱️ {pkg.duration}</span>}
+        <div className="mb-3 flex items-center gap-3 text-sm text-gray-500">
+          {pkg.destination && <span>{ICONS.destination} {pkg.destination}</span>}
+          {pkg.duration && <span>{ICONS.duration} {pkg.duration}</span>}
         </div>
-        
-        {/* 2. Show Less and More Detail Option */}
-        <div className="text-gray-600 text-sm mb-4 grow">
+
+        <div className="mb-4 grow text-sm text-gray-600">
           {showFullDescription ? (
             <p>{pkg.description}</p>
           ) : (
             <p>
-              {pkg.description && pkg.description.length > 100 
-                ? `${pkg.description.substring(0, 100)}...` 
+              {pkg.description && pkg.description.length > 100
+                ? `${pkg.description.substring(0, 100)}...`
                 : pkg.description}
             </p>
           )}
-          
+
           {pkg.description && pkg.description.length > 100 && (
-            <button 
-              onClick={() => setShowFullDescription(!showFullDescription)}
-              className="text-[#006837] font-semibold mt-1 hover:underline focus:outline-none"
+            <button
+              onClick={() => setShowFullDescription((current) => !current)}
+              className="mt-1 font-semibold text-[#006837] hover:underline focus:outline-none"
+              type="button"
             >
               {showFullDescription ? 'Show Less' : 'Show More Details'}
             </button>
           )}
         </div>
 
-        <p className="text-xs text-gray-500 mb-4">
+        <p className="mb-4 text-xs text-gray-500">
           Availability, requirements, and next steps are confirmed by our team after you submit your request.
         </p>
-        
+
         <div className="mt-auto space-y-2">
-          <Link to={`/packages/${pkg._id || pkg.id}`} className="block w-full text-center bg-[#0B1C3E] text-white py-2 rounded-lg hover:bg-[#1a2f55] transition-colors">
+          <Link
+            to={`/packages/${packageId}`}
+            className="block w-full rounded-lg bg-[#0B1C3E] py-2 text-center text-white transition-colors hover:bg-[#1a2f55]"
+          >
             Ask About This Package
           </Link>
-          <button 
+          <button
             onClick={() => toggleCompare(pkg)}
-            className={`w-full py-2 rounded-lg text-sm font-bold border transition-colors ${
-              compareList.find(p => (p._id || p.id) === (pkg._id || pkg.id))
-                ? 'bg-gray-100 text-gray-600 border-gray-300'
-                : 'bg-white text-[#0B1C3E] border-[#0B1C3E] hover:bg-gray-50'
+            className={`w-full rounded-lg border py-2 text-sm font-bold transition-colors ${
+              isInCompare
+                ? 'border-gray-300 bg-gray-100 text-gray-600'
+                : 'border-[#0B1C3E] bg-white text-[#0B1C3E] hover:bg-gray-50'
             }`}
+            type="button"
           >
-            {compareList.find(p => (p._id || p.id) === (pkg._id || pkg.id)) ? 'Remove from Compare' : '+ Add to Compare'}
+            {isInCompare ? 'Remove from Compare' : '+ Add to Compare'}
           </button>
         </div>
       </div>
@@ -107,16 +123,10 @@ const PackageList = () => {
   const [wishlist, setWishlist] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  // Filters
   const [destinationFilter, setDestinationFilter] = useState('');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
-
-  // Comparison
   const [compareList, setCompareList] = useState([]);
-
-  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const itemsPerPage = 6;
@@ -124,38 +134,47 @@ const PackageList = () => {
   useEffect(() => {
     const fetchPackages = async () => {
       setLoading(true);
+      setError(null);
+
       try {
-        // Fetch packages with server-side pagination and filtering
         const params = new URLSearchParams({
           page: currentPage,
-          limit: itemsPerPage
+          limit: itemsPerPage,
         });
-        
-        if (destinationFilter) params.append('search', destinationFilter);
-        if (minPrice) params.append('minPrice', minPrice);
-        if (maxPrice) params.append('maxPrice', maxPrice);
 
-        const response = await axios.get(`/packages`, { params });
+        if (destinationFilter) {
+          params.append('search', destinationFilter);
+        }
+
+        if (minPrice) {
+          params.append('minPrice', minPrice);
+        }
+
+        if (maxPrice) {
+          params.append('maxPrice', maxPrice);
+        }
+
+        const response = await axios.get('/packages', { params });
         const data = response.data;
-        
+
         if (data.packages) {
           setDisplayPackages(data.packages);
           setTotalPages(data.totalPages);
           setTotalPackages(data.totalPackages);
         } else {
           setDisplayPackages([]);
+          setTotalPages(1);
+          setTotalPackages(0);
         }
 
-        // Fetch wishlist if logged in
         if (isAuthenticated) {
           try {
-            const wishlistRes = await axios.get(`/wishlist`);
+            const wishlistRes = await axios.get('/wishlist');
             if (wishlistRes.data) {
-              setWishlist(new Set(wishlistRes.data.map(item => item.packageId)));
+              setWishlist(new Set(wishlistRes.data.map((item) => item.packageId)));
             }
           } catch (wishlistErr) {
-            console.error("Failed to fetch wishlist:", wishlistErr);
-            // Don't block the main UI if wishlist fails
+            console.error('Failed to fetch wishlist:', wishlistErr);
           }
         }
       } catch (err) {
@@ -169,102 +188,142 @@ const PackageList = () => {
     fetchPackages();
   }, [isAuthenticated, currentPage, destinationFilter, minPrice, maxPrice]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [destinationFilter, minPrice, maxPrice]);
+
   const toggleWishlist = async (pkgId) => {
     if (!isAuthenticated) {
       setError('Create an account to save favorites and track future requests.');
       return;
     }
+
     try {
       await axios.post(`/wishlist/${pkgId}`);
-      setWishlist(prev => {
-        const newSet = new Set(prev); // Optimistic update
-        if (newSet.has(pkgId)) newSet.delete(pkgId);
-        else newSet.add(pkgId);
-        return newSet;
+      setWishlist((prev) => {
+        const next = new Set(prev);
+        if (next.has(pkgId)) {
+          next.delete(pkgId);
+        } else {
+          next.add(pkgId);
+        }
+        return next;
       });
     } catch (err) {
       console.error('Wishlist error:', err);
     }
   };
 
-  // Reset page when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [destinationFilter, minPrice, maxPrice]);
-
   const toggleCompare = (pkg) => {
-    setCompareList(prev => {
-      const exists = prev.find(p => (p._id || p.id) === (pkg._id || pkg.id));
+    setCompareList((prev) => {
+      const packageId = pkg._id || pkg.id;
+      const exists = prev.find((item) => (item._id || item.id) === packageId);
+
       if (exists) {
-        return prev.filter(p => (p._id || p.id) !== (pkg._id || pkg.id));
-      } else {
-        if (prev.length >= 3) {
-          setError("You can compare up to 3 packages at a time."); // User-facing error
-          return prev;
-        }
-        return [...prev, pkg];
+        return prev.filter((item) => (item._id || item.id) !== packageId);
       }
+
+      if (prev.length >= 3) {
+        setError('You can compare up to 3 packages at a time.');
+        return prev;
+      }
+
+      return [...prev, pkg];
     });
   };
 
-  if (loading) return <div className="text-center p-10">Loading packages and request options...</div>;
-  if (error) return <div className="text-center p-10 text-red-500">{error}</div>;
+  if (loading) {
+    return <div className="p-10 text-center">Loading packages and request options...</div>;
+  }
+
+  if (error) {
+    return <div className="p-10 text-center text-red-500">{error}</div>;
+  }
 
   return (
     <div className="container mx-auto p-6">
-      <div className="text-center mb-8">
+      <div className="mb-8 text-center">
         <h2 className="text-3xl font-bold text-[#0B1C3E]">Explore Travel Packages</h2>
-        <p className="text-gray-600 mt-3 max-w-2xl mx-auto">
+        <p className="mx-auto mt-3 max-w-2xl text-gray-600">
           Browse Umrah and travel package options, then start your request online. Our team confirms availability, guidance, and next steps on WhatsApp.
         </p>
       </div>
-      
-      {/* Filters */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-8 flex flex-col md:flex-row gap-4 items-center justify-between">
+
+      <div className="mb-8 flex flex-col items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:flex-row">
         <div className="w-full md:w-1/3">
-          <input type="text" placeholder="Search package or destination..." value={destinationFilter} onChange={(e) => setDestinationFilter(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#0B1C3E]" />
+          <input
+            type="text"
+            placeholder="Search package or destination..."
+            value={destinationFilter}
+            onChange={(e) => setDestinationFilter(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 p-2 focus:border-[#0B1C3E] focus:outline-none"
+          />
         </div>
-        <div className="flex gap-2 w-full md:w-1/3">
-          <input type="number" placeholder="Min Price" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} className="w-1/2 p-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#0B1C3E]" />
-          <input type="number" placeholder="Max Price" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} className="w-1/2 p-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#0B1C3E]" />
+        <div className="flex w-full gap-2 md:w-1/3">
+          <input
+            type="number"
+            placeholder="Min Price"
+            value={minPrice}
+            onChange={(e) => setMinPrice(e.target.value)}
+            className="w-1/2 rounded-lg border border-gray-300 p-2 focus:border-[#0B1C3E] focus:outline-none"
+          />
+          <input
+            type="number"
+            placeholder="Max Price"
+            value={maxPrice}
+            onChange={(e) => setMaxPrice(e.target.value)}
+            className="w-1/2 rounded-lg border border-gray-300 p-2 focus:border-[#0B1C3E] focus:outline-none"
+          />
         </div>
-        <div className="text-sm text-gray-500">Showing {displayPackages.length} of {totalPackages} package options</div>
+        <div className="text-sm text-gray-500">
+          Showing {displayPackages.length} of {totalPackages} package options
+        </div>
       </div>
 
-      {/* Comparison Table */}
       {compareList.length > 0 && (
-        <PackageComparison packages={compareList} onRemove={(id) => setCompareList(prev => prev.filter(p => (p._id || p.id) !== id))} />
+        <PackageComparison
+          packages={compareList}
+          onRemove={(id) => setCompareList((prev) => prev.filter((pkg) => (pkg._id || pkg.id) !== id))}
+        />
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {displayPackages.length > 0 ? displayPackages.map((pkg) => (
-          <PackageCard 
-            key={pkg._id || pkg.id} 
-            pkg={pkg} 
-            wishlist={wishlist} 
-            toggleWishlist={toggleWishlist} 
-            compareList={compareList} 
-            toggleCompare={toggleCompare} 
-          />
-        )) : <div className="col-span-full text-center text-gray-500">No packages are available right now. Please check again soon or contact us on WhatsApp.</div>}
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+        {displayPackages.length > 0 ? (
+          displayPackages.map((pkg) => (
+            <PackageCard
+              key={pkg._id || pkg.id}
+              pkg={pkg}
+              wishlist={wishlist}
+              toggleWishlist={toggleWishlist}
+              compareList={compareList}
+              toggleCompare={toggleCompare}
+            />
+          ))
+        ) : (
+          <div className="col-span-full text-center text-gray-500">
+            No packages are available right now. Please check again soon or contact us on WhatsApp.
+          </div>
+        )}
       </div>
 
       {totalPages > 1 && (
-        <div className="flex justify-center mt-10 space-x-4">
+        <div className="mt-10 flex justify-center space-x-4">
           <button
-            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
             disabled={currentPage === 1}
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 hover:bg-gray-300 transition-colors"
+            className="rounded-lg bg-gray-200 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-300 disabled:opacity-50"
+            type="button"
           >
             Previous
           </button>
-          <span className="px-4 py-2 text-[#0B1C3E] font-bold">
+          <span className="px-4 py-2 font-bold text-[#0B1C3E]">
             Page {currentPage} of {totalPages}
           </span>
           <button
-            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
             disabled={currentPage === totalPages}
-            className="px-4 py-2 bg-[#0B1C3E] text-white rounded-lg disabled:opacity-50 hover:bg-[#1a2f55] transition-colors"
+            className="rounded-lg bg-[#0B1C3E] px-4 py-2 text-white transition-colors hover:bg-[#1a2f55] disabled:opacity-50"
+            type="button"
           >
             Next
           </button>

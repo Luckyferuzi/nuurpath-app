@@ -2,8 +2,6 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider } from './contexts/AuthContext.jsx';
-import { LanguageProvider } from './contexts/LanguageContext.jsx';
-import { ThemeProvider } from './contexts/ThemeContext.jsx';
 import PackageList from './components/PackageList.jsx';
 import PackageDetails from './components/PackageDetails.jsx';
 import Navbar from './components/Navbar.jsx';
@@ -121,13 +119,9 @@ function AppFrame() {
 function App() {
   const appContent = (
     <AuthProvider>
-      <LanguageProvider>
-        <ThemeProvider>
-          <Router>
-            <AppFrame />
-          </Router>
-        </ThemeProvider>
-      </LanguageProvider>
+      <Router>
+        <AppFrame />
+      </Router>
     </AuthProvider>
   );
 

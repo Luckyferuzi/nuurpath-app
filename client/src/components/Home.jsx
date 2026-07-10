@@ -1,8 +1,6 @@
-//Users/issatende/Projects/nuurpath-travels/client/src/components/Home.jsx
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios, { resolveBackendUrl } from '../lib/api';
-import PackageList from './PackageList';
 import GlobalSupport from './GlobalSupport';
 import BookingForm from './BookingForm';
 import MemoriesGallery from './MemoriesGallery';
@@ -26,20 +24,20 @@ const Home = () => {
   const [selectedService, setSelectedService] = useState(null);
   const processSteps = [
     {
-      title: 'Submit Your Request',
-      description: 'Choose a package or service and share the details we need to understand your travel plans.',
+      title: 'Choose What You Need',
+      description: 'Start with a package, flight request, consultation, or document support service.',
     },
     {
-      title: 'Team Review',
-      description: 'Our team checks your request, clarifies requirements, and prepares the next steps.',
+      title: 'Send Your Request',
+      description: 'Share your dates, contact details, and anything important for your trip.',
+    },
+    {
+      title: 'We Review It',
+      description: 'The NuurPath team checks availability, requirements, and the best next step.',
     },
     {
       title: 'Continue on WhatsApp',
-      description: 'We continue the important conversation with you directly on WhatsApp.',
-    },
-    {
-      title: 'Get Guided Support',
-      description: 'Receive guidance for packages, flights, documents, and travel preparation.',
+      description: 'We follow up directly to guide you, answer questions, and move the request forward.',
     },
   ];
   const trustBadges = [
@@ -53,25 +51,31 @@ const Home = () => {
 
   useEffect(() => {
     const getImageUrl = (imagePath) => {
-      if (!imagePath) return "https://placehold.co/1200x600/0B1C3E/D4AF37?text=NuurPath+Travels";
+      if (!imagePath) {
+        return 'https://placehold.co/1200x600/0B1C3E/D4AF37?text=NuurPath+Travels';
+      }
+
       return resolveBackendUrl(imagePath);
     };
 
     const fetchTrips = async () => {
       try {
-        const response = await axios.get(`/packages`);
+        const response = await axios.get('/packages');
         const data = Array.isArray(response.data) ? response.data : (response.data.packages || []);
-        
-        const trips = data.slice(0, 5).map(pkg => ({
+
+        const trips = data.slice(0, 5).map((pkg) => ({
           id: pkg._id || pkg.id,
           title: pkg.title,
-          image: (pkg.images && pkg.images.length > 0) ? getImageUrl(pkg.images[0]) : "https://placehold.co/1200x600/0B1C3E/D4AF37?text=NuurPath+Travels",
-          link: `/packages/${pkg._id || pkg.id}`
+          image: (pkg.images && pkg.images.length > 0)
+            ? getImageUrl(pkg.images[0])
+            : 'https://placehold.co/1200x600/0B1C3E/D4AF37?text=NuurPath+Travels',
+          link: `/packages/${pkg._id || pkg.id}`,
         }));
+
         setUpcomingTrips(trips);
       } catch (error) {
         setTripsError('Something went wrong while loading packages. Please try again or contact us on WhatsApp.');
-        console.error("Failed to fetch upcoming trips", error);
+        console.error('Failed to fetch upcoming trips', error);
       } finally {
         setLoadingTrips(false);
       }
@@ -79,11 +83,11 @@ const Home = () => {
 
     const fetchServices = async () => {
       try {
-        const response = await axios.get(`/services`);
+        const response = await axios.get('/services');
         setServices(response.data);
       } catch (error) {
         setServicesError('Something went wrong while loading our services. Please try again or contact us on WhatsApp.');
-        console.error("Failed to fetch services", error);
+        console.error('Failed to fetch services', error);
       } finally {
         setLoadingServices(false);
       }
@@ -94,20 +98,30 @@ const Home = () => {
   }, []);
 
   useEffect(() => {
-    if (upcomingTrips.length === 0 || isPaused) return;
+    if (upcomingTrips.length === 0 || isPaused) {
+      return undefined;
+    }
+
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % upcomingTrips.length);
     }, 5000);
+
     return () => clearInterval(timer);
   }, [upcomingTrips.length, isPaused]);
 
   const nextSlide = () => {
-    if (upcomingTrips.length === 0) return;
+    if (upcomingTrips.length === 0) {
+      return;
+    }
+
     setCurrentSlide((prev) => (prev + 1) % upcomingTrips.length);
   };
 
   const prevSlide = () => {
-    if (upcomingTrips.length === 0) return;
+    if (upcomingTrips.length === 0) {
+      return;
+    }
+
     setCurrentSlide((prev) => (prev - 1 + upcomingTrips.length) % upcomingTrips.length);
   };
 
@@ -121,13 +135,18 @@ const Home = () => {
   };
 
   const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
+    if (!touchStart || !touchEnd) {
+      return;
+    }
+
     const distance = touchStart - touchEnd;
     const isLeftSwipe = distance > minSwipeDistance;
     const isRightSwipe = distance < -minSwipeDistance;
+
     if (isLeftSwipe) {
       nextSlide();
     }
+
     if (isRightSwipe) {
       prevSlide();
     }
@@ -136,6 +155,7 @@ const Home = () => {
   const scrollToSection = (sectionId) => (e) => {
     e.preventDefault();
     const element = document.getElementById(sectionId);
+
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
     }
@@ -230,7 +250,7 @@ const Home = () => {
   };
 
   return (
-    <div className="bg-gray-50 min-h-screen">
+    <div className="min-h-screen bg-gray-50">
       <style>{`
         @keyframes fadeInUp {
           from { opacity: 0; transform: translateY(20px); }
@@ -247,190 +267,201 @@ const Home = () => {
           animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
       `}</style>
-      {/* Hero Section */}
-      <div className="bg-[#0B1C3E] text-white py-20 px-4 text-center relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/arabesque.png')] bg-fixed"></div>
-        <div className="container mx-auto relative z-10">
-          <h1 className="text-4xl md:text-6xl font-black uppercase tracking-tighter mb-6">
-            Start Your Journey <br/>
+
+      <div className="relative overflow-hidden bg-[#0B1C3E] px-4 py-20 text-center text-white">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/arabesque.png')] opacity-10 bg-fixed"></div>
+        <div className="container relative z-10 mx-auto">
+          <h1 className="mb-6 text-4xl font-black uppercase tracking-tighter md:text-6xl">
+            Start Your Journey <br />
             <span className="text-[#D4AF37]">with Guided Travel Support</span>
           </h1>
-          <p className="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto mb-10 font-medium">
-            Explore Umrah packages, request flights, and get visa or passport guidance online - then continue with the NuurPath team on WhatsApp for the next steps.
+          <p className="mx-auto mb-10 max-w-2xl text-lg font-medium text-gray-300 md:text-xl">
+            Browse Umrah packages, request flights, and ask for visa or passport guidance. Start on the website, then continue with the NuurPath team on WhatsApp.
           </p>
-          <div className="flex flex-col md:flex-row gap-4 justify-center mb-5">
-            <Link to="/packages" className="bg-[#D4AF37] text-[#0B1C3E] px-8 py-3 rounded-full font-bold uppercase tracking-widest hover:bg-white transition-colors">
+          <div className="mb-5 flex flex-col justify-center gap-4 md:flex-row">
+            <Link to="/packages" className="rounded-full bg-[#D4AF37] px-8 py-3 font-bold uppercase tracking-widest text-[#0B1C3E] transition-colors hover:bg-white">
               Explore Packages
             </Link>
-            <Link to="/book-flight" className="border-2 border-[#D4AF37] text-[#D4AF37] px-8 py-3 rounded-full font-bold uppercase tracking-widest hover:bg-[#D4AF37] hover:text-[#0B1C3E] transition-colors">
+            <Link to="/book-flight" className="rounded-full border-2 border-[#D4AF37] px-8 py-3 font-bold uppercase tracking-widest text-[#D4AF37] transition-colors hover:bg-[#D4AF37] hover:text-[#0B1C3E]">
               Ask About Flights
             </Link>
-            <a href="#services" onClick={scrollToSection('services')} className="border-2 border-white text-white px-8 py-3 rounded-full font-bold uppercase tracking-widest hover:bg-white hover:text-[#0B1C3E] transition-colors cursor-pointer">
-              Get Travel Guidance
+            <a
+              href="#how-it-works"
+              onClick={scrollToSection('how-it-works')}
+              className="cursor-pointer rounded-full border-2 border-white px-8 py-3 font-bold uppercase tracking-widest text-white transition-colors hover:bg-white hover:text-[#0B1C3E]"
+            >
+              See How It Works
             </a>
           </div>
-          <p className="text-sm text-gray-400 font-semibold tracking-wide">
-            Start your request online. Continue with our team on WhatsApp. No online payment is required on the website.
+          <p className="text-sm font-semibold tracking-wide text-gray-400">
+            Start on the website. Finish the follow-up with our team on WhatsApp. No online payment is required here.
           </p>
         </div>
       </div>
 
-      {/* Trust Process Section */}
-      <div className="container mx-auto px-4 py-16">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-black uppercase tracking-widest text-[#0B1C3E] mb-2">How NuurPath Helps</h2>
-          <div className="w-24 h-1 bg-[#D4AF37] mx-auto"></div>
-          <p className="text-gray-600 mt-4 max-w-3xl mx-auto">
-            NuurPath helps you start important travel requests online, then continue with real human support for quotations, document guidance, and next steps.
+      <div id="featured-packages" className="container mx-auto px-4 py-16">
+        <div className="mb-12 text-center">
+          <h2 className="mb-2 text-3xl font-black uppercase tracking-widest text-[#0B1C3E]">Featured Packages</h2>
+          <div className="mx-auto h-1 w-24 bg-[#D4AF37]"></div>
+          <p className="mx-auto mt-4 max-w-2xl text-gray-600">
+            Start with the packages we want customers to see first, then ask for availability, guidance, and next steps.
           </p>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-          {processSteps.map((step, index) => (
-            <div key={step.title} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-left">
-              <div className="w-12 h-12 rounded-full bg-[#0B1C3E] text-white flex items-center justify-center font-black text-lg mb-4">
-                {index + 1}
-              </div>
-              <h3 className="text-lg font-bold text-[#0B1C3E] mb-2">{step.title}</h3>
-              <p className="text-sm text-gray-600 leading-6">{step.description}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex flex-wrap justify-center gap-3">
-          {trustBadges.map((badge) => (
-            <span key={badge} className="px-4 py-2 rounded-full border border-gray-200 bg-white text-sm font-semibold text-[#0B1C3E] shadow-sm">
-              {badge}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {/* Featured Packages Section */}
-      <div className="container mx-auto px-4 py-16">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-black uppercase tracking-widest text-[#0B1C3E] mb-2">Featured Packages</h2>
-          <div className="w-24 h-1 bg-[#D4AF37] mx-auto"></div>
-          <p className="text-gray-600 mt-4 max-w-2xl mx-auto">
-            Explore Umrah and travel package options, then send your request online for human review and WhatsApp follow-up.
-          </p>
-        </div>
-        
         {tripsError && (
-            <div className="text-center text-red-500 mb-8">{tripsError}</div>
+          <div className="mb-8 text-center text-red-500">{tripsError}</div>
         )}
-        <div 
-          className="relative max-w-5xl mx-auto overflow-hidden rounded-2xl shadow-2xl aspect-video group bg-gray-200"
+        <div
+          className="group relative mx-auto aspect-video max-w-5xl overflow-hidden rounded-2xl bg-gray-200 shadow-2xl"
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
         >
-            {loadingTrips ? (
-                <div className="w-full h-full flex flex-col items-center justify-center animate-pulse bg-gray-300">
-                    <div className="h-12 w-2/3 bg-gray-400 rounded mb-6"></div>
-                    <div className="h-12 w-40 bg-gray-400 rounded-full"></div>
-                </div>
-            ) : upcomingTrips.length > 0 ? (
-                <>
-                    {upcomingTrips.map((trip, index) => (
-                        <div 
-                            key={trip.id}
-                            className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentSlide ? 'opacity-100' : 'opacity-0'}`}
-                        >
-                            <img src={trip.image} alt={trip.title} className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white p-4">
-                                <h3 className="text-3xl md:text-5xl font-black uppercase tracking-tighter mb-4 text-center">{trip.title}</h3>
-                                <div className="flex flex-col md:flex-row gap-4">
-                                    <Link to={trip.link} className="bg-[#D4AF37] text-[#0B1C3E] px-8 py-3 rounded-full font-bold uppercase tracking-widest hover:bg-white transition-colors">
-                                        View Package
-                                    </Link>
-                                    <button 
-                                        onClick={() => handleBookNow(trip.id)}
-                                        className="border-2 border-white text-white px-8 py-3 rounded-full font-bold uppercase tracking-widest hover:bg-white hover:text-[#0B1C3E] transition-colors"
-                                    >
-                                        Request Package
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                    
-                    <button onClick={prevSlide} className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 text-white p-3 rounded-full backdrop-blur-sm transition-colors z-10">
-                        &#10094;
-                    </button>
-                    <button onClick={nextSlide} className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 text-white p-3 rounded-full backdrop-blur-sm transition-colors z-10">
-                        &#10095;
-                    </button>
-                    
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-10">
-                        {upcomingTrips.map((_, idx) => (
-                            <button 
-                                key={idx}
-                                onClick={() => setCurrentSlide(idx)}
-                                className={`w-3 h-3 rounded-full transition-colors ${idx === currentSlide ? 'bg-[#D4AF37]' : 'bg-white/50'}`}
-                            />
-                        ))}
+          {loadingTrips ? (
+            <div className="flex h-full w-full animate-pulse flex-col items-center justify-center bg-gray-300">
+              <div className="mb-6 h-12 w-2/3 rounded bg-gray-400"></div>
+              <div className="h-12 w-40 rounded-full bg-gray-400"></div>
+            </div>
+          ) : upcomingTrips.length > 0 ? (
+            <>
+              {upcomingTrips.map((trip, index) => (
+                <div
+                  key={trip.id}
+                  className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentSlide ? 'opacity-100' : 'opacity-0'}`}
+                >
+                  <img src={trip.image} alt={trip.title} className="h-full w-full object-cover" />
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 p-4 text-white">
+                    <h3 className="mb-4 text-center text-3xl font-black uppercase tracking-tighter md:text-5xl">{trip.title}</h3>
+                    <div className="flex flex-col gap-4 md:flex-row">
+                      <Link to={trip.link} className="rounded-full bg-[#D4AF37] px-8 py-3 font-bold uppercase tracking-widest text-[#0B1C3E] transition-colors hover:bg-white">
+                        View Package
+                      </Link>
+                      <button
+                        onClick={() => handleBookNow(trip.id)}
+                        className="rounded-full border-2 border-white px-8 py-3 font-bold uppercase tracking-widest text-white transition-colors hover:bg-white hover:text-[#0B1C3E]"
+                        type="button"
+                      >
+                        Request Package
+                      </button>
                     </div>
-                </>
-            ) : (
-                <div className="absolute inset-0 flex items-center justify-center text-gray-500 font-bold text-xl">
-                    No packages are available right now. Please check again soon or contact us on WhatsApp.
+                  </div>
                 </div>
-            )}
+              ))}
+
+              <button
+                onClick={prevSlide}
+                className="absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/20 p-3 text-white backdrop-blur-sm transition-colors hover:bg-white/40"
+                type="button"
+              >
+                &#10094;
+              </button>
+              <button
+                onClick={nextSlide}
+                className="absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/20 p-3 text-white backdrop-blur-sm transition-colors hover:bg-white/40"
+                type="button"
+              >
+                &#10095;
+              </button>
+
+              <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 gap-2">
+                {upcomingTrips.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setCurrentSlide(idx)}
+                    className={`h-3 w-3 rounded-full transition-colors ${idx === currentSlide ? 'bg-[#D4AF37]' : 'bg-white/50'}`}
+                    type="button"
+                  />
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center text-xl font-bold text-gray-500">
+              Packages are being prepared. Please check again soon or contact us on WhatsApp.
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Services Section */}
-      <div id="services" className="bg-white py-16 border-y border-gray-100">
+      <div id="how-it-works" className="container mx-auto px-4 py-16">
+        <div className="mb-12 text-center">
+          <h2 className="mb-2 text-3xl font-black uppercase tracking-widest text-[#0B1C3E]">How NuurPath Works</h2>
+          <div className="mx-auto h-1 w-24 bg-[#D4AF37]"></div>
+          <p className="mx-auto mt-4 max-w-3xl text-gray-600">
+            The website helps you start the request clearly. Our team then takes over with real follow-up and guidance.
+          </p>
+        </div>
+
+        <div className="mb-10 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+          {processSteps.map((step, index) => (
+            <div key={step.title} className="rounded-2xl border border-gray-100 bg-white p-6 text-left shadow-sm">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#0B1C3E] text-lg font-black text-white">
+                {index + 1}
+              </div>
+              <h3 className="mb-2 text-lg font-bold text-[#0B1C3E]">{step.title}</h3>
+              <p className="text-sm leading-6 text-gray-600">{step.description}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap justify-center gap-3">
+          {trustBadges.map((badge) => (
+            <span key={badge} className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-[#0B1C3E] shadow-sm">
+              {badge}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div id="services" className="border-y border-gray-100 bg-white py-16">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-black uppercase tracking-widest text-[#0B1C3E] mb-2">Travel Support Services</h2>
-            <div className="w-24 h-1 bg-[#D4AF37] mx-auto"></div>
-            <p className="text-gray-600 mt-4 max-w-2xl mx-auto">
-              Start your request online and continue with our team on WhatsApp for guidance, quotations, document steps, and next actions.
+          <div className="mb-12 text-center">
+            <h2 className="mb-2 text-3xl font-black uppercase tracking-widest text-[#0B1C3E]">Travel Support Services</h2>
+            <div className="mx-auto h-1 w-24 bg-[#D4AF37]"></div>
+            <p className="mx-auto mt-4 max-w-2xl text-gray-600">
+              Need help beyond packages? Send a service request and our team will guide you on WhatsApp.
             </p>
           </div>
           {servicesError && (
-            <div className="text-center text-red-500 mb-8">{servicesError}</div>
+            <div className="mb-8 text-center text-red-500">{servicesError}</div>
           )}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          <div className="mx-auto grid max-w-4xl grid-cols-1 gap-8 md:grid-cols-2">
             {loadingServices ? (
               [1, 2].map((i) => (
-                <div key={i} className="p-8 rounded-2xl bg-gray-50 border border-gray-100 text-center animate-pulse">
-                  <div className="h-10 w-10 bg-gray-200 rounded-full mx-auto mb-4"></div>
-                  <div className="h-6 w-3/4 bg-gray-200 mx-auto mb-3 rounded"></div>
-                  <div className="h-4 w-full bg-gray-200 mx-auto mb-2 rounded"></div>
-                  <div className="h-4 w-5/6 bg-gray-200 mx-auto rounded"></div>
+                <div key={i} className="animate-pulse rounded-2xl border border-gray-100 bg-gray-50 p-8 text-center">
+                  <div className="mx-auto mb-4 h-10 w-10 rounded-full bg-gray-200"></div>
+                  <div className="mx-auto mb-3 h-6 w-3/4 rounded bg-gray-200"></div>
+                  <div className="mx-auto mb-2 h-4 w-full rounded bg-gray-200"></div>
+                  <div className="mx-auto h-4 w-5/6 rounded bg-gray-200"></div>
                 </div>
               ))
             ) : services.length > 0 ? (
               services.map((service, index) => (
-                <div 
-                  key={service._id || service.id} 
-                  className="p-8 rounded-2xl bg-gray-50 border border-gray-100 hover:shadow-lg transition-shadow text-center animate-fadeInUp"
+                <div
+                  key={service._id || service.id}
+                  className="animate-fadeInUp rounded-2xl border border-gray-100 bg-gray-50 p-8 text-center transition-shadow hover:shadow-lg"
                   style={{ opacity: 0, animationDelay: `${index * 0.2}s` }}
                 >
-                  <div className="text-4xl mb-4">{index % 2 === 0 ? '✈️' : '🌴'}</div>
-                  <h3 className="text-xl font-bold text-[#0B1C3E] mb-3">{service.title}</h3>
-                  <p className="text-gray-600 mb-4">
+                  <div className="mb-4 text-4xl">{index % 2 === 0 ? '\u2708\uFE0F' : '\u{1F30D}'}</div>
+                  <h3 className="mb-3 text-xl font-bold text-[#0B1C3E]">{service.title}</h3>
+                  <p className="mb-4 text-gray-600">
                     {getServiceDescription(service)}
                   </p>
-                  <p className="text-xs uppercase tracking-[2px] text-gray-500 font-bold mb-6">
+                  <p className="mb-6 text-xs font-bold uppercase tracking-[2px] text-gray-500">
                     Human support for important travel steps
                   </p>
                   {isConsultationService(service) ? (
                     <Link
                       to="/book-consultation"
-                      className="inline-block bg-[#0B1C3E] text-white px-6 py-3 rounded-full font-bold uppercase tracking-widest hover:bg-[#1a2f55] transition-colors"
+                      className="inline-block rounded-full bg-[#0B1C3E] px-6 py-3 font-bold uppercase tracking-widest text-white transition-colors hover:bg-[#1a2f55]"
                     >
                       {getServiceCtaLabel(service)}
                     </Link>
                   ) : (
                     <button
                       onClick={() => openServiceInquiryModal(service)}
-                      className="bg-[#0B1C3E] text-white px-6 py-3 rounded-full font-bold uppercase tracking-widest hover:bg-[#1a2f55] transition-colors"
+                      className="rounded-full bg-[#0B1C3E] px-6 py-3 font-bold uppercase tracking-widest text-white transition-colors hover:bg-[#1a2f55]"
+                      type="button"
                     >
                       {getServiceCtaLabel(service)}
                     </button>
@@ -438,49 +469,58 @@ const Home = () => {
                 </div>
               ))
             ) : (
-              <div className="col-span-full text-center text-gray-500">No services are available right now. Please check again soon or contact us on WhatsApp.</div>
+              <div className="col-span-full text-center text-gray-500">
+                No services are available right now. Please check again soon or contact us on WhatsApp.
+              </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Private Consultation CTA */}
-      <div id="consultation" className="bg-[#006837] text-white py-16">
+      <div id="consultation" className="bg-[#006837] py-16 text-white">
         <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl font-black uppercase tracking-widest mb-4">Need Personalized Travel Guidance?</h2>
-          <p className="text-lg text-green-100 mb-8 max-w-2xl mx-auto">
+          <h2 className="mb-4 text-3xl font-black uppercase tracking-widest">Need Personalized Travel Guidance?</h2>
+          <p className="mx-auto mb-8 max-w-2xl text-lg text-green-100">
             Request a private consultation for personalized travel guidance, planning support, and help understanding your next steps.
           </p>
-          <Link to="/book-consultation" className="inline-block bg-white text-[#006837] px-8 py-4 rounded-full font-bold uppercase tracking-widest hover:bg-[#D4AF37] hover:text-[#0B1C3E] transition-colors shadow-lg">
+          <Link to="/book-consultation" className="inline-block rounded-full bg-white px-8 py-4 font-bold uppercase tracking-widest text-[#006837] shadow-lg transition-colors hover:bg-[#D4AF37] hover:text-[#0B1C3E]">
             Request Private Consultation
           </Link>
         </div>
       </div>
 
-      {/* Package List */}
-      <div className="py-10">
-        <PackageList />
+      <div id="packages" className="bg-[#0B1C3E] py-16 text-white">
+        <div className="container mx-auto px-4 text-center">
+          <h2 className="mb-4 text-3xl font-black uppercase tracking-widest">Ready To See Every Package?</h2>
+          <p className="mx-auto mb-8 max-w-2xl text-base text-blue-100">
+            Browse the full package list in one place, compare options, and send your request when you are ready.
+          </p>
+          <Link
+            to="/packages"
+            className="inline-block rounded-full bg-[#D4AF37] px-8 py-4 font-bold uppercase tracking-widest text-[#0B1C3E] transition-colors hover:bg-white"
+          >
+            View All Packages
+          </Link>
+        </div>
       </div>
 
-      {/* Memories & Testimonials Gallery */}
       <MemoriesGallery />
 
-      {/* Global Support Form */}
       <GlobalSupport />
 
-      {/* Booking Modal */}
       {bookingModalOpen && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
           onClick={closeBookingModal}
         >
-          <div 
-            className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto relative"
+          <div
+            className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <button 
+            <button
               onClick={closeBookingModal}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-800 z-10 bg-gray-100 rounded-full p-1"
+              className="absolute right-4 top-4 z-10 rounded-full bg-gray-100 p-1 text-gray-500 hover:text-gray-800"
+              type="button"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -495,16 +535,17 @@ const Home = () => {
 
       {serviceInquiryModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
           onClick={closeServiceInquiryModal}
         >
           <div
-            className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto relative"
+            className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <button
               onClick={closeServiceInquiryModal}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-800 z-10 bg-gray-100 rounded-full p-1"
+              className="absolute right-4 top-4 z-10 rounded-full bg-gray-100 p-1 text-gray-500 hover:text-gray-800"
+              type="button"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

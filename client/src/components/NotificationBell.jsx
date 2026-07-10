@@ -86,7 +86,7 @@ const NotificationBell = () => {
         <div className="relative" ref={dropdownRef}>
             <button 
                 onClick={() => setIsOpen(!isOpen)}
-                className={`relative p-2 rounded-full transition-all duration-200 focus:outline-none ${isOpen ? 'bg-blue-50 text-brand-primary' : 'text-gray-600 hover:bg-gray-100 hover:text-brand-primary'}`}
+                className={`relative p-2 rounded-full transition-all duration-200 focus:outline-none ${isOpen ? 'bg-white text-[#0B1C3E]' : 'text-white hover:bg-white/10 hover:text-white'}`}
                 aria-label="Notifications"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -106,7 +106,7 @@ const NotificationBell = () => {
                         <div className="px-4 py-3 text-sm font-bold text-gray-800 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                             <span>Notifications</span>
                             {unreadCount > 0 && (
-                                <span className="text-xs font-normal text-brand-primary bg-blue-50 px-2 py-0.5 rounded-full">
+                                <span className="text-xs font-normal text-[#0B1C3E] bg-blue-50 px-2 py-0.5 rounded-full">
                                     {unreadCount} New
                                 </span>
                             )}
@@ -130,7 +130,7 @@ const NotificationBell = () => {
                                         onClick={() => !notification.read && markAsRead(notification.id)}
                                     >
                                         <div className="flex items-start gap-3">
-                                            <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${!notification.read ? 'bg-brand-primary' : 'bg-transparent'}`}></div>
+                                            <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${!notification.read ? 'bg-[#0B1C3E]' : 'bg-transparent'}`}></div>
                                             <div className="flex-1 min-w-0">
                                                 <p className={`text-sm ${!notification.read ? 'text-gray-900 font-semibold' : 'text-gray-600'}`}>
                                                     {notification.message || notification.content}
@@ -147,8 +147,8 @@ const NotificationBell = () => {
                         </div>
                         <div className="border-t border-gray-100 bg-gray-50 p-2 text-center">
                             <Link 
-                                to="/notifications" 
-                                className="block w-full py-2 text-xs font-medium text-gray-600 hover:text-brand-primary hover:bg-white rounded-lg transition-colors border border-transparent hover:border-gray-200 hover:shadow-sm" 
+                                to="/dashboard?tab=notifications" 
+                                className="block w-full py-2 text-xs font-medium text-gray-600 hover:text-[#0B1C3E] hover:bg-white rounded-lg transition-colors border border-transparent hover:border-gray-200 hover:shadow-sm" 
                                 onClick={() => setIsOpen(false)}
                             >
                                 View All Notifications
