@@ -1,18 +1,30 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from '../lib/api';
+import { getOperationalStatusLabel, getOperationalStatusOptions } from '../lib/operationalPipeline.js';
+import { matchesCreatedAtWindow, STAFF_TIME_WINDOW_OPTIONS } from '../lib/staffFilters.js';
+import { formatAdminDate, formatAdminDateTime } from '../lib/staffRequestUtils.js';
+import { buildDirectWhatsAppUrl, buildServiceLeadFollowUpMessage } from '../lib/whatsapp.js';
 import {
-  getOperationalStatusBadgeClassName,
-  getOperationalStatusLabel,
-  getOperationalStatusOptions,
-} from '../lib/operationalPipeline.js';
-import {
-  formatAdminDate,
-  formatAdminDateTime,
-} from '../lib/staffRequestUtils.js';
-import {
-  buildDirectWhatsAppUrl,
-  buildServiceLeadFollowUpMessage,
-} from '../lib/whatsapp.js';
+  StaffCardSection,
+  StaffDetailRow,
+  StaffDetailSection,
+  StaffEmptyState,
+  StaffFilterPills,
+  StaffMetricCard,
+  StaffPageShell,
+  StaffStatusPill,
+} from './staff/WorkspacePrimitives.jsx';
+
+const STATUS_FILTERS = [
+  { value: 'all', label: 'All requests' },
+  { value: 'new', label: 'New requests' },
+  { value: 'urgent', label: 'Urgent' },
+  { value: 'documents', label: 'Waiting for documents' },
+  { value: 'follow-up', label: 'Ready for follow-up' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'closed', label: 'Closed' },
+];
 
 function truncateText(value, maxLength = 180) {
   const text = String(value || '').trim();
@@ -20,7 +32,7 @@ function truncateText(value, maxLength = 180) {
     return '';
   }
 
-  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+  return text.length > maxLength ? `${text.slice(0, maxLength - 3)}...` : text;
 }
 
 function getPriorityToneClass(priorityLabel) {
@@ -62,45 +74,49 @@ function requiresDocumentFollowUp(inquiry) {
   return documentText.includes('missing') || documentText.includes('need') || documentText.includes('expired');
 }
 
-function MetricCard({ label, value, hint }) {
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="text-xs font-bold uppercase tracking-[0.22em] text-gray-500">{label}</div>
-      <div className="mt-3 text-3xl font-black text-[#0B1C3E]">{value}</div>
-      <p className="mt-2 text-sm text-gray-600">{hint}</p>
-    </div>
-  );
+function matchesStatusFilter(inquiry, statusFilter) {
+  const status = getOperationalStatusLabel(inquiry?.status);
+
+  if (statusFilter === 'all') {
+    return true;
+  }
+
+  if (statusFilter === 'new') {
+    return status === 'New';
+  }
+
+  if (statusFilter === 'urgent') {
+    return String(inquiry?.priorityLabel || '').toLowerCase() === 'high';
+  }
+
+  if (statusFilter === 'documents') {
+    return requiresDocumentFollowUp(inquiry);
+  }
+
+  if (statusFilter === 'follow-up') {
+    return ['Contacted', 'Qualified', 'Docs Received', 'Quoted', 'WhatsApp Follow-up'].includes(status);
+  }
+
+  if (statusFilter === 'confirmed') {
+    return status === 'Confirmed Offline';
+  }
+
+  if (statusFilter === 'completed') {
+    return status === 'Completed';
+  }
+
+  if (statusFilter === 'closed') {
+    return ['Cancelled', 'Lost'].includes(status);
+  }
+
+  return true;
 }
 
-function DetailRow({ label, value, subtle = false }) {
-  return (
-    <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-      <div className="text-xs font-bold uppercase tracking-[0.18em] text-gray-500">{label}</div>
-      <div className={`mt-2 text-sm ${subtle ? 'text-gray-600' : 'text-[#0B1C3E]'}`}>
-        {value || 'Not provided'}
-      </div>
-    </div>
-  );
-}
-
-function DetailSection({ title, description, children }) {
-  return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="mb-4">
-        <h3 className="text-lg font-bold text-[#0B1C3E]">{title}</h3>
-        {description && <p className="mt-1 text-sm text-gray-600">{description}</p>}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function StatusPill({ status }) {
-  return (
-    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${getOperationalStatusBadgeClassName(status)}`}>
-      {getOperationalStatusLabel(status)}
-    </span>
-  );
+function getStatusFilterOptions(inquiries) {
+  return STATUS_FILTERS.map((option) => ({
+    ...option,
+    count: inquiries.filter((inquiry) => matchesStatusFilter(inquiry, option.value)).length,
+  }));
 }
 
 const ServiceInquiriesAdmin = () => {
@@ -109,6 +125,8 @@ const ServiceInquiriesAdmin = () => {
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [timeWindow, setTimeWindow] = useState('30d');
   const [selectedInquiryId, setSelectedInquiryId] = useState(null);
   const [editingInquiry, setEditingInquiry] = useState(null);
   const [formData, setFormData] = useState({
@@ -274,17 +292,22 @@ const ServiceInquiriesAdmin = () => {
     document.body.removeChild(link);
   };
 
-  const filteredInquiries = inquiries.filter((inquiry) => {
+  const filteredInquiries = useMemo(() => {
     const term = searchTerm.toLowerCase();
 
-    return (
-      String(inquiry.inquiryId || inquiry.id).includes(term) ||
-      String(inquiry.contactName || '').toLowerCase().includes(term) ||
-      String(inquiry.contactEmail || '').toLowerCase().includes(term) ||
-      String(inquiry.serviceTitle || inquiry.serviceType || '').toLowerCase().includes(term) ||
-      String(inquiry.country || '').toLowerCase().includes(term)
-    );
-  });
+    return inquiries.filter((inquiry) => (
+      matchesStatusFilter(inquiry, statusFilter) &&
+      matchesCreatedAtWindow(inquiry, timeWindow) &&
+      (
+        !term ||
+        String(inquiry.inquiryId || inquiry.id).includes(term) ||
+        String(inquiry.contactName || '').toLowerCase().includes(term) ||
+        String(inquiry.contactEmail || '').toLowerCase().includes(term) ||
+        String(inquiry.serviceTitle || inquiry.serviceType || '').toLowerCase().includes(term) ||
+        String(inquiry.country || '').toLowerCase().includes(term)
+      )
+    ));
+  }, [inquiries, searchTerm, statusFilter, timeWindow]);
 
   const selectedInquiry = filteredInquiries.find((inquiry) => inquiry.id === selectedInquiryId)
     || filteredInquiries[0]
@@ -292,68 +315,77 @@ const ServiceInquiriesAdmin = () => {
     || inquiries[0]
     || null;
 
-  const urgentCount = inquiries.filter((inquiry) => String(inquiry.priorityLabel || '').toLowerCase() === 'high').length;
-  const documentFollowUpCount = inquiries.filter((inquiry) => requiresDocumentFollowUp(inquiry)).length;
-  const activeFollowUpsCount = inquiries.filter((inquiry) => {
-    const status = getOperationalStatusLabel(inquiry.status);
-    return !['New', 'Completed', 'Cancelled', 'Lost'].includes(status);
-  }).length;
-  const completedCount = inquiries.filter((inquiry) => {
-    const status = getOperationalStatusLabel(inquiry.status);
-    return status === 'Confirmed Offline' || status === 'Completed';
-  }).length;
+  const metrics = [
+    {
+      label: 'Urgent Requests',
+      value: inquiries.filter((inquiry) => String(inquiry.priorityLabel || '').toLowerCase() === 'high').length,
+      hint: 'Requests that sound time-sensitive and should be answered quickly.',
+      tone: 'danger',
+    },
+    {
+      label: 'Document Chase',
+      value: inquiries.filter((inquiry) => requiresDocumentFollowUp(inquiry)).length,
+      hint: 'Requests still waiting on missing, renewed, or incomplete documents.',
+      tone: 'warm',
+    },
+    {
+      label: 'Active Follow-Up',
+      value: inquiries.filter((inquiry) => !['New', 'Completed', 'Cancelled', 'Lost'].includes(getOperationalStatusLabel(inquiry.status))).length,
+      hint: 'Requests that are already in conversation, documents, quote, or delivery stages.',
+      tone: 'accent',
+    },
+    {
+      label: 'Completed Work',
+      value: inquiries.filter((inquiry) => {
+        const status = getOperationalStatusLabel(inquiry.status);
+        return status === 'Confirmed Offline' || status === 'Completed';
+      }).length,
+      hint: 'Requests already confirmed offline or fully completed.',
+      tone: 'default',
+    },
+  ];
 
   if (loading) {
     return <div className="p-10 text-center text-sm text-gray-500">Loading service requests...</div>;
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h2 className="text-3xl font-black text-[#0B1C3E]">Service Request Follow-Up</h2>
-          <p className="mt-2 max-w-3xl text-sm text-gray-600">
-            See urgency, document readiness, and the customer message in one place so visa and passport support requests are easier to act on.
-          </p>
-        </div>
+    <StaffPageShell
+      eyebrow="Follow-Up Queue"
+      title="Service Requests"
+      description="See urgency, document readiness, and customer notes in one place so support requests are easier to act on."
+      actions={(
         <button
           type="button"
           onClick={exportCSV}
-          className="rounded-full border border-[#0B1C3E] px-5 py-3 text-sm font-bold text-[#0B1C3E] transition-colors hover:bg-[#0B1C3E] hover:text-white"
+          className="rounded-full border border-[#101c2d] px-5 py-3 text-sm font-bold text-[#101c2d] transition hover:bg-[#101c2d] hover:text-white"
         >
           Export Requests
         </button>
-      </div>
-
+      )}
+    >
       {error && (
-        <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
           {error}
         </div>
       )}
       {message && (
-        <div className={`mt-6 rounded-2xl px-5 py-4 text-sm ${message.type === 'success' ? 'border border-green-200 bg-green-50 text-green-700' : 'border border-red-200 bg-red-50 text-red-700'}`}>
+        <div className={`rounded-2xl px-5 py-4 text-sm ${message.type === 'success' ? 'border border-green-200 bg-green-50 text-green-700' : 'border border-red-200 bg-red-50 text-red-700'}`}>
           {message.text}
         </div>
       )}
 
-      <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Urgent Requests" value={urgentCount} hint="Requests that sound time-sensitive and should be answered quickly." />
-        <MetricCard label="Document Chase" value={documentFollowUpCount} hint="Requests still waiting on missing, renewed, or incomplete documents." />
-        <MetricCard label="Active Follow-Up" value={activeFollowUpsCount} hint="Requests that are already in conversation, documents, quote, or delivery stages." />
-        <MetricCard label="Completed Work" value={completedCount} hint="Requests already confirmed offline or fully completed." />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {metrics.map((metric) => (
+          <StaffMetricCard key={metric.label} label={metric.label} value={metric.value} hint={metric.hint} tone={metric.tone} />
+        ))}
       </div>
 
       {editingInquiry && (
-        <div className="mt-8 rounded-[2rem] border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="mb-6">
-            <h3 className="text-2xl font-bold text-[#0B1C3E]">
-              Update Service Request #{editingInquiry.inquiryId || editingInquiry.id}
-            </h3>
-            <p className="mt-2 text-sm text-gray-600">
-              {(editingInquiry.serviceTitle || editingInquiry.serviceType)} for {editingInquiry.contactName}
-            </p>
-          </div>
-
+        <StaffCardSection
+          title={`Update Service Request #${editingInquiry.inquiryId || editingInquiry.id}`}
+          description={`${editingInquiry.serviceTitle || editingInquiry.serviceType} for ${editingInquiry.contactName}`}
+        >
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
               <label className="block">
@@ -368,7 +400,6 @@ const ServiceInquiriesAdmin = () => {
                   ))}
                 </select>
               </label>
-
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-gray-700">Team notes</span>
                 <textarea
@@ -397,31 +428,50 @@ const ServiceInquiriesAdmin = () => {
               </button>
             </div>
           </form>
-        </div>
+        </StaffCardSection>
       )}
 
-      <div className="mt-8 rounded-[2rem] border border-gray-200 bg-white p-5 shadow-sm">
-        <label className="block">
-          <span className="mb-2 block text-sm font-semibold text-gray-700">Search requests</span>
-          <input
-            type="text"
-            placeholder="Search by customer, email, country, service, or request ID..."
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+      <StaffCardSection title="Filter and Search" description="Switch between urgent, document, and follow-up queues before narrowing by time or search.">
+        <div className="space-y-4">
+          <StaffFilterPills
+            options={getStatusFilterOptions(inquiries)}
+            value={statusFilter}
+            onChange={setStatusFilter}
           />
-        </label>
-      </div>
+          <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-gray-700">Request age</span>
+              <select
+                value={timeWindow}
+                onChange={(event) => setTimeWindow(event.target.value)}
+                className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+              >
+                {STAFF_TIME_WINDOW_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-gray-700">Search</span>
+              <input
+                type="text"
+                placeholder="Search by customer, email, country, service, or request ID..."
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+              />
+            </label>
+          </div>
+        </div>
+      </StaffCardSection>
 
       {filteredInquiries.length === 0 ? (
-        <div className="mt-8 rounded-[2rem] border border-dashed border-gray-300 bg-gray-50 p-10 text-center">
-          <h3 className="text-xl font-bold text-[#0B1C3E]">No service requests match this search</h3>
-          <p className="mt-2 text-sm text-gray-600">
-            Try a different customer name, country, or service title. When service requests arrive, they will appear here automatically.
-          </p>
-        </div>
+        <StaffEmptyState
+          title="No service requests match this view"
+          description="Try a different queue filter, widen the date range, or search with another customer or service detail."
+        />
       ) : (
-        <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
           <div className="space-y-4">
             {filteredInquiries.map((inquiry) => {
               const isSelected = selectedInquiry?.id === inquiry.id;
@@ -431,29 +481,29 @@ const ServiceInquiriesAdmin = () => {
                   key={inquiry.id}
                   type="button"
                   onClick={() => setSelectedInquiryId(inquiry.id)}
-                  className={`w-full rounded-[2rem] border p-5 text-left shadow-sm transition ${isSelected ? 'border-[#0B1C3E] bg-[#0B1C3E] text-white shadow-lg' : 'border-gray-200 bg-white hover:-translate-y-0.5 hover:shadow-md'}`}
+                  className={`w-full rounded-[2rem] border p-5 text-left shadow-sm transition ${isSelected ? 'border-[#101c2d] bg-[#101c2d] text-white shadow-lg' : 'border-[#ebe4d3] bg-white hover:-translate-y-0.5 hover:shadow-md'}`}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <div className={`text-xs font-bold uppercase tracking-[0.22em] ${isSelected ? 'text-white/75' : 'text-gray-500'}`}>
+                      <div className={`text-xs font-black uppercase tracking-[0.22em] ${isSelected ? 'text-white/70' : 'text-[#7a828f]'}`}>
                         Request #{inquiry.inquiryId || inquiry.id}
                       </div>
-                      <h3 className={`mt-2 text-xl font-black ${isSelected ? 'text-white' : 'text-[#0B1C3E]'}`}>
+                      <h3 className={`mt-2 text-xl font-black ${isSelected ? 'text-white' : 'text-[#101c2d]'}`}>
                         {inquiry.serviceTitle || inquiry.serviceType}
                       </h3>
-                      <div className={`mt-2 text-sm ${isSelected ? 'text-white/80' : 'text-gray-600'}`}>
+                      <div className={`mt-2 text-sm ${isSelected ? 'text-white/80' : 'text-[#67707e]'}`}>
                         {inquiry.requestFocus || 'Service support'}
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                      <StatusPill status={inquiry.status} />
-                      <span className={`text-xs ${isSelected ? 'text-white/75' : 'text-gray-500'}`}>
+                      <StaffStatusPill status={inquiry.status} />
+                      <span className={`text-xs ${isSelected ? 'text-white/70' : 'text-[#7a828f]'}`}>
                         Received {formatAdminDate(inquiry.createdAt, 'Recently')}
                       </span>
                     </div>
                   </div>
 
-                  <div className={`mt-4 grid gap-3 md:grid-cols-2 ${isSelected ? 'text-white/90' : 'text-gray-700'}`}>
+                  <div className={`mt-4 grid gap-3 md:grid-cols-2 ${isSelected ? 'text-white/90' : 'text-[#4f5763]'}`}>
                     <div>
                       <div className="text-sm font-bold">{inquiry.contactName}</div>
                       <div className="mt-1 text-sm">{inquiry.contactEmail}</div>
@@ -481,7 +531,7 @@ const ServiceInquiriesAdmin = () => {
                   </div>
 
                   {inquiry.customerMessage && (
-                    <p className={`mt-4 text-sm ${isSelected ? 'text-white/85' : 'text-gray-600'}`}>
+                    <p className={`mt-4 text-sm ${isSelected ? 'text-white/85' : 'text-[#67707e]'}`}>
                       {truncateText(inquiry.customerMessage)}
                     </p>
                   )}
@@ -492,12 +542,12 @@ const ServiceInquiriesAdmin = () => {
 
           {selectedInquiry && (
             <div className="space-y-5 xl:sticky xl:top-24 xl:self-start">
-              <DetailSection
+              <StaffDetailSection
                 title={`Request #${selectedInquiry.inquiryId || selectedInquiry.id}`}
                 description={selectedInquiry.nextActionHint || 'Review the request, continue the conversation, and keep the notes current.'}
               >
                 <div className="flex flex-wrap gap-3">
-                  <StatusPill status={selectedInquiry.status} />
+                  <StaffStatusPill status={selectedInquiry.status} />
                   <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${getPriorityToneClass(selectedInquiry.priorityLabel)}`}>
                     {selectedInquiry.priorityLabel || 'Standard'} priority
                   </span>
@@ -522,49 +572,49 @@ const ServiceInquiriesAdmin = () => {
                     Continue on WhatsApp
                   </button>
                 </div>
-              </DetailSection>
+              </StaffDetailSection>
 
-              <DetailSection title="Customer Details">
+              <StaffDetailSection title="Customer Details">
                 <div className="grid gap-3 md:grid-cols-2">
-                  <DetailRow label="Name" value={selectedInquiry.contactName} />
-                  <DetailRow label="Account type" value={selectedInquiry.userId ? 'Account Holder' : 'Guest'} />
-                  <DetailRow label="Email" value={selectedInquiry.contactEmail} />
-                  <DetailRow label="Phone / WhatsApp" value={selectedInquiry.contactPhone} />
+                  <StaffDetailRow label="Name" value={selectedInquiry.contactName} />
+                  <StaffDetailRow label="Account type" value={selectedInquiry.userId ? 'Account Holder' : 'Guest'} />
+                  <StaffDetailRow label="Email" value={selectedInquiry.contactEmail} />
+                  <StaffDetailRow label="Phone / WhatsApp" value={selectedInquiry.contactPhone} />
                 </div>
-              </DetailSection>
+              </StaffDetailSection>
 
-              <DetailSection title="Service Request">
+              <StaffDetailSection title="Service Request">
                 <div className="grid gap-3 md:grid-cols-2">
-                  <DetailRow label="Service" value={selectedInquiry.serviceTitle || selectedInquiry.serviceType} />
-                  <DetailRow label="Request focus" value={selectedInquiry.requestFocus} />
-                  <DetailRow label="Country or destination" value={selectedInquiry.country} />
-                  <DetailRow label="Preferred date" value={formatAdminDate(selectedInquiry.preferredDate)} />
-                  <DetailRow label="Applicants" value={selectedInquiry.applicants ? String(selectedInquiry.applicants) : 'Not provided'} />
-                  <DetailRow label="Urgency from customer" value={selectedInquiry.urgency || selectedInquiry.priorityLabel || 'Not provided'} />
+                  <StaffDetailRow label="Service" value={selectedInquiry.serviceTitle || selectedInquiry.serviceType} />
+                  <StaffDetailRow label="Request focus" value={selectedInquiry.requestFocus} />
+                  <StaffDetailRow label="Country or destination" value={selectedInquiry.country} />
+                  <StaffDetailRow label="Preferred date" value={formatAdminDate(selectedInquiry.preferredDate)} />
+                  <StaffDetailRow label="Applicants" value={selectedInquiry.applicants ? String(selectedInquiry.applicants) : 'Not provided'} />
+                  <StaffDetailRow label="Urgency from customer" value={selectedInquiry.urgency || selectedInquiry.priorityLabel || 'Not provided'} />
                 </div>
-              </DetailSection>
+              </StaffDetailSection>
 
-              <DetailSection title="Documents and Message" description="This section helps staff see whether the request is ready, blocked, or urgent.">
+              <StaffDetailSection title="Documents and Message" description="This section helps staff see whether the request is ready, blocked, or urgent.">
                 <div className="grid gap-3 md:grid-cols-2">
-                  <DetailRow label="Document status" value={selectedInquiry.documentStatus || 'Not provided'} subtle />
-                  <DetailRow label="Document readiness" value={selectedInquiry.documentReadiness || 'Not provided'} subtle />
+                  <StaffDetailRow label="Document status" value={selectedInquiry.documentStatus || 'Not provided'} subtle />
+                  <StaffDetailRow label="Document readiness" value={selectedInquiry.documentReadiness || 'Not provided'} subtle />
                 </div>
                 <div className="mt-3">
-                  <DetailRow label="Customer message" value={selectedInquiry.customerMessage || 'No customer message provided.'} subtle />
+                  <StaffDetailRow label="Customer message" value={selectedInquiry.customerMessage || 'No customer message provided.'} subtle />
                 </div>
-              </DetailSection>
+              </StaffDetailSection>
 
-              <DetailSection title="Team Follow-Up">
+              <StaffDetailSection title="Team Follow-Up">
                 <div className="space-y-3">
-                  <DetailRow label="Next suggested action" value={selectedInquiry.nextActionHint} subtle />
-                  <DetailRow label="Internal notes" value={selectedInquiry.adminNotes || 'No internal notes yet.'} subtle />
+                  <StaffDetailRow label="Next suggested action" value={selectedInquiry.nextActionHint} subtle />
+                  <StaffDetailRow label="Internal notes" value={selectedInquiry.adminNotes || 'No internal notes yet.'} subtle />
                 </div>
-              </DetailSection>
+              </StaffDetailSection>
             </div>
           )}
         </div>
       )}
-    </div>
+    </StaffPageShell>
   );
 };
 

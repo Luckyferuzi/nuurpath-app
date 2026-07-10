@@ -1,20 +1,24 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from '../lib/api';
 import { useAuth } from '../contexts/AuthContext.jsx';
-import {
-  getOperationalStatusBadgeClassName,
-  getOperationalStatusLabel,
-  getOperationalStatusOptions,
-} from '../lib/operationalPipeline.js';
+import { getOperationalStatusLabel, getOperationalStatusOptions } from '../lib/operationalPipeline.js';
+import { matchesCreatedAtWindow, STAFF_TIME_WINDOW_OPTIONS } from '../lib/staffFilters.js';
 import {
   formatAdminDate,
   formatAdminDateTime,
   openProtectedStaffFile,
 } from '../lib/staffRequestUtils.js';
+import { buildDirectWhatsAppUrl, buildPackageLeadFollowUpMessage } from '../lib/whatsapp.js';
 import {
-  buildDirectWhatsAppUrl,
-  buildPackageLeadFollowUpMessage,
-} from '../lib/whatsapp.js';
+  StaffCardSection,
+  StaffDetailRow,
+  StaffDetailSection,
+  StaffEmptyState,
+  StaffFilterPills,
+  StaffMetricCard,
+  StaffPageShell,
+  StaffStatusPill,
+} from './staff/WorkspacePrimitives.jsx';
 
 const EMPTY_FORM_DATA = {
   contactName: '',
@@ -27,13 +31,23 @@ const EMPTY_FORM_DATA = {
   adminNotes: '',
 };
 
+const STATUS_FILTERS = [
+  { value: 'all', label: 'All requests' },
+  { value: 'new', label: 'New requests' },
+  { value: 'documents', label: 'Waiting for documents' },
+  { value: 'follow-up', label: 'Ready for follow-up' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'closed', label: 'Closed' },
+];
+
 function truncateText(value, maxLength = 140) {
   const text = String(value || '').trim();
   if (!text) {
     return '';
   }
 
-  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+  return text.length > maxLength ? `${text.slice(0, maxLength - 3)}...` : text;
 }
 
 function getMissingInformation(booking) {
@@ -74,45 +88,45 @@ function getMissingInformation(booking) {
   return missing;
 }
 
-function MetricCard({ label, value, hint }) {
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="text-xs font-bold uppercase tracking-[0.22em] text-gray-500">{label}</div>
-      <div className="mt-3 text-3xl font-black text-[#0B1C3E]">{value}</div>
-      <p className="mt-2 text-sm text-gray-600">{hint}</p>
-    </div>
-  );
+function matchesStatusFilter(booking, statusFilter) {
+  const status = getOperationalStatusLabel(booking?.status);
+
+  if (statusFilter === 'all') {
+    return true;
+  }
+
+  if (statusFilter === 'new') {
+    return status === 'New';
+  }
+
+  if (statusFilter === 'documents') {
+    return status === 'Docs Requested' || getMissingInformation(booking).length > 0;
+  }
+
+  if (statusFilter === 'follow-up') {
+    return ['Contacted', 'Qualified', 'Docs Received', 'Quoted', 'WhatsApp Follow-up'].includes(status);
+  }
+
+  if (statusFilter === 'confirmed') {
+    return status === 'Confirmed Offline';
+  }
+
+  if (statusFilter === 'completed') {
+    return status === 'Completed';
+  }
+
+  if (statusFilter === 'closed') {
+    return ['Cancelled', 'Lost'].includes(status);
+  }
+
+  return true;
 }
 
-function DetailRow({ label, value, subtle = false }) {
-  return (
-    <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-      <div className="text-xs font-bold uppercase tracking-[0.18em] text-gray-500">{label}</div>
-      <div className={`mt-2 text-sm ${subtle ? 'text-gray-600' : 'text-[#0B1C3E]'}`}>
-        {value || 'Not provided'}
-      </div>
-    </div>
-  );
-}
-
-function DetailSection({ title, description, children }) {
-  return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="mb-4">
-        <h3 className="text-lg font-bold text-[#0B1C3E]">{title}</h3>
-        {description && <p className="mt-1 text-sm text-gray-600">{description}</p>}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function StatusPill({ status }) {
-  return (
-    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${getOperationalStatusBadgeClassName(status)}`}>
-      {getOperationalStatusLabel(status)}
-    </span>
-  );
+function getStatusFilterOptions(bookings) {
+  return STATUS_FILTERS.map((option) => ({
+    ...option,
+    count: bookings.filter((booking) => matchesStatusFilter(booking, option.value)).length,
+  }));
 }
 
 const PackageBookingsAdmin = () => {
@@ -123,6 +137,8 @@ const PackageBookingsAdmin = () => {
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [timeWindow, setTimeWindow] = useState('30d');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [selectedBookingId, setSelectedBookingId] = useState(null);
@@ -131,6 +147,7 @@ const PackageBookingsAdmin = () => {
   const [documentActionId, setDocumentActionId] = useState('');
   const [formData, setFormData] = useState(EMPTY_FORM_DATA);
   const [showForm, setShowForm] = useState(false);
+
   const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
 
   const fetchBookings = useCallback(async () => {
@@ -368,21 +385,29 @@ const PackageBookingsAdmin = () => {
     document.body.removeChild(link);
   };
 
-  const filteredBookings = bookings.filter((booking) => {
+  const filteredBookings = useMemo(() => {
     const term = searchTerm.toLowerCase();
-    const customerName = String(booking.contactName || booking.user?.name || '').toLowerCase();
-    const customerEmail = String(booking.contactEmail || booking.user?.email || '').toLowerCase();
-    const packageTitle = String(booking.packageTitle || booking.package?.title || '').toLowerCase();
-    const departureCity = String(booking.departureCity || booking.locationFrom || '').toLowerCase();
 
-    return (
-      customerName.includes(term) ||
-      customerEmail.includes(term) ||
-      packageTitle.includes(term) ||
-      departureCity.includes(term) ||
-      String(booking.requestId || booking.id).includes(term)
-    );
-  });
+    return bookings.filter((booking) => {
+      const customerName = String(booking.contactName || booking.user?.name || '').toLowerCase();
+      const customerEmail = String(booking.contactEmail || booking.user?.email || '').toLowerCase();
+      const packageTitle = String(booking.packageTitle || booking.package?.title || '').toLowerCase();
+      const departureCity = String(booking.departureCity || booking.locationFrom || '').toLowerCase();
+
+      return (
+        matchesStatusFilter(booking, statusFilter) &&
+        matchesCreatedAtWindow(booking, timeWindow) &&
+        (
+          !term ||
+          customerName.includes(term) ||
+          customerEmail.includes(term) ||
+          packageTitle.includes(term) ||
+          departureCity.includes(term) ||
+          String(booking.requestId || booking.id).includes(term)
+        )
+      );
+    });
+  }, [bookings, searchTerm, statusFilter, timeWindow]);
 
   const selectedBooking = filteredBookings.find((booking) => booking.id === selectedBookingId)
     || filteredBookings[0]
@@ -390,28 +415,44 @@ const PackageBookingsAdmin = () => {
     || bookings[0]
     || null;
 
-  const newRequestsCount = bookings.filter((booking) => getOperationalStatusLabel(booking.status) === 'New').length;
-  const activeFollowUpsCount = bookings.filter((booking) => {
-    const status = getOperationalStatusLabel(booking.status);
-    return !['New', 'Completed', 'Cancelled', 'Lost'].includes(status);
-  }).length;
-  const docsNeededCount = bookings.filter((booking) => getMissingInformation(booking).length > 0).length;
-  const passportReadyCount = bookings.filter((booking) => getMissingInformation(booking).length === 0).length;
+  const metrics = [
+    {
+      label: 'New Requests',
+      value: bookings.filter((booking) => getOperationalStatusLabel(booking.status) === 'New').length,
+      hint: 'Fresh package requests that still need the first team response.',
+      tone: 'default',
+    },
+    {
+      label: 'Active Follow-Up',
+      value: bookings.filter((booking) => !['New', 'Completed', 'Cancelled', 'Lost'].includes(getOperationalStatusLabel(booking.status))).length,
+      hint: 'Requests already moving through contact, documents, quote, or confirmation.',
+      tone: 'warm',
+    },
+    {
+      label: 'Missing Documents',
+      value: bookings.filter((booking) => getMissingInformation(booking).length > 0).length,
+      hint: 'Requests that still miss one or more important travel or passport details.',
+      tone: 'danger',
+    },
+    {
+      label: 'Ready Profiles',
+      value: bookings.filter((booking) => getMissingInformation(booking).length === 0).length,
+      hint: 'Requests that already include the main passport and travel details staff usually need.',
+      tone: 'accent',
+    },
+  ];
 
   if (loading) {
     return <div className="p-10 text-center text-sm text-gray-500">Loading package requests...</div>;
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h2 className="text-3xl font-black text-[#0B1C3E]">Package Request Follow-Up</h2>
-          <p className="mt-2 max-w-3xl text-sm text-gray-600">
-            Keep the list easy to scan, then open one request at a time to see the traveler details, passport information, and the next staff action clearly.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-3">
+    <StaffPageShell
+      eyebrow="Follow-Up Queue"
+      title="Package Requests"
+      description="Keep package leads, passport details, and next-step coordination in a calmer layout with quicker queue switching."
+      actions={(
+        <>
           <button
             type="button"
             onClick={() => {
@@ -426,49 +467,42 @@ const PackageBookingsAdmin = () => {
               setMessage(null);
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            className="rounded-full bg-[#006837] px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-[#00512b]"
+            className="rounded-full bg-[#006837] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#00512b]"
           >
             {showForm && !editingId ? 'Close Form' : 'Add Manual Request'}
           </button>
           <button
             type="button"
             onClick={exportCSV}
-            className="rounded-full border border-[#0B1C3E] px-5 py-3 text-sm font-bold text-[#0B1C3E] transition-colors hover:bg-[#0B1C3E] hover:text-white"
+            className="rounded-full border border-[#101c2d] px-5 py-3 text-sm font-bold text-[#101c2d] transition hover:bg-[#101c2d] hover:text-white"
           >
             Export Requests
           </button>
-        </div>
-      </div>
-
+        </>
+      )}
+    >
       {error && (
-        <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
           {error}
         </div>
       )}
       {message && (
-        <div className={`mt-6 rounded-2xl px-5 py-4 text-sm ${message.type === 'success' ? 'border border-green-200 bg-green-50 text-green-700' : 'border border-red-200 bg-red-50 text-red-700'}`}>
+        <div className={`rounded-2xl px-5 py-4 text-sm ${message.type === 'success' ? 'border border-green-200 bg-green-50 text-green-700' : 'border border-red-200 bg-red-50 text-red-700'}`}>
           {message.text}
         </div>
       )}
 
-      <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="New Requests" value={newRequestsCount} hint="Fresh package requests that still need the first team response." />
-        <MetricCard label="Active Follow-Up" value={activeFollowUpsCount} hint="Requests already moving through contact, documents, quote, or confirmation." />
-        <MetricCard label="Missing Documents" value={docsNeededCount} hint="Requests that still miss one or more important travel or passport details." />
-        <MetricCard label="Ready Profiles" value={passportReadyCount} hint="Requests that already include the main passport and travel details staff usually need." />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {metrics.map((metric) => (
+          <StaffMetricCard key={metric.label} label={metric.label} value={metric.value} hint={metric.hint} tone={metric.tone} />
+        ))}
       </div>
 
       {showForm && (
-        <div className="mt-8 rounded-[2rem] border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="mb-6">
-            <h3 className="text-2xl font-bold text-[#0B1C3E]">
-              {editingId ? `Update Request #${editingId}` : 'Create a Manual Package Request'}
-            </h3>
-            <p className="mt-2 text-sm text-gray-600">
-              Use this form when staff need to add or update a package request directly. Customer-submitted passport details stay visible in the request detail panel below.
-            </p>
-          </div>
-
+        <StaffCardSection
+          title={editingId ? `Update Request #${editingId}` : 'Create a Manual Package Request'}
+          description="Use this form when staff need to add or update a package request directly. Customer-submitted passport details stay visible in the request detail panel below."
+        >
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <label className="block">
@@ -481,7 +515,6 @@ const PackageBookingsAdmin = () => {
                   required
                 />
               </label>
-
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-gray-700">Customer email</span>
                 <input
@@ -492,7 +525,6 @@ const PackageBookingsAdmin = () => {
                   required
                 />
               </label>
-
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-gray-700">Phone or WhatsApp</span>
                 <input
@@ -503,7 +535,6 @@ const PackageBookingsAdmin = () => {
                   required
                 />
               </label>
-
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-gray-700">Package</span>
                 <select
@@ -518,7 +549,6 @@ const PackageBookingsAdmin = () => {
                   ))}
                 </select>
               </label>
-
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-gray-700">Preferred travel date</span>
                 <input
@@ -528,7 +558,6 @@ const PackageBookingsAdmin = () => {
                   className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
                 />
               </label>
-
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-gray-700">Travelers</span>
                 <input
@@ -555,7 +584,6 @@ const PackageBookingsAdmin = () => {
                   ))}
                 </select>
               </label>
-
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-gray-700">Team notes</span>
                 <textarea
@@ -584,31 +612,50 @@ const PackageBookingsAdmin = () => {
               </button>
             </div>
           </form>
-        </div>
+        </StaffCardSection>
       )}
 
-      <div className="mt-8 rounded-[2rem] border border-gray-200 bg-white p-5 shadow-sm">
-        <label className="block">
-          <span className="mb-2 block text-sm font-semibold text-gray-700">Search requests</span>
-          <input
-            type="text"
-            placeholder="Search by customer, email, package, departure city, or request ID..."
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+      <StaffCardSection title="Filter and Search" description="Jump between queue states first, then narrow by age or search details.">
+        <div className="space-y-4">
+          <StaffFilterPills
+            options={getStatusFilterOptions(bookings)}
+            value={statusFilter}
+            onChange={setStatusFilter}
           />
-        </label>
-      </div>
+          <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-gray-700">Request age</span>
+              <select
+                value={timeWindow}
+                onChange={(event) => setTimeWindow(event.target.value)}
+                className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+              >
+                {STAFF_TIME_WINDOW_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-gray-700">Search</span>
+              <input
+                type="text"
+                placeholder="Search by customer, email, package, departure city, or request ID..."
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+              />
+            </label>
+          </div>
+        </div>
+      </StaffCardSection>
 
       {filteredBookings.length === 0 ? (
-        <div className="mt-8 rounded-[2rem] border border-dashed border-gray-300 bg-gray-50 p-10 text-center">
-          <h3 className="text-xl font-bold text-[#0B1C3E]">No package requests match this search</h3>
-          <p className="mt-2 text-sm text-gray-600">
-            Try a different customer name, package title, or request number. When requests arrive, this space will fill automatically.
-          </p>
-        </div>
+        <StaffEmptyState
+          title="No package requests match this view"
+          description="Try another queue filter, widen the date range, or search with a different customer or package detail."
+        />
       ) : (
-        <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
           <div className="space-y-4">
             {filteredBookings.map((booking) => {
               const isSelected = selectedBooking?.id === booking.id;
@@ -619,26 +666,26 @@ const PackageBookingsAdmin = () => {
                   key={booking.id}
                   type="button"
                   onClick={() => setSelectedBookingId(booking.id)}
-                  className={`w-full rounded-[2rem] border p-5 text-left shadow-sm transition ${isSelected ? 'border-[#0B1C3E] bg-[#0B1C3E] text-white shadow-lg' : 'border-gray-200 bg-white hover:-translate-y-0.5 hover:shadow-md'}`}
+                  className={`w-full rounded-[2rem] border p-5 text-left shadow-sm transition ${isSelected ? 'border-[#101c2d] bg-[#101c2d] text-white shadow-lg' : 'border-[#ebe4d3] bg-white hover:-translate-y-0.5 hover:shadow-md'}`}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <div className={`text-xs font-bold uppercase tracking-[0.22em] ${isSelected ? 'text-white/75' : 'text-gray-500'}`}>
+                      <div className={`text-xs font-black uppercase tracking-[0.22em] ${isSelected ? 'text-white/70' : 'text-[#7a828f]'}`}>
                         Request #{booking.requestId || booking.id}
                       </div>
-                      <h3 className={`mt-2 text-xl font-black ${isSelected ? 'text-white' : 'text-[#0B1C3E]'}`}>
+                      <h3 className={`mt-2 text-xl font-black ${isSelected ? 'text-white' : 'text-[#101c2d]'}`}>
                         {booking.packageTitle || booking.package?.title || 'Unknown package'}
                       </h3>
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                      <StatusPill status={booking.status} />
-                      <span className={`text-xs ${isSelected ? 'text-white/75' : 'text-gray-500'}`}>
+                      <StaffStatusPill status={booking.status} />
+                      <span className={`text-xs ${isSelected ? 'text-white/70' : 'text-[#7a828f]'}`}>
                         Received {formatAdminDate(booking.createdAt, 'Recently')}
                       </span>
                     </div>
                   </div>
 
-                  <div className={`mt-4 grid gap-3 md:grid-cols-2 ${isSelected ? 'text-white/90' : 'text-gray-700'}`}>
+                  <div className={`mt-4 grid gap-3 md:grid-cols-2 ${isSelected ? 'text-white/90' : 'text-[#4f5763]'}`}>
                     <div>
                       <div className="text-sm font-bold">{booking.contactName || booking.user?.name || 'Guest traveler'}</div>
                       <div className="mt-1 text-sm">{booking.contactEmail || booking.user?.email || 'No email provided'}</div>
@@ -666,12 +713,12 @@ const PackageBookingsAdmin = () => {
                   </div>
 
                   {booking.customerNotes && (
-                    <p className={`mt-4 text-sm ${isSelected ? 'text-white/85' : 'text-gray-600'}`}>
+                    <p className={`mt-4 text-sm ${isSelected ? 'text-white/85' : 'text-[#67707e]'}`}>
                       {truncateText(booking.customerNotes)}
                     </p>
                   )}
 
-                  <div className={`mt-4 text-sm ${isSelected ? 'text-white/75' : 'text-gray-500'}`}>
+                  <div className={`mt-4 text-sm ${isSelected ? 'text-white/75' : 'text-[#7a828f]'}`}>
                     {missingInformation.length > 0
                       ? `Still needed: ${missingInformation.join(', ')}`
                       : 'Main passport and travel details are already available.'}
@@ -683,12 +730,12 @@ const PackageBookingsAdmin = () => {
 
           {selectedBooking && (
             <div className="space-y-5 xl:sticky xl:top-24 xl:self-start">
-              <DetailSection
+              <StaffDetailSection
                 title={`Request #${selectedBooking.requestId || selectedBooking.id}`}
                 description={selectedBooking.nextActionHint || 'Open the request details, continue the conversation, and keep the notes up to date.'}
               >
                 <div className="flex flex-wrap gap-3">
-                  <StatusPill status={selectedBooking.status} />
+                  <StaffStatusPill status={selectedBooking.status} />
                   <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">
                     Received {formatAdminDate(selectedBooking.createdAt, 'Recently')}
                   </span>
@@ -716,7 +763,7 @@ const PackageBookingsAdmin = () => {
                     type="button"
                     onClick={() => handlePassportDocument(selectedBooking, 'preview')}
                     disabled={documentActionId === `${selectedBooking.id}-preview`}
-                    className="rounded-full border border-[#0B1C3E] px-4 py-2 text-sm font-bold text-[#0B1C3E] transition hover:bg-[#0B1C3E] hover:text-white disabled:opacity-60"
+                    className="rounded-full border border-[#101c2d] px-4 py-2 text-sm font-bold text-[#101c2d] transition hover:bg-[#101c2d] hover:text-white disabled:opacity-60"
                   >
                     {documentActionId === `${selectedBooking.id}-preview` ? 'Opening...' : 'View Passport Copy'}
                   </button>
@@ -738,65 +785,65 @@ const PackageBookingsAdmin = () => {
                     </button>
                   )}
                 </div>
-              </DetailSection>
+              </StaffDetailSection>
 
-              <DetailSection title="Customer Details">
+              <StaffDetailSection title="Customer Details">
                 <div className="grid gap-3 md:grid-cols-2">
-                  <DetailRow label="Name" value={selectedBooking.contactName || selectedBooking.user?.name} />
-                  <DetailRow label="Account type" value={selectedBooking.customerType || (selectedBooking.userId ? 'Account Holder' : 'Guest')} />
-                  <DetailRow label="Email" value={selectedBooking.contactEmail || selectedBooking.user?.email} />
-                  <DetailRow label="Phone / WhatsApp" value={selectedBooking.contactPhone} />
+                  <StaffDetailRow label="Name" value={selectedBooking.contactName || selectedBooking.user?.name} />
+                  <StaffDetailRow label="Account type" value={selectedBooking.customerType || (selectedBooking.userId ? 'Account Holder' : 'Guest')} />
+                  <StaffDetailRow label="Email" value={selectedBooking.contactEmail || selectedBooking.user?.email} />
+                  <StaffDetailRow label="Phone / WhatsApp" value={selectedBooking.contactPhone} />
                 </div>
-              </DetailSection>
+              </StaffDetailSection>
 
-              <DetailSection title="Travel Request">
+              <StaffDetailSection title="Travel Request">
                 <div className="grid gap-3 md:grid-cols-2">
-                  <DetailRow label="Package" value={selectedBooking.packageTitle || selectedBooking.package?.title} />
-                  <DetailRow label="Travelers" value={String(selectedBooking.passengers || 1)} />
-                  <DetailRow label="Preferred travel date" value={formatAdminDate(selectedBooking.travelDate)} />
-                  <DetailRow label="Departure city" value={selectedBooking.departureCity || selectedBooking.locationFrom} />
+                  <StaffDetailRow label="Package" value={selectedBooking.packageTitle || selectedBooking.package?.title} />
+                  <StaffDetailRow label="Travelers" value={String(selectedBooking.passengers || 1)} />
+                  <StaffDetailRow label="Preferred travel date" value={formatAdminDate(selectedBooking.travelDate)} />
+                  <StaffDetailRow label="Departure city" value={selectedBooking.departureCity || selectedBooking.locationFrom} />
                 </div>
-              </DetailSection>
+              </StaffDetailSection>
 
-              <DetailSection title="Passport and Traveler Details" description="These are the customer-submitted fields staff need for document follow-up and review.">
+              <StaffDetailSection title="Passport and Traveler Details" description="These are the customer-submitted fields staff need for document follow-up and review.">
                 <div className="grid gap-3 md:grid-cols-2">
-                  <DetailRow label="Passport number" value={selectedBooking.passportNumber} />
-                  <DetailRow label="Passport expiry date" value={formatAdminDate(selectedBooking.passportExpiryDate)} />
-                  <DetailRow label="Date of birth" value={formatAdminDate(selectedBooking.dateOfBirth)} />
-                  <DetailRow label="Nationality" value={selectedBooking.nationality} />
-                  <DetailRow
+                  <StaffDetailRow label="Passport number" value={selectedBooking.passportNumber} />
+                  <StaffDetailRow label="Passport expiry date" value={formatAdminDate(selectedBooking.passportExpiryDate)} />
+                  <StaffDetailRow label="Date of birth" value={formatAdminDate(selectedBooking.dateOfBirth)} />
+                  <StaffDetailRow label="Nationality" value={selectedBooking.nationality} />
+                  <StaffDetailRow
                     label="Passport copy"
                     value={selectedBooking.passportCopyAvailable || selectedBooking.passportCopy ? 'Attached and staff-only' : 'Not attached'}
                     subtle
                   />
-                  <DetailRow
+                  <StaffDetailRow
                     label="Missing items"
                     value={getMissingInformation(selectedBooking).length > 0 ? getMissingInformation(selectedBooking).join(', ') : 'Nothing important is missing'}
                     subtle
                   />
                 </div>
-              </DetailSection>
+              </StaffDetailSection>
 
-              <DetailSection title="Customer Notes">
+              <StaffDetailSection title="Customer Notes">
                 <div className="space-y-3">
-                  <DetailRow label="Special request or message" value={selectedBooking.customerNotes || selectedBooking.specialRequests} subtle />
-                  <DetailRow label="Extra note captured from form" value={selectedBooking.notes} subtle />
+                  <StaffDetailRow label="Special request or message" value={selectedBooking.customerNotes || selectedBooking.specialRequests} subtle />
+                  <StaffDetailRow label="Extra note captured from form" value={selectedBooking.notes} subtle />
                 </div>
-              </DetailSection>
+              </StaffDetailSection>
 
-              <DetailSection title="Team Follow-Up">
+              <StaffDetailSection title="Team Follow-Up">
                 <div className="space-y-3">
-                  <DetailRow label="Next suggested action" value={selectedBooking.nextActionHint} subtle />
-                  <DetailRow label="Internal notes" value={selectedBooking.adminNotes || 'No internal notes yet.'} subtle />
+                  <StaffDetailRow label="Next suggested action" value={selectedBooking.nextActionHint} subtle />
+                  <StaffDetailRow label="Internal notes" value={selectedBooking.adminNotes || 'No internal notes yet.'} subtle />
                 </div>
-              </DetailSection>
+              </StaffDetailSection>
             </div>
           )}
         </div>
       )}
 
       {totalPages > 1 && (
-        <div className="mt-8 flex items-center justify-center gap-3">
+        <div className="flex items-center justify-center gap-3">
           <button
             type="button"
             onClick={() => setCurrentPage((previous) => Math.max(previous - 1, 1))}
@@ -816,7 +863,7 @@ const PackageBookingsAdmin = () => {
           </button>
         </div>
       )}
-    </div>
+    </StaffPageShell>
   );
 };
 

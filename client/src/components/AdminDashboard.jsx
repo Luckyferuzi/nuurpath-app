@@ -1,285 +1,228 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import axios from '../lib/api';
 import { useAuth } from '../contexts/AuthContext.jsx';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { StaffCardSection, StaffMetricCard, StaffPageShell } from './staff/WorkspacePrimitives.jsx';
+import { getStaffWorkspaceSections } from '../lib/staffWorkspace.js';
+
+const CHART_COLORS = ['#006837', '#D4AF37', '#0B1C3E', '#5c7cfa'];
 
 const AdminDashboard = () => {
-    const { user } = useAuth();
-    const [stats, setStats] = useState({
-        totalUsers: 0,
-        pipelineValue: 0,
-        newRequests: 0,
-        activeFollowUps: 0,
-        completedRequests: 0,
-        lostOrCancelled: 0,
-        totalPackageRequests: 0,
-        totalFlightRequests: 0,
-        totalConsultations: 0,
-        totalServiceInquiries: 0,
-        trends: [],
-        requestDistribution: [],
-    });
-    const [loading, setLoading] = useState(true);
-    const role = String(user?.role || '').toLowerCase();
-    const isAdmin = role === 'admin';
+  const { user } = useAuth();
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    pipelineValue: 0,
+    newRequests: 0,
+    activeFollowUps: 0,
+    completedRequests: 0,
+    lostOrCancelled: 0,
+    totalPackageRequests: 0,
+    totalFlightRequests: 0,
+    totalConsultations: 0,
+    totalServiceInquiries: 0,
+    trends: [],
+    requestDistribution: [],
+  });
+  const [loading, setLoading] = useState(true);
 
-    const COLORS = ['#006837', '#D4AF37', '#0B1C3E', '#5c7cfa'];
+  const role = String(user?.role || '').toLowerCase();
+  const isAdmin = role === 'admin';
 
-    useEffect(() => {
-        const fetchStats = async () => {
-            try {
-                const response = await axios.get('/admin/stats');
-                setStats(response.data);
-            } catch (error) {
-                console.error('Error fetching stats:', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchStats();
-    }, []);
-
-    const containerStyle = {
-        padding: '20px',
-        maxWidth: '1200px',
-        margin: '20px auto',
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await axios.get('/admin/stats');
+        setStats(response.data);
+      } catch (error) {
+        console.error('Error fetching stats:', error);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    const gridStyle = {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
-        gap: '20px',
-        marginTop: '20px',
-    };
+    fetchStats();
+  }, []);
 
-    const cardStyle = {
-        border: '1px solid #e0e0e0',
-        borderRadius: '8px',
-        padding: '20px',
-        textAlign: 'center',
-        textDecoration: 'none',
-        color: 'inherit',
-        backgroundColor: '#fff',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-        transition: 'box-shadow 0.3s ease, transform 0.2s ease',
-    };
+  const navigationSections = useMemo(() => (
+    getStaffWorkspaceSections(role)
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) => item.to !== '/admin'),
+      }))
+      .filter((section) => section.items.length > 0)
+  ), [role]);
 
-    const statCardStyle = {
-        backgroundColor: '#f8f9fa',
-        padding: '20px',
-        borderRadius: '8px',
-        textAlign: 'center',
-        border: '1px solid #e0e0e0',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-    };
+  const topMetrics = [
+    {
+      label: 'Request Value',
+      value: loading ? '...' : `$${(stats.pipelineValue || 0).toLocaleString()}`,
+      hint: 'Estimated open package-request value that is still in motion.',
+      tone: 'accent',
+    },
+    {
+      label: 'New Requests',
+      value: loading ? '...' : stats.newRequests,
+      hint: 'Fresh requests that still need the first team response.',
+      tone: 'default',
+    },
+    {
+      label: 'Ready Follow-Up',
+      value: loading ? '...' : stats.activeFollowUps,
+      hint: 'Requests already moving through contact, documents, or quotation.',
+      tone: 'warm',
+    },
+    {
+      label: 'Confirmed or Done',
+      value: loading ? '...' : stats.completedRequests,
+      hint: 'Requests already confirmed offline or fully completed.',
+      tone: 'default',
+    },
+  ];
 
-    const summaryCardStyle = {
-        backgroundColor: '#fff',
-        padding: '16px',
-        borderRadius: '8px',
-        border: '1px solid #e0e0e0',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-    };
+  const queueMetrics = [
+    { label: 'Package Requests', value: loading ? '...' : stats.totalPackageRequests, hint: 'Package leads in the system.', tone: 'accent' },
+    { label: 'Flight Requests', value: loading ? '...' : stats.totalFlightRequests, hint: 'Flight inquiries waiting or in follow-up.', tone: 'warm' },
+    { label: 'Consultations', value: loading ? '...' : stats.totalConsultations, hint: 'Private consultation bookings to review.', tone: 'default' },
+    { label: 'Service Requests', value: loading ? '...' : stats.totalServiceInquiries, hint: 'Visa and passport support requests.', tone: 'default' },
+    { label: 'Customers', value: loading ? '...' : stats.totalUsers, hint: 'Customer accounts in the platform.', tone: 'default' },
+    { label: 'Closed Requests', value: loading ? '...' : stats.lostOrCancelled, hint: 'Cancelled or lost requests for review.', tone: 'danger' },
+  ];
 
-    const summaryItems = [
-        { label: 'Package Requests', value: stats.totalPackageRequests, color: '#006837' },
-        { label: 'Flight Requests', value: stats.totalFlightRequests, color: '#D4AF37' },
-        { label: 'Consultations', value: stats.totalConsultations, color: '#0B1C3E' },
-        { label: 'Service Inquiries', value: stats.totalServiceInquiries, color: '#5c7cfa' },
-        { label: 'Cancelled or Lost', value: stats.lostOrCancelled, color: '#dc3545' },
-    ];
+  const quickQueues = [
+    {
+      title: 'Requests needing quick attention',
+      items: [
+        `New requests: ${loading ? '...' : stats.newRequests}`,
+        `Active follow-up: ${loading ? '...' : stats.activeFollowUps}`,
+        `Closed or lost: ${loading ? '...' : stats.lostOrCancelled}`,
+      ],
+    },
+    {
+      title: 'What this workspace supports',
+      items: [
+        'Clear follow-up lists for packages, flights, consultations, and services.',
+        'Separate admin-only areas for content, services, and people management.',
+        'Cleaner mobile and tablet navigation for urgent follow-up situations.',
+      ],
+    },
+  ];
 
-    return (
-        <div style={containerStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>
-                <div>
-                    <h2 style={{ margin: 0 }}>{isAdmin ? 'Operations Dashboard' : 'Lead Follow-Up Dashboard'}</h2>
-                    <p style={{ margin: '6px 0 0 0', color: '#666' }}>
-                        Track customer requests, follow-ups, and offline confirmations from one operational workspace.
-                    </p>
-                </div>
+  return (
+    <StaffPageShell
+      eyebrow={isAdmin ? 'Admin Overview' : 'Manager Overview'}
+      title={isAdmin ? 'Operations Dashboard' : 'Lead Follow-Up Dashboard'}
+      description="Use this space to understand the current request volume, jump into the right queue fast, and keep the team workspace easier to read from desktop down to mobile."
+    >
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {topMetrics.map((metric) => (
+          <StaffMetricCard
+            key={metric.label}
+            label={metric.label}
+            value={metric.value}
+            hint={metric.hint}
+            tone={metric.tone}
+          />
+        ))}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {queueMetrics.map((metric) => (
+          <StaffMetricCard
+            key={metric.label}
+            label={metric.label}
+            value={metric.value}
+            hint={metric.hint}
+            tone={metric.tone}
+          />
+        ))}
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+        <StaffCardSection title="Request Trends" description="Monthly movement across package, flight, consultation, and service requests.">
+          <div className="h-[320px]">
+            <ResponsiveContainer>
+              <LineChart data={stats.trends}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e7e0d2" />
+                <XAxis dataKey="name" stroke="#6b7280" />
+                <YAxis stroke="#6b7280" />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="Packages" stroke="#006837" strokeWidth={2} activeDot={{ r: 7 }} />
+                <Line type="monotone" dataKey="Flights" stroke="#D4AF37" strokeWidth={2} activeDot={{ r: 7 }} />
+                <Line type="monotone" dataKey="Consultations" stroke="#0B1C3E" strokeWidth={2} activeDot={{ r: 7 }} />
+                <Line type="monotone" dataKey="Services" stroke="#5c7cfa" strokeWidth={2} activeDot={{ r: 7 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </StaffCardSection>
+
+        <div className="space-y-6">
+          <StaffCardSection title="Request Mix" description="See which request type is taking the largest share right now.">
+            <div className="h-[280px]">
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie
+                    data={stats.requestDistribution}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={58}
+                    outerRadius={84}
+                    paddingAngle={4}
+                    dataKey="value"
+                    label
+                  >
+                    {(stats.requestDistribution || []).map((entry, index) => (
+                      <Cell key={`${entry.name}-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
             </div>
+          </StaffCardSection>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginTop: '20px' }}>
-                <div style={statCardStyle}>
-                    <h3 style={{ fontSize: '36px', color: '#006837', margin: '0 0 10px 0' }}>{loading ? '...' : `$${(stats.pipelineValue || 0).toLocaleString()}`}</h3>
-                    <p style={{ color: '#666', margin: 0, fontWeight: 'bold' }}>Pipeline Value</p>
+          <StaffCardSection title="Daily Focus" description="A short view of what usually matters most when the team starts work.">
+            <div className="space-y-4">
+              {quickQueues.map((queue) => (
+                <div key={queue.title} className="rounded-2xl border border-[#efe8d8] bg-[#fbfaf7] p-4">
+                  <h3 className="text-sm font-black uppercase tracking-[0.18em] text-[#101c2d]">{queue.title}</h3>
+                  <ul className="mt-3 space-y-2 text-sm leading-6 text-[#67707e]">
+                    {queue.items.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
                 </div>
-                <div style={statCardStyle}>
-                    <h3 style={{ fontSize: '36px', color: '#0B1C3E', margin: '0 0 10px 0' }}>{loading ? '...' : stats.newRequests}</h3>
-                    <p style={{ color: '#666', margin: 0, fontWeight: 'bold' }}>New Requests</p>
-                </div>
-                <div style={statCardStyle}>
-                    <h3 style={{ fontSize: '36px', color: '#0B1C3E', margin: '0 0 10px 0' }}>{loading ? '...' : stats.activeFollowUps}</h3>
-                    <p style={{ color: '#666', margin: 0, fontWeight: 'bold' }}>Active Follow-Ups</p>
-                </div>
-                <div style={statCardStyle}>
-                    <h3 style={{ fontSize: '36px', color: '#0B1C3E', margin: '0 0 10px 0' }}>{loading ? '...' : stats.completedRequests}</h3>
-                    <p style={{ color: '#666', margin: 0, fontWeight: 'bold' }}>Confirmed Offline / Completed</p>
-                </div>
+              ))}
             </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginTop: '24px' }}>
-                {summaryItems.map((item) => (
-                    <div key={item.label} style={summaryCardStyle}>
-                        <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#666', textTransform: 'uppercase', letterSpacing: '1px' }}>{item.label}</div>
-                        <div style={{ fontSize: '28px', fontWeight: 'bold', color: item.color, marginTop: '8px' }}>{loading ? '...' : item.value}</div>
-                    </div>
-                ))}
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px', marginTop: '40px' }}>
-                <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #e0e0e0', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                    <h3 style={{ color: '#0B1C3E', marginBottom: '20px' }}>Request Trends (Last 6 Months)</h3>
-                    <div style={{ width: '100%', height: 300 }}>
-                        <ResponsiveContainer>
-                            <LineChart data={stats.trends}>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="name" />
-                                <YAxis />
-                                <Tooltip />
-                                <Legend />
-                                <Line type="monotone" dataKey="Packages" stroke="#006837" strokeWidth={2} activeDot={{ r: 8 }} />
-                                <Line type="monotone" dataKey="Flights" stroke="#D4AF37" strokeWidth={2} activeDot={{ r: 8 }} />
-                                <Line type="monotone" dataKey="Consultations" stroke="#0B1C3E" strokeWidth={2} activeDot={{ r: 8 }} />
-                                <Line type="monotone" dataKey="Services" stroke="#5c7cfa" strokeWidth={2} activeDot={{ r: 8 }} />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-
-                <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #e0e0e0', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                    <h3 style={{ color: '#0B1C3E', marginBottom: '20px' }}>Pipeline Value Trends</h3>
-                    <div style={{ width: '100%', height: 300 }}>
-                        <ResponsiveContainer>
-                            <LineChart data={stats.trends}>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="name" />
-                                <YAxis />
-                                <Tooltip formatter={(value) => `$${Number(value || 0).toLocaleString()}`} />
-                                <Legend />
-                                <Line type="monotone" dataKey="PipelineValue" name="Pipeline Value" stroke="#D4AF37" strokeWidth={2} activeDot={{ r: 8 }} />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-
-                <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #e0e0e0', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                    <h3 style={{ color: '#0B1C3E', marginBottom: '20px' }}>Request Distribution</h3>
-                    <div style={{ width: '100%', height: 300 }}>
-                        <ResponsiveContainer>
-                            <PieChart>
-                                <Pie
-                                    data={stats.requestDistribution}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={60}
-                                    outerRadius={80}
-                                    fill="#8884d8"
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                    label
-                                >
-                                    {stats.requestDistribution && stats.requestDistribution.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                </Pie>
-                                <Tooltip />
-                                <Legend />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-            </div>
-
-            <div style={gridStyle}>
-                <Link
-                    to="/admin/consultations"
-                    style={cardStyle}
-                    onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 5px 15px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-5px)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.boxShadow = cardStyle.boxShadow; e.currentTarget.style.transform = 'none'; }}
-                >
-                    <h3 style={{ color: '#0056b3', marginBottom: '10px' }}>Consultation Follow-Ups</h3>
-                    <p style={{ color: '#555' }}>Review private consultation requests, notes, and next actions.</p>
-                </Link>
-                <Link
-                    to="/admin/package-bookings"
-                    style={cardStyle}
-                    onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 5px 15px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-5px)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.boxShadow = cardStyle.boxShadow; e.currentTarget.style.transform = 'none'; }}
-                >
-                    <h3 style={{ color: '#0056b3', marginBottom: '10px' }}>Package Request Follow-Up</h3>
-                    <p style={{ color: '#555' }}>Move package leads from new inquiry to offline confirmation.</p>
-                </Link>
-                <Link
-                    to="/admin/flight-bookings"
-                    style={cardStyle}
-                    onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 5px 15px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-5px)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.boxShadow = cardStyle.boxShadow; e.currentTarget.style.transform = 'none'; }}
-                >
-                    <h3 style={{ color: '#0056b3', marginBottom: '10px' }}>Flight Request Follow-Up</h3>
-                    <p style={{ color: '#555' }}>Track flight leads, quotes, and WhatsApp follow-up steps.</p>
-                </Link>
-                <Link
-                    to="/admin/service-inquiries"
-                    style={cardStyle}
-                    onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 5px 15px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-5px)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.boxShadow = cardStyle.boxShadow; e.currentTarget.style.transform = 'none'; }}
-                >
-                    <h3 style={{ color: '#0056b3', marginBottom: '10px' }}>Service Request Follow-Up</h3>
-                    <p style={{ color: '#555' }}>Manage visa, passport, and document support follow-ups.</p>
-                </Link>
-                {isAdmin && (
-                    <Link
-                        to="/admin/users"
-                        style={cardStyle}
-                        onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 5px 15px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-5px)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.boxShadow = cardStyle.boxShadow; e.currentTarget.style.transform = 'none'; }}
-                    >
-                        <h3 style={{ color: '#0056b3', marginBottom: '10px' }}>Manage Users</h3>
-                        <p style={{ color: '#555' }}>View users, update roles, and create manager accounts.</p>
-                    </Link>
-                )}
-                {isAdmin && (
-                    <Link
-                        to="/admin/services"
-                        style={cardStyle}
-                        onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 5px 15px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-5px)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.boxShadow = cardStyle.boxShadow; e.currentTarget.style.transform = 'none'; }}
-                    >
-                        <h3 style={{ color: '#0056b3', marginBottom: '10px' }}>Manage Services</h3>
-                        <p style={{ color: '#555' }}>Update service offerings and descriptions.</p>
-                    </Link>
-                )}
-                {isAdmin && (
-                    <Link
-                        to="/admin/packages"
-                        style={cardStyle}
-                        onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 5px 15px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-5px)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.boxShadow = cardStyle.boxShadow; e.currentTarget.style.transform = 'none'; }}
-                    >
-                        <h3 style={{ color: '#0056b3', marginBottom: '10px' }}>Manage Packages</h3>
-                        <p style={{ color: '#555' }}>Add, edit, or remove travel packages.</p>
-                    </Link>
-                )}
-                <Link
-                    to="/admin/reviews"
-                    style={cardStyle}
-                    onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 5px 15px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-5px)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.boxShadow = cardStyle.boxShadow; e.currentTarget.style.transform = 'none'; }}
-                >
-                    <h3 style={{ color: '#0056b3', marginBottom: '10px' }}>Manage Reviews</h3>
-                    <p style={{ color: '#555' }}>Moderate customer reviews and testimonials.</p>
-                </Link>
-            </div>
+          </StaffCardSection>
         </div>
-    );
+      </div>
+
+      <StaffCardSection title="Workspace Areas" description="These grouped links help staff move through the workspace without hunting across unrelated pages.">
+        <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
+          {navigationSections.map((section) => (
+            <div key={section.id} className="rounded-[1.5rem] border border-[#efe8d8] bg-[#fbfaf7] p-5">
+              <div className="text-xs font-black uppercase tracking-[0.24em] text-[#8a7443]">{section.label}</div>
+              <div className="mt-4 space-y-3">
+                {section.items.map((item) => (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    className="block rounded-2xl border border-white bg-white px-4 py-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                  >
+                    <div className="text-base font-bold text-[#101c2d]">{item.label}</div>
+                    <p className="mt-2 text-sm leading-6 text-[#67707e]">{item.description}</p>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </StaffCardSection>
+    </StaffPageShell>
+  );
 };
 
 export default AdminDashboard;

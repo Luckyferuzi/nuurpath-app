@@ -1,15 +1,103 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from '../lib/api';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { getOperationalStatusLabel, getOperationalStatusOptions } from '../lib/operationalPipeline.js';
+import { matchesCreatedAtWindow, STAFF_TIME_WINDOW_OPTIONS } from '../lib/staffFilters.js';
+import { formatAdminDate, formatAdminDateTime } from '../lib/staffRequestUtils.js';
+import { buildConsultationLeadFollowUpMessage, buildDirectWhatsAppUrl } from '../lib/whatsapp.js';
 import {
-  getOperationalStatusBadgeStyle,
-  getOperationalStatusLabel,
-  getOperationalStatusOptions,
-} from '../lib/operationalPipeline.js';
-import {
-  buildConsultationLeadFollowUpMessage,
-  buildDirectWhatsAppUrl,
-} from '../lib/whatsapp.js';
+  StaffCardSection,
+  StaffDetailRow,
+  StaffDetailSection,
+  StaffEmptyState,
+  StaffFilterPills,
+  StaffMetricCard,
+  StaffPageShell,
+  StaffStatusPill,
+} from './staff/WorkspacePrimitives.jsx';
+
+const STATUS_FILTERS = [
+  { value: 'all', label: 'All requests' },
+  { value: 'new', label: 'New requests' },
+  { value: 'follow-up', label: 'Ready for follow-up' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'closed', label: 'Closed' },
+];
+
+function buildConsultationNextAction(consultation) {
+  const status = getOperationalStatusLabel(consultation?.status);
+
+  if (status === 'Cancelled' || status === 'Lost') {
+    return 'No more follow-up is needed unless the customer asks to book again.';
+  }
+
+  if (status === 'Completed') {
+    return 'The consultation is complete. Only after-service or rebooking follow-up remains.';
+  }
+
+  if (status === 'Confirmed Offline') {
+    return 'Make sure the customer has the confirmed slot details and any preparation notes.';
+  }
+
+  if (status === 'WhatsApp Follow-up' || status === 'Contacted') {
+    return 'Continue the coordination on WhatsApp and confirm the final date or time if it changed.';
+  }
+
+  if (status === 'Qualified') {
+    return 'Confirm the customer need, the preferred slot, and who should handle the consultation.';
+  }
+
+  return 'Review the request details, contact the customer, and confirm the consultation slot clearly.';
+}
+
+function matchesStatusFilter(consultation, statusFilter) {
+  const status = getOperationalStatusLabel(consultation?.status);
+
+  if (statusFilter === 'all') {
+    return true;
+  }
+
+  if (statusFilter === 'new') {
+    return status === 'New';
+  }
+
+  if (statusFilter === 'follow-up') {
+    return ['Contacted', 'Qualified', 'WhatsApp Follow-up', 'Docs Received'].includes(status);
+  }
+
+  if (statusFilter === 'confirmed') {
+    return status === 'Confirmed Offline';
+  }
+
+  if (statusFilter === 'completed') {
+    return status === 'Completed';
+  }
+
+  if (statusFilter === 'closed') {
+    return ['Cancelled', 'Lost'].includes(status);
+  }
+
+  return true;
+}
+
+function getStatusFilterOptions(consultations) {
+  return STATUS_FILTERS.map((option) => ({
+    ...option,
+    count: consultations.filter((consultation) => matchesStatusFilter(consultation, option.value)).length,
+  }));
+}
+
+const EMPTY_FORM_DATA = {
+  name: '',
+  email: '',
+  phone: '',
+  date: '',
+  time: '',
+  description: '',
+  status: 'New',
+  adminNotes: '',
+};
 
 const PrivateConsultationsAdmin = () => {
   const { user } = useAuth();
@@ -18,19 +106,14 @@ const PrivateConsultationsAdmin = () => {
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [timeWindow, setTimeWindow] = useState('30d');
+  const [selectedConsultationId, setSelectedConsultationId] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    date: '',
-    time: '',
-    description: '',
-    status: 'New',
-    adminNotes: '',
-  });
+  const [formData, setFormData] = useState(EMPTY_FORM_DATA);
+
   const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
 
   const fetchConsultations = useCallback(async () => {
@@ -49,17 +132,20 @@ const PrivateConsultationsAdmin = () => {
     fetchConsultations();
   }, [fetchConsultations]);
 
+  useEffect(() => {
+    if (!consultations.length) {
+      setSelectedConsultationId(null);
+      return;
+    }
+
+    const selectedExists = consultations.some((consultation) => consultation.id === selectedConsultationId);
+    if (!selectedExists) {
+      setSelectedConsultationId(consultations[0].id);
+    }
+  }, [consultations, selectedConsultationId]);
+
   const resetForm = () => {
-    setFormData({
-      name: '',
-      email: '',
-      phone: '',
-      date: '',
-      time: '',
-      description: '',
-      status: 'New',
-      adminNotes: '',
-    });
+    setFormData(EMPTY_FORM_DATA);
     setEditingId(null);
     setShowForm(false);
     setSubmitting(false);
@@ -79,7 +165,7 @@ const PrivateConsultationsAdmin = () => {
     setEditingId(consultation.id);
     setShowForm(true);
     setMessage(null);
-    window.scrollTo(0, 0);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSubmit = async (event) => {
@@ -159,193 +245,380 @@ const PrivateConsultationsAdmin = () => {
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  const filteredConsultations = consultations.filter((consultation) => {
+  const filteredConsultations = useMemo(() => {
     const term = searchTerm.toLowerCase();
-    return (
-      String(consultation.requestId || consultation.id).includes(term) ||
-      String(consultation.name || '').toLowerCase().includes(term) ||
-      String(consultation.email || '').toLowerCase().includes(term) ||
-      String(consultation.phone || '').toLowerCase().includes(term)
-    );
-  });
 
-  const containerStyle = {
-    padding: '20px',
-    maxWidth: '1200px',
-    margin: '0 auto',
-  };
+    return consultations.filter((consultation) => (
+      matchesStatusFilter(consultation, statusFilter) &&
+      matchesCreatedAtWindow(consultation, timeWindow) &&
+      (
+        !term ||
+        String(consultation.requestId || consultation.id).includes(term) ||
+        String(consultation.name || '').toLowerCase().includes(term) ||
+        String(consultation.email || '').toLowerCase().includes(term) ||
+        String(consultation.phone || '').toLowerCase().includes(term)
+      )
+    ));
+  }, [consultations, searchTerm, statusFilter, timeWindow]);
 
-  const tableStyle = {
-    width: '100%',
-    borderCollapse: 'collapse',
-    marginTop: '20px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-  };
+  const selectedConsultation = filteredConsultations.find((consultation) => consultation.id === selectedConsultationId)
+    || filteredConsultations[0]
+    || consultations.find((consultation) => consultation.id === selectedConsultationId)
+    || consultations[0]
+    || null;
 
-  const thStyle = {
-    backgroundColor: '#f8f9fa',
-    padding: '12px',
-    borderBottom: '2px solid #dee2e6',
-    textAlign: 'left',
-    fontWeight: 'bold',
-  };
-
-  const tdStyle = {
-    padding: '12px',
-    borderBottom: '1px solid #dee2e6',
-    verticalAlign: 'top',
-  };
+  const metrics = [
+    {
+      label: 'New Requests',
+      value: consultations.filter((consultation) => getOperationalStatusLabel(consultation.status) === 'New').length,
+      hint: 'Consultations that still need the first confirmation response.',
+      tone: 'default',
+    },
+    {
+      label: 'Ready Follow-Up',
+      value: consultations.filter((consultation) => ['Contacted', 'Qualified', 'WhatsApp Follow-up'].includes(getOperationalStatusLabel(consultation.status))).length,
+      hint: 'Requests already moving through contact and scheduling discussion.',
+      tone: 'warm',
+    },
+    {
+      label: 'Confirmed',
+      value: consultations.filter((consultation) => getOperationalStatusLabel(consultation.status) === 'Confirmed Offline').length,
+      hint: 'Consultation slots already confirmed with the customer.',
+      tone: 'accent',
+    },
+    {
+      label: 'Closed',
+      value: consultations.filter((consultation) => ['Cancelled', 'Lost'].includes(getOperationalStatusLabel(consultation.status))).length,
+      hint: 'Requests no longer active.',
+      tone: 'danger',
+    },
+  ];
 
   if (loading) {
-    return <div style={{ textAlign: 'center', padding: '20px' }}>Loading...</div>;
+    return <div className="p-10 text-center text-sm text-gray-500">Loading consultation requests...</div>;
   }
 
   return (
-    <div style={containerStyle}>
-      <h2 style={{ marginBottom: '20px' }}>Consultation Follow-Ups</h2>
-
-      {error && (
-        <div style={{ color: 'red', marginBottom: '20px', padding: '10px', backgroundColor: '#ffe0e0', borderRadius: '5px' }}>
-          {error}
-        </div>
-      )}
-      {message && (
-        <div style={{ color: message.type === 'success' ? '#155724' : '#721c24', marginBottom: '20px', padding: '10px', backgroundColor: message.type === 'success' ? '#d4edda' : '#f8d7da', borderRadius: '5px' }}>
-          {message.text}
-        </div>
-      )}
-
-      <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+    <StaffPageShell
+      eyebrow="Follow-Up Queue"
+      title="Consultations"
+      description="Manage private consultation requests with clearer slot details, fewer table-heavy screens, and faster access to the next action."
+      actions={(
         <button
+          type="button"
           onClick={() => {
-            if (showForm) {
+            if (showForm && !editingId) {
               resetForm();
               return;
             }
 
             setShowForm(true);
             setEditingId(null);
+            setFormData(EMPTY_FORM_DATA);
             setMessage(null);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          style={{ padding: '10px 20px', backgroundColor: '#006837', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+          className="rounded-full bg-[#006837] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#00512b]"
         >
-          {showForm ? 'Cancel' : 'Add New Consultation'}
+          {showForm && !editingId ? 'Close Form' : 'Add Consultation'}
         </button>
+      )}
+    >
+      {error && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+      {message && (
+        <div className={`rounded-2xl px-5 py-4 text-sm ${message.type === 'success' ? 'border border-green-200 bg-green-50 text-green-700' : 'border border-red-200 bg-red-50 text-red-700'}`}>
+          {message.text}
+        </div>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {metrics.map((metric) => (
+          <StaffMetricCard key={metric.label} label={metric.label} value={metric.value} hint={metric.hint} tone={metric.tone} />
+        ))}
       </div>
 
       {showForm && (
-        <div style={{ backgroundColor: '#f9f9f9', padding: '20px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #ddd' }}>
-          <h3 style={{ marginBottom: '15px' }}>{editingId ? `Update Consultation Request #${editingId}` : 'New Consultation Request'}</h3>
-          <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '15px' }}>
-            <input type="text" placeholder="Name" value={formData.name} onChange={(event) => setFormData({ ...formData, name: event.target.value })} required style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
-            <input type="email" placeholder="Email" value={formData.email} onChange={(event) => setFormData({ ...formData, email: event.target.value })} required style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
-            <input type="tel" placeholder="Phone / WhatsApp" value={formData.phone} onChange={(event) => setFormData({ ...formData, phone: event.target.value })} required style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              <input type="date" value={formData.date} onChange={(event) => setFormData({ ...formData, date: event.target.value })} required style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
-              <input type="time" value={formData.time} onChange={(event) => setFormData({ ...formData, time: event.target.value })} required style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
+        <StaffCardSection
+          title={editingId ? `Update Consultation Request #${editingId}` : 'Create Consultation Request'}
+          description="Keep the form focused on what staff actually need. Optional internal follow-up notes stay separate from the customer booking details."
+        >
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-gray-700">Customer name</span>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(event) => setFormData({ ...formData, name: event.target.value })}
+                  required
+                  className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-gray-700">Customer email</span>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(event) => setFormData({ ...formData, email: event.target.value })}
+                  required
+                  className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-gray-700">Phone / WhatsApp</span>
+                <input
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(event) => setFormData({ ...formData, phone: event.target.value })}
+                  required
+                  className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                />
+              </label>
             </div>
-            <textarea placeholder="Consultation summary or request details" value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', minHeight: '100px' }} required />
-            <select value={formData.status} onChange={(event) => setFormData({ ...formData, status: event.target.value })} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}>
-              {getOperationalStatusOptions(formData.status).map((statusOption) => (
-                <option key={statusOption} value={statusOption}>{statusOption}</option>
-              ))}
-            </select>
-            <textarea
-              placeholder="Internal notes for your team only"
-              value={formData.adminNotes}
-              onChange={(event) => setFormData({ ...formData, adminNotes: event.target.value })}
-              style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', minHeight: '100px' }}
-            />
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button type="submit" disabled={submitting} style={{ padding: '10px 20px', backgroundColor: '#006837', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-gray-700">Preferred date</span>
+                <input
+                  type="date"
+                  value={formData.date}
+                  onChange={(event) => setFormData({ ...formData, date: event.target.value })}
+                  required
+                  className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-gray-700">Preferred time</span>
+                <input
+                  type="time"
+                  value={formData.time}
+                  onChange={(event) => setFormData({ ...formData, time: event.target.value })}
+                  required
+                  className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                />
+              </label>
+            </div>
+
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-gray-700">Consultation summary</span>
+              <textarea
+                value={formData.description}
+                onChange={(event) => setFormData({ ...formData, description: event.target.value })}
+                required
+                placeholder="What kind of help does the customer want from the consultation?"
+                className="h-28 w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+              />
+            </label>
+
+            <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-gray-700">Request status</span>
+                <select
+                  value={formData.status}
+                  onChange={(event) => setFormData({ ...formData, status: event.target.value })}
+                  className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                >
+                  {getOperationalStatusOptions(formData.status).map((statusOption) => (
+                    <option key={statusOption} value={statusOption}>{statusOption}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-gray-700">Team notes</span>
+                <textarea
+                  value={formData.adminNotes}
+                  onChange={(event) => setFormData({ ...formData, adminNotes: event.target.value })}
+                  placeholder="Internal notes for follow-up, reassignment, or special preparation."
+                  className="h-28 w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                />
+              </label>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="submit"
+                disabled={submitting}
+                className="rounded-full bg-[#101c2d] px-6 py-3 text-sm font-black uppercase tracking-[0.18em] text-white transition hover:bg-[#16263b] disabled:cursor-not-allowed disabled:opacity-70"
+              >
                 {submitting ? 'Saving...' : editingId ? 'Save Request Update' : 'Create Request'}
               </button>
-              <button type="button" onClick={resetForm} style={{ padding: '10px 20px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="rounded-full border border-gray-300 px-6 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+              >
                 Cancel
               </button>
             </div>
           </form>
-        </div>
+        </StaffCardSection>
       )}
 
-      <div style={{ marginBottom: '20px' }}>
-        <input
-          type="text"
-          placeholder="Search by customer, email, phone, or request ID..."
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          style={{
-            width: '100%',
-            padding: '10px',
-            borderRadius: '4px',
-            border: '1px solid #ccc',
-            fontSize: '16px',
-          }}
-        />
-      </div>
+      <StaffCardSection title="Filter and Search" description="Switch between quick queues first, then narrow by age or customer detail.">
+        <div className="space-y-4">
+          <StaffFilterPills
+            options={getStatusFilterOptions(consultations)}
+            value={statusFilter}
+            onChange={setStatusFilter}
+          />
+          <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-gray-700">Request age</span>
+              <select
+                value={timeWindow}
+                onChange={(event) => setTimeWindow(event.target.value)}
+                className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+              >
+                {STAFF_TIME_WINDOW_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-gray-700">Search</span>
+              <input
+                type="text"
+                placeholder="Search by customer, email, phone, or request ID..."
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+              />
+            </label>
+          </div>
+        </div>
+      </StaffCardSection>
 
       {filteredConsultations.length === 0 ? (
-        <p>No consultation requests yet.</p>
+        <StaffEmptyState
+          title="No consultation requests match this view"
+          description="Try another queue filter, widen the date range, or search with a different customer detail."
+        />
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={tableStyle}>
-            <thead>
-              <tr>
-                <th style={thStyle}>Request Date</th>
-                <th style={thStyle}>Customer</th>
-                <th style={thStyle}>Preferred Slot</th>
-                <th style={thStyle}>Request Summary</th>
-                <th style={thStyle}>Request Status</th>
-                <th style={thStyle}>Internal Notes</th>
-                <th style={thStyle}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredConsultations.map((consultation) => (
-                <tr key={consultation.id}>
-                  <td style={tdStyle}>{consultation.createdAt ? new Date(consultation.createdAt).toLocaleDateString() : 'TBD'}</td>
-                  <td style={tdStyle}>
-                    {consultation.name}
-                    <br />
-                    <span style={{ fontSize: '0.8em', color: '#666' }}>{consultation.email}</span>
-                    <br />
-                    <span style={{ fontSize: '0.8em', color: '#666' }}>{consultation.phone}</span>
-                    {!consultation.userId && <div style={{ fontSize: '0.75em', color: '#856404', marginTop: '4px' }}>Guest / No account</div>}
-                  </td>
-                  <td style={tdStyle}>
-                    Date: {consultation.date || 'TBD'}
-                    <br />
-                    Time: {consultation.time || 'TBD'}
-                  </td>
-                  <td style={tdStyle}>{consultation.description || 'No description provided.'}</td>
-                  <td style={tdStyle}>
-                    <span style={{ ...getOperationalStatusBadgeStyle(consultation.status), padding: '4px 8px', borderRadius: '12px', fontSize: '12px' }}>
-                      {getOperationalStatusLabel(consultation.status)}
-                    </span>
-                  </td>
-                  <td style={tdStyle}>{consultation.adminNotes || 'No internal notes yet.'}</td>
-                  <td style={tdStyle}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-start' }}>
-                      <button onClick={() => handleEdit(consultation)} style={{ color: 'blue', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold', padding: 0 }}>
-                        Update Request
-                      </button>
-                      <button onClick={() => openWhatsApp(consultation)} style={{ color: '#006837', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold', padding: 0 }}>
-                        Continue on WhatsApp
-                      </button>
-                      {isAdmin && (
-                        <button onClick={() => handleDelete(consultation.id)} style={{ color: 'red', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold', padding: 0 }}>
-                          Delete
-                        </button>
-                      )}
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
+          <div className="space-y-4">
+            {filteredConsultations.map((consultation) => {
+              const isSelected = selectedConsultation?.id === consultation.id;
+
+              return (
+                <button
+                  key={consultation.id}
+                  type="button"
+                  onClick={() => setSelectedConsultationId(consultation.id)}
+                  className={`w-full rounded-[2rem] border p-5 text-left shadow-sm transition ${isSelected ? 'border-[#101c2d] bg-[#101c2d] text-white shadow-lg' : 'border-[#ebe4d3] bg-white hover:-translate-y-0.5 hover:shadow-md'}`}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className={`text-xs font-black uppercase tracking-[0.22em] ${isSelected ? 'text-white/70' : 'text-[#7a828f]'}`}>
+                        Request #{consultation.requestId || consultation.id}
+                      </div>
+                      <h3 className={`mt-2 text-xl font-black ${isSelected ? 'text-white' : 'text-[#101c2d]'}`}>
+                        {consultation.name}
+                      </h3>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <div className="flex flex-col items-end gap-2">
+                      <StaffStatusPill status={consultation.status} />
+                      <span className={`text-xs ${isSelected ? 'text-white/70' : 'text-[#7a828f]'}`}>
+                        Received {formatAdminDate(consultation.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className={`mt-4 grid gap-3 md:grid-cols-2 ${isSelected ? 'text-white/90' : 'text-[#4f5763]'}`}>
+                    <div>
+                      <div className="text-sm font-bold">{consultation.email}</div>
+                      <div className="mt-1 text-sm">{consultation.phone}</div>
+                      {!consultation.userId && <div className="mt-2 text-xs font-semibold uppercase tracking-[0.18em]">Guest request</div>}
+                    </div>
+                    <div className="text-sm">
+                      <div>Date: {consultation.date || 'TBD'}</div>
+                      <div className="mt-1">Time: {consultation.time || 'TBD'}</div>
+                    </div>
+                  </div>
+
+                  {consultation.description && (
+                    <p className={`mt-4 text-sm ${isSelected ? 'text-white/85' : 'text-[#67707e]'}`}>
+                      {consultation.description}
+                    </p>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedConsultation && (
+            <div className="space-y-5 xl:sticky xl:top-24 xl:self-start">
+              <StaffDetailSection
+                title={`Request #${selectedConsultation.requestId || selectedConsultation.id}`}
+                description={buildConsultationNextAction(selectedConsultation)}
+              >
+                <div className="flex flex-wrap gap-3">
+                  <StaffStatusPill status={selectedConsultation.status} />
+                  <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">
+                    Received {formatAdminDate(selectedConsultation.createdAt)}
+                  </span>
+                  <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">
+                    Last contact {formatAdminDateTime(selectedConsultation.lastContactedAt, 'not recorded')}
+                  </span>
+                </div>
+
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleEdit(selectedConsultation)}
+                    className="rounded-full bg-[#101c2d] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#16263b]"
+                  >
+                    Update Request
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openWhatsApp(selectedConsultation)}
+                    className="rounded-full bg-[#25D366] px-4 py-2 text-sm font-bold text-white transition hover:opacity-95"
+                  >
+                    Continue on WhatsApp
+                  </button>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(selectedConsultation.id)}
+                      className="rounded-full border border-red-200 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-50"
+                    >
+                      Delete Request
+                    </button>
+                  )}
+                </div>
+              </StaffDetailSection>
+
+              <StaffDetailSection title="Customer Details">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <StaffDetailRow label="Name" value={selectedConsultation.name} />
+                  <StaffDetailRow label="Account type" value={selectedConsultation.userId ? 'Account Holder' : 'Guest'} />
+                  <StaffDetailRow label="Email" value={selectedConsultation.email} />
+                  <StaffDetailRow label="Phone / WhatsApp" value={selectedConsultation.phone} />
+                </div>
+              </StaffDetailSection>
+
+              <StaffDetailSection title="Preferred Slot">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <StaffDetailRow label="Preferred date" value={selectedConsultation.date || 'TBD'} />
+                  <StaffDetailRow label="Preferred time" value={selectedConsultation.time || 'TBD'} />
+                </div>
+              </StaffDetailSection>
+
+              <StaffDetailSection title="Consultation Summary">
+                <div className="space-y-3">
+                  <StaffDetailRow label="Customer request" value={selectedConsultation.description || 'No description provided.'} subtle />
+                  <StaffDetailRow label="Internal notes" value={selectedConsultation.adminNotes || 'No internal notes yet.'} subtle />
+                </div>
+              </StaffDetailSection>
+            </div>
+          )}
         </div>
       )}
-    </div>
+    </StaffPageShell>
   );
 };
 

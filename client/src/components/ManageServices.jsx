@@ -1,157 +1,443 @@
-import React, { useState, useEffect } from 'react';
-import axios from '../lib/api';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import axios from '../lib/api';
+import {
+  StaffCardSection,
+  StaffEmptyState,
+  StaffFilterPills,
+  StaffMetricCard,
+  StaffPageShell,
+} from './staff/WorkspacePrimitives.jsx';
+
+const SERVICE_FILTERS = [
+  { value: 'all', label: 'All services' },
+  { value: 'icon-ready', label: 'Icon ready' },
+  { value: 'needs-icon', label: 'Needs icon' },
+];
+
+function hasIcon(service) {
+  return Boolean(String(service?.icon || '').trim());
+}
+
+function matchesServiceFilter(service, filterValue) {
+  if (filterValue === 'all') {
+    return true;
+  }
+
+  if (filterValue === 'icon-ready') {
+    return hasIcon(service);
+  }
+
+  if (filterValue === 'needs-icon') {
+    return !hasIcon(service);
+  }
+
+  return true;
+}
+
+function getServiceFilterOptions(services) {
+  return SERVICE_FILTERS.map((option) => ({
+    ...option,
+    count: services.filter((service) => matchesServiceFilter(service, option.value)).length,
+  }));
+}
+
+function reorderServices(services, startIndex, endIndex) {
+  const updated = [...services];
+  const [movedService] = updated.splice(startIndex, 1);
+  updated.splice(endIndex, 0, movedService);
+  return updated;
+}
+
+const defaultFormData = {
+  title: '',
+  description: '',
+  icon: '',
+};
 
 const ManageServices = () => {
-    const [services, setServices] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [formData, setFormData] = useState({ title: '', description: '', icon: '' });
-    const [submitting, setSubmitting] = useState(false);
+  const [services, setServices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [message, setMessage] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [serviceFilter, setServiceFilter] = useState('all');
+  const [showForm, setShowForm] = useState(false);
+  const [editingServiceId, setEditingServiceId] = useState(null);
+  const [formData, setFormData] = useState(defaultFormData);
+  const [submitting, setSubmitting] = useState(false);
+  const [reorderingId, setReorderingId] = useState(null);
 
-    useEffect(() => {
-        fetchServices();
-    }, []);
+  const fetchServices = useCallback(async () => {
+    setLoading(true);
 
-    const fetchServices = async () => {
-        try {
-            const res = await axios.get('/services');
-            setServices(res.data);
-            setError(null); // Clear previous errors on success
-            setLoading(false);
-        } catch (err) {
-            console.error('Error fetching services:', err);
-            setError('Failed to load services.');
-            setLoading(false);
-        }
-    };
+    try {
+      const response = await axios.get('/services');
+      setServices(Array.isArray(response.data) ? response.data : []);
+      setError(null);
+    } catch (err) {
+      setError(err.response?.data?.msg || err.message || 'Failed to load services.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-    const handleInputChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-    };
+  useEffect(() => {
+    fetchServices();
+  }, [fetchServices]);
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setSubmitting(true);
-        try {
-            const res = await axios.post('/services', formData);
-            setError(null); // Clear previous errors on success
-            setServices([...services, res.data]);
-            setFormData({ title: '', description: '', icon: '' });
-            setSubmitting(false);
-        } catch (err) {
-            setError(err.response?.data?.msg || err.message || 'Failed to create service.'); // User-facing error
-            console.error('Error creating service:', err); // Log for debugging
-            setSubmitting(false);
-        }
-    };
+  const filteredServices = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
 
-    const handleDelete = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this service?')) return;
-        try {
-            await axios.delete(`/services/${id}`);
-            setError(null); // Clear previous errors on success
-            setServices(services.filter(s => s.id !== id));
-        } catch (err) {
-            setError(err.response?.data?.msg || err.message || 'Failed to delete service.'); // User-facing error
-            console.error('Error deleting service:', err); // Log for debugging
-        }
-    };
+    return services.filter((service) => {
+      if (!matchesServiceFilter(service, serviceFilter)) {
+        return false;
+      }
 
-    // Styles matching your AdminDashboard theme
-    const containerStyle = { padding: '20px', maxWidth: '1000px', margin: '20px auto' };
-    const tableStyle = { width: '100%', borderCollapse: 'collapse', marginTop: '20px', backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' };
-    const thStyle = { textAlign: 'left', padding: '12px', borderBottom: '2px solid #eee', backgroundColor: '#f8f9fa', color: '#0B1C3E' };
-    const tdStyle = { padding: '12px', borderBottom: '1px solid #eee' };
-    const formStyle = { backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #e0e0e0', marginBottom: '30px' };
-    const inputStyle = { width: '100%', padding: '10px', marginBottom: '10px', borderRadius: '4px', border: '1px solid #ccc', boxSizing: 'border-box' };
-    const btnStyle = { padding: '10px 20px', backgroundColor: '#006837', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' };
-    const deleteBtnStyle = { padding: '6px 12px', backgroundColor: '#dc3545', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' };
+      if (!term) {
+        return true;
+      }
 
-    if (loading) return <div style={containerStyle}>Loading services...</div>;
+      return (
+        String(service.title || '').toLowerCase().includes(term) ||
+        String(service.description || '').toLowerCase().includes(term) ||
+        String(service.icon || '').toLowerCase().includes(term)
+      );
+    });
+  }, [searchTerm, serviceFilter, services]);
 
-    return (
-        <div style={containerStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>
-                <h2 style={{ margin: 0 }}>Manage Services</h2>
-                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                    <Link to="/admin/service-inquiries" style={{ textDecoration: 'none', color: '#006837', fontWeight: 'bold' }}>View Service Inquiries</Link>
-                    <Link to="/admin" style={{ textDecoration: 'none', color: '#0056b3', fontWeight: 'bold' }}>&larr; Back to Dashboard</Link>
-                </div>
-            </div>
+  const metrics = [
+    {
+      label: 'Total Services',
+      value: services.length,
+      hint: 'These power the public service cards and related request forms.',
+      tone: 'default',
+    },
+    {
+      label: 'Icon Ready',
+      value: services.filter((service) => hasIcon(service)).length,
+      hint: 'Services that already have an icon label and feel more complete in the public UI.',
+      tone: 'accent',
+    },
+    {
+      label: 'Needs Icon Polish',
+      value: services.filter((service) => !hasIcon(service)).length,
+      hint: 'Service cards without icon naming are easier to miss during quick browsing.',
+      tone: 'warm',
+    },
+    {
+      label: 'Public Order',
+      value: services.length ? `1-${services.length}` : '0',
+      hint: 'The order shown below is the same order customers see on the public website.',
+      tone: 'default',
+    },
+  ];
 
-            {error && <div style={{ color: 'red', marginBottom: '20px' }}>{error}</div>}
+  const resetForm = () => {
+    setFormData(defaultFormData);
+    setEditingServiceId(null);
+    setShowForm(false);
+    setSubmitting(false);
+  };
 
-            {/* Add Service Form */}
-            <div style={formStyle}>
-                <h3 style={{ marginTop: 0, color: '#0B1C3E' }}>Add New Service</h3>
-                <form onSubmit={handleSubmit}>
-                    <input
-                        type="text"
-                        name="title"
-                        placeholder="Service Title (e.g., Visa Assistance)"
-                        value={formData.title}
-                        onChange={handleInputChange}
-                        style={inputStyle}
-                        required
-                    />
-                    <textarea
-                        name="description"
-                        placeholder="Service Description"
-                        value={formData.description}
-                        onChange={handleInputChange}
-                        style={{ ...inputStyle, height: '80px', resize: 'vertical' }}
-                        required
-                    />
-                    <input
-                        type="text"
-                        name="icon"
-                        placeholder="Icon Name (e.g., Plane, Hotel, Shield)"
-                        value={formData.icon}
-                        onChange={handleInputChange}
-                        style={inputStyle}
-                    />
-                    <button type="submit" style={btnStyle} disabled={submitting}>
-                        {submitting ? 'Adding...' : 'Add Service'}
-                    </button>
-                </form>
-            </div>
+  const handleInputChange = (event) => {
+    setFormData({ ...formData, [event.target.name]: event.target.value });
+  };
 
-            {/* Services Table */}
-            <table style={tableStyle}>
-                <thead>
-                    <tr>
-                        <th style={thStyle}>Icon</th>
-                        <th style={thStyle}>Title</th>
-                        <th style={thStyle}>Description</th>
-                        <th style={thStyle}>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {services.map(service => (
-                        <tr key={service.id}>
-                            <td style={tdStyle}>{service.icon || '—'}</td>
-                            <td style={tdStyle}><strong>{service.title}</strong></td>
-                            <td style={tdStyle}>{service.description}</td>
-                            <td style={tdStyle}>
-                                <button 
-                                    onClick={() => handleDelete(service.id)} 
-                                    style={deleteBtnStyle}
-                                >
-                                    Delete
-                                </button>
-                            </td>
-                        </tr>
-                    ))}
-                    {services.length === 0 && (
-                        <tr>
-                            <td colSpan="4" style={{ ...tdStyle, textAlign: 'center', padding: '30px', color: '#666' }}>No services found. Add your first service above.</td>
-                        </tr>
-                    )}
-                </tbody>
-            </table>
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      if (editingServiceId) {
+        await axios.put(`/services/${editingServiceId}`, formData);
+        setMessage({ type: 'success', text: 'Service updated successfully.' });
+      } else {
+        await axios.post('/services', formData);
+        setMessage({ type: 'success', text: 'Service created successfully.' });
+      }
+
+      await fetchServices();
+      resetForm();
+    } catch (err) {
+      setError(err.response?.data?.msg || err.message || 'Failed to save service.');
+      setSubmitting(false);
+    }
+  };
+
+  const handleEdit = (service) => {
+    setFormData({
+      title: service.title || '',
+      description: service.description || '',
+      icon: service.icon || '',
+    });
+    setEditingServiceId(service.id);
+    setShowForm(true);
+    setMessage(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDelete = async (serviceId) => {
+    if (!window.confirm('Are you sure you want to delete this service?')) {
+      return;
+    }
+
+    try {
+      await axios.delete(`/services/${serviceId}`);
+      setServices((currentServices) => currentServices.filter((service) => service.id !== serviceId));
+      setMessage({ type: 'success', text: 'Service deleted successfully.' });
+      setError(null);
+
+      if (editingServiceId === serviceId) {
+        resetForm();
+      }
+    } catch (err) {
+      setError(err.response?.data?.msg || err.message || 'Failed to delete service.');
+    }
+  };
+
+  const handleMove = async (serviceId, direction) => {
+    const currentIndex = services.findIndex((service) => service.id === serviceId);
+    if (currentIndex === -1) {
+      return;
+    }
+
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= services.length) {
+      return;
+    }
+
+    const reorderedServices = reorderServices(services, currentIndex, targetIndex);
+    const orderedIds = reorderedServices.map((service) => service.id);
+
+    setReorderingId(serviceId);
+    setServices(reorderedServices);
+    setError(null);
+
+    try {
+      await axios.put('/services/reorder', { orderedIds });
+      setMessage({ type: 'success', text: 'Service order updated.' });
+    } catch (err) {
+      setServices(services);
+      setError(err.response?.data?.msg || err.message || 'Failed to reorder services.');
+    } finally {
+      setReorderingId(null);
+    }
+  };
+
+  if (loading) {
+    return <div className="p-10 text-center text-sm text-gray-500">Loading services...</div>;
+  }
+
+  return (
+    <StaffPageShell
+      eyebrow="Content and Trust"
+      title="Services"
+      description="Keep support services clear, customer-friendly, and easy to connect with the service request queue."
+      actions={(
+        <>
+          <Link
+            to="/admin/service-inquiries"
+            className="rounded-full border border-[#101c2d] px-5 py-3 text-sm font-bold text-[#101c2d] transition hover:bg-[#101c2d] hover:text-white"
+          >
+            Open Service Requests
+          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              setShowForm((visible) => !visible);
+              if (showForm) {
+                resetForm();
+              }
+            }}
+            className="rounded-full bg-[#101c2d] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#16263b]"
+          >
+            {showForm ? 'Close Form' : 'Add Service'}
+          </button>
+        </>
+      )}
+    >
+      {error && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+          {error}
         </div>
-    );
+      )}
+      {message && (
+        <div className={`rounded-2xl px-5 py-4 text-sm ${message.type === 'success' ? 'border border-green-200 bg-green-50 text-green-700' : 'border border-red-200 bg-red-50 text-red-700'}`}>
+          {message.text}
+        </div>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {metrics.map((metric) => (
+          <StaffMetricCard key={metric.label} label={metric.label} value={metric.value} hint={metric.hint} tone={metric.tone} />
+        ))}
+      </div>
+
+      {showForm && (
+        <StaffCardSection
+          title={editingServiceId ? 'Edit Service' : 'Create New Service'}
+          description={editingServiceId
+            ? 'Refine the public service wording or icon naming without disturbing the rest of the workspace.'
+            : 'Create the service cards customers can browse before submitting a request.'}
+        >
+          <form onSubmit={handleSubmit} className="grid gap-4 lg:grid-cols-2">
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-gray-700">Service title</span>
+              <input
+                type="text"
+                name="title"
+                value={formData.title}
+                onChange={handleInputChange}
+                placeholder="Visa Assistance"
+                required
+                className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-gray-700">Icon label</span>
+              <input
+                type="text"
+                name="icon"
+                value={formData.icon}
+                onChange={handleInputChange}
+                placeholder="Passport, Plane, Shield"
+                className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+              />
+            </label>
+            <label className="block lg:col-span-2">
+              <span className="mb-2 block text-sm font-semibold text-gray-700">Description</span>
+              <textarea
+                name="description"
+                value={formData.description}
+                onChange={handleInputChange}
+                placeholder="Explain what help the customer will receive and why it matters."
+                required
+                className="h-32 w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+              />
+            </label>
+
+            <div className="lg:col-span-2 flex flex-wrap gap-3">
+              <button
+                type="submit"
+                disabled={submitting}
+                className="rounded-full bg-[#101c2d] px-6 py-3 text-sm font-black uppercase tracking-[0.18em] text-white transition hover:bg-[#16263b] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {submitting ? 'Saving...' : editingServiceId ? 'Save Service Changes' : 'Create Service'}
+              </button>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="rounded-full border border-gray-300 px-6 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </StaffCardSection>
+      )}
+
+      <StaffCardSection
+        title="Filter and Search"
+        description="Use quick filters to spot services that still need icon polish or to find a service quickly before editing."
+      >
+        <div className="space-y-4">
+          <StaffFilterPills
+            options={getServiceFilterOptions(services)}
+            value={serviceFilter}
+            onChange={setServiceFilter}
+          />
+          <label className="block">
+            <span className="mb-2 block text-sm font-semibold text-gray-700">Search services</span>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search by service title, description, or icon..."
+              className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+            />
+          </label>
+        </div>
+      </StaffCardSection>
+
+      <StaffCardSection
+        title="Service Catalog"
+        description="The order shown here is the public order customers see. Move services earlier or later when business priorities change."
+      >
+        {filteredServices.length === 0 ? (
+          <StaffEmptyState
+            title="No services match this view"
+            description="Try another filter or search term, or add the first service to start filling the public catalog."
+          />
+        ) : (
+          <div className="grid gap-4 xl:grid-cols-2">
+            {filteredServices.map((service) => {
+              const serviceIndex = services.findIndex((entry) => entry.id === service.id);
+              const isFirst = serviceIndex === 0;
+              const isLast = serviceIndex === services.length - 1;
+
+              return (
+                <article key={service.id} className="rounded-[1.5rem] border border-[#ebe4d3] bg-[#fcfbf8] p-5 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="text-xs font-black uppercase tracking-[0.22em] text-[#8a7443]">
+                        Order #{serviceIndex + 1}
+                      </div>
+                      <h3 className="mt-2 text-xl font-black text-[#101c2d]">{service.title}</h3>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${hasIcon(service) ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {hasIcon(service) ? `Icon: ${service.icon}` : 'Icon still needed'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="mt-4 text-sm leading-6 text-[#5b6472]">
+                    {service.description}
+                  </p>
+
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleEdit(service)}
+                      className="rounded-full bg-[#101c2d] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#16263b]"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(service.id)}
+                      className="rounded-full border border-red-200 px-4 py-2 text-sm font-bold text-red-700 transition hover:bg-red-50"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMove(service.id, 'up')}
+                      disabled={isFirst || reorderingId === service.id}
+                      className="rounded-full border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Move Up
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMove(service.id, 'down')}
+                      disabled={isLast || reorderingId === service.id}
+                      className="rounded-full border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Move Down
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </StaffCardSection>
+    </StaffPageShell>
+  );
 };
 
 export default ManageServices;

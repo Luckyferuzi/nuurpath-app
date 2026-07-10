@@ -1,24 +1,101 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from '../lib/api';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { getOperationalStatusLabel, getOperationalStatusOptions } from '../lib/operationalPipeline.js';
+import { matchesCreatedAtWindow, STAFF_TIME_WINDOW_OPTIONS } from '../lib/staffFilters.js';
+import { formatAdminDate, formatAdminDateTime } from '../lib/staffRequestUtils.js';
+import { buildDirectWhatsAppUrl, buildFlightLeadFollowUpMessage } from '../lib/whatsapp.js';
 import {
-  getOperationalStatusBadgeStyle,
-  getOperationalStatusLabel,
-  getOperationalStatusOptions,
-} from '../lib/operationalPipeline.js';
-import {
-  buildDirectWhatsAppUrl,
-  buildFlightLeadFollowUpMessage,
-} from '../lib/whatsapp.js';
+  StaffCardSection,
+  StaffDetailRow,
+  StaffDetailSection,
+  StaffEmptyState,
+  StaffFilterPills,
+  StaffMetricCard,
+  StaffPageShell,
+  StaffStatusPill,
+} from './staff/WorkspacePrimitives.jsx';
 
-const formatDate = (value, fallback = 'TBD') => {
-  if (!value) {
-    return fallback;
+const STATUS_FILTERS = [
+  { value: 'all', label: 'All requests' },
+  { value: 'new', label: 'New requests' },
+  { value: 'follow-up', label: 'Ready for follow-up' },
+  { value: 'quoted', label: 'Quoted' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'closed', label: 'Closed' },
+];
+
+function buildFlightNextAction(booking) {
+  const status = getOperationalStatusLabel(booking?.status);
+
+  if (status === 'Cancelled' || status === 'Lost') {
+    return 'No further follow-up is needed unless the traveler asks to reopen the request.';
   }
 
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? fallback : parsed.toLocaleDateString();
-};
+  if (status === 'Completed') {
+    return 'Travel is complete. Only after-service support or future upsell follow-up remains.';
+  }
+
+  if (status === 'Confirmed Offline') {
+    return 'Confirm ticketing, payment status, and any last travel details before departure.';
+  }
+
+  if (status === 'Quoted') {
+    return 'Follow up on the fare quotation and confirm whether the traveler is ready to proceed.';
+  }
+
+  if (status === 'WhatsApp Follow-up' || status === 'Contacted') {
+    return 'Continue the conversation on WhatsApp and note the next promised update for the traveler.';
+  }
+
+  if (status === 'Qualified') {
+    return 'Confirm route, dates, traveler count, and travel class before moving to quotation.';
+  }
+
+  return 'Review the route details, greet the traveler, and move the request into active follow-up.';
+}
+
+function matchesStatusFilter(booking, statusFilter) {
+  const status = getOperationalStatusLabel(booking?.status);
+
+  if (statusFilter === 'all') {
+    return true;
+  }
+
+  if (statusFilter === 'new') {
+    return status === 'New';
+  }
+
+  if (statusFilter === 'follow-up') {
+    return ['Contacted', 'Qualified', 'WhatsApp Follow-up', 'Docs Received'].includes(status);
+  }
+
+  if (statusFilter === 'quoted') {
+    return status === 'Quoted';
+  }
+
+  if (statusFilter === 'confirmed') {
+    return status === 'Confirmed Offline';
+  }
+
+  if (statusFilter === 'completed') {
+    return status === 'Completed';
+  }
+
+  if (statusFilter === 'closed') {
+    return ['Cancelled', 'Lost'].includes(status);
+  }
+
+  return true;
+}
+
+function getStatusFilterOptions(bookings) {
+  return STATUS_FILTERS.map((option) => ({
+    ...option,
+    count: bookings.filter((booking) => matchesStatusFilter(booking, option.value)).length,
+  }));
+}
 
 const FlightBookingsAdmin = () => {
   const { user } = useAuth();
@@ -27,12 +104,16 @@ const FlightBookingsAdmin = () => {
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [timeWindow, setTimeWindow] = useState('30d');
+  const [selectedBookingId, setSelectedBookingId] = useState(null);
   const [editingBooking, setEditingBooking] = useState(null);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     status: 'New',
     adminNotes: '',
   });
+
   const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
 
   const fetchBookings = useCallback(async () => {
@@ -51,6 +132,18 @@ const FlightBookingsAdmin = () => {
     fetchBookings();
   }, [fetchBookings]);
 
+  useEffect(() => {
+    if (!bookings.length) {
+      setSelectedBookingId(null);
+      return;
+    }
+
+    const selectedExists = bookings.some((booking) => booking.id === selectedBookingId);
+    if (!selectedExists) {
+      setSelectedBookingId(bookings[0].id);
+    }
+  }, [bookings, selectedBookingId]);
+
   const resetForm = () => {
     setEditingBooking(null);
     setFormData({
@@ -67,7 +160,7 @@ const FlightBookingsAdmin = () => {
       adminNotes: booking.adminNotes || '',
     });
     setMessage(null);
-    window.scrollTo(0, 0);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSubmit = async (event) => {
@@ -82,9 +175,11 @@ const FlightBookingsAdmin = () => {
     try {
       const response = await axios.put(`/flights/${editingBooking.id}`, formData);
       const updatedBooking = response.data;
-      setBookings((prev) => prev.map((booking) => (
+
+      setBookings((previous) => previous.map((booking) => (
         booking.id === updatedBooking.id ? updatedBooking : booking
       )));
+      setSelectedBookingId(updatedBooking.id);
       setError(null);
       setMessage({ type: 'success', text: `Flight request #${updatedBooking.requestId || updatedBooking.id} updated successfully.` });
       resetForm();
@@ -95,20 +190,21 @@ const FlightBookingsAdmin = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this request?')) {
+    if (!window.confirm('Are you sure you want to delete this flight request?')) {
       return;
     }
 
     try {
       await axios.delete(`/flights/${id}`);
-      setBookings((prev) => prev.filter((booking) => booking.id !== id));
+      setBookings((previous) => previous.filter((booking) => booking.id !== id));
       setMessage({ type: 'success', text: 'Flight request deleted successfully.' });
       setError(null);
+
       if (editingBooking?.id === id) {
         resetForm();
       }
     } catch (err) {
-      setError(err.response?.data?.msg || err.message || 'Failed to delete request.');
+      setError(err.response?.data?.msg || err.message || 'Failed to delete flight request.');
     }
   };
 
@@ -136,7 +232,7 @@ const FlightBookingsAdmin = () => {
 
   const exportCSV = () => {
     if (bookings.length === 0) {
-      alert('No requests to export.');
+      window.alert('No flight requests to export.');
       return;
     }
 
@@ -144,8 +240,8 @@ const FlightBookingsAdmin = () => {
     const csvContent = [
       headers.join(','),
       ...bookings.map((booking) => {
-        const name = (booking.contactName || booking.user?.name || 'Guest').replace(/"/g, '""');
-        const notes = (booking.adminNotes || '').replace(/"/g, '""');
+        const name = String(booking.contactName || booking.user?.name || 'Guest').replace(/"/g, '""');
+        const notes = String(booking.adminNotes || '').replace(/"/g, '""');
 
         return [
           booking.requestId || booking.id,
@@ -154,13 +250,13 @@ const FlightBookingsAdmin = () => {
           booking.contactPhone || '',
           `"${String(booking.from || '').replace(/"/g, '""')}"`,
           `"${String(booking.to || '').replace(/"/g, '""')}"`,
-          formatDate(booking.departureDate),
-          formatDate(booking.returnDate, 'One Way'),
+          formatAdminDate(booking.departureDate, 'TBD'),
+          formatAdminDate(booking.returnDate, 'One Way'),
           booking.passengers || 1,
           booking.travelClass || '',
           `"${getOperationalStatusLabel(booking.status)}"`,
           `"${notes}"`,
-          formatDate(booking.createdAt),
+          formatAdminDate(booking.createdAt),
         ].join(',');
       }),
     ].join('\n');
@@ -168,201 +264,323 @@ const FlightBookingsAdmin = () => {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `flight_requests_${new Date().toISOString().split('T')[0]}.csv`);
+    link.href = url;
+    link.download = `flight_requests_${new Date().toISOString().split('T')[0]}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  const filteredBookings = bookings.filter((booking) => {
+  const filteredBookings = useMemo(() => {
     const term = searchTerm.toLowerCase();
-    const name = (booking.contactName || booking.user?.name || '').toLowerCase();
-    const email = (booking.contactEmail || booking.user?.email || '').toLowerCase();
-    const route = `${booking.from || ''} ${booking.to || ''}`.toLowerCase();
 
-    return (
-      name.includes(term) ||
-      email.includes(term) ||
-      route.includes(term) ||
-      String(booking.requestId || booking.id).includes(term)
-    );
-  });
+    return bookings.filter((booking) => {
+      const name = String(booking.contactName || booking.user?.name || '').toLowerCase();
+      const email = String(booking.contactEmail || booking.user?.email || '').toLowerCase();
+      const route = `${booking.from || ''} ${booking.to || ''}`.toLowerCase();
 
-  const containerStyle = {
-    padding: '20px',
-    maxWidth: '1200px',
-    margin: '0 auto',
-  };
+      return (
+        matchesStatusFilter(booking, statusFilter) &&
+        matchesCreatedAtWindow(booking, timeWindow) &&
+        (
+          !term ||
+          name.includes(term) ||
+          email.includes(term) ||
+          route.includes(term) ||
+          String(booking.requestId || booking.id).includes(term)
+        )
+      );
+    });
+  }, [bookings, searchTerm, statusFilter, timeWindow]);
 
-  const tableStyle = {
-    width: '100%',
-    borderCollapse: 'collapse',
-    marginTop: '20px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-  };
+  const selectedBooking = filteredBookings.find((booking) => booking.id === selectedBookingId)
+    || filteredBookings[0]
+    || bookings.find((booking) => booking.id === selectedBookingId)
+    || bookings[0]
+    || null;
 
-  const thStyle = {
-    backgroundColor: '#f8f9fa',
-    padding: '12px',
-    borderBottom: '2px solid #dee2e6',
-    textAlign: 'left',
-    fontWeight: 'bold',
-  };
-
-  const tdStyle = {
-    padding: '12px',
-    borderBottom: '1px solid #dee2e6',
-    verticalAlign: 'top',
-  };
+  const metrics = [
+    {
+      label: 'New Requests',
+      value: bookings.filter((booking) => getOperationalStatusLabel(booking.status) === 'New').length,
+      hint: 'Flight requests that still need the first staff response.',
+      tone: 'default',
+    },
+    {
+      label: 'Quoted',
+      value: bookings.filter((booking) => getOperationalStatusLabel(booking.status) === 'Quoted').length,
+      hint: 'Requests already moved into fare quotation.',
+      tone: 'warm',
+    },
+    {
+      label: 'Confirmed',
+      value: bookings.filter((booking) => getOperationalStatusLabel(booking.status) === 'Confirmed Offline').length,
+      hint: 'Requests already confirmed offline and moving toward fulfillment.',
+      tone: 'accent',
+    },
+    {
+      label: 'Closed',
+      value: bookings.filter((booking) => ['Cancelled', 'Lost'].includes(getOperationalStatusLabel(booking.status))).length,
+      hint: 'Requests no longer active.',
+      tone: 'danger',
+    },
+  ];
 
   if (loading) {
-    return <div style={{ textAlign: 'center', padding: '20px' }}>Loading...</div>;
+    return <div className="p-10 text-center text-sm text-gray-500">Loading flight requests...</div>;
   }
 
   return (
-    <div style={containerStyle}>
-      <h2 style={{ marginBottom: '20px' }}>Flight Request Follow-Up</h2>
-
+    <StaffPageShell
+      eyebrow="Follow-Up Queue"
+      title="Flight Requests"
+      description="Keep route requests, quotations, and traveler follow-up in a layout that works better across laptop, tablet, and urgent mobile checks."
+      actions={(
+        <button
+          type="button"
+          onClick={exportCSV}
+          className="rounded-full border border-[#101c2d] px-5 py-3 text-sm font-bold text-[#101c2d] transition hover:bg-[#101c2d] hover:text-white"
+        >
+          Export Requests
+        </button>
+      )}
+    >
       {error && (
-        <div style={{ color: 'red', marginBottom: '20px', padding: '10px', backgroundColor: '#ffe0e0', borderRadius: '5px' }}>
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
           {error}
         </div>
       )}
       {message && (
-        <div style={{ color: message.type === 'success' ? '#155724' : '#721c24', marginBottom: '20px', padding: '10px', backgroundColor: message.type === 'success' ? '#d4edda' : '#f8d7da', borderRadius: '5px' }}>
+        <div className={`rounded-2xl px-5 py-4 text-sm ${message.type === 'success' ? 'border border-green-200 bg-green-50 text-green-700' : 'border border-red-200 bg-red-50 text-red-700'}`}>
           {message.text}
         </div>
       )}
 
-      <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-        <button
-          onClick={exportCSV}
-          style={{ padding: '10px 20px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
-        >
-          Export CSV
-        </button>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {metrics.map((metric) => (
+          <StaffMetricCard key={metric.label} label={metric.label} value={metric.value} hint={metric.hint} tone={metric.tone} />
+        ))}
       </div>
 
       {editingBooking && (
-        <div style={{ backgroundColor: '#f9f9f9', padding: '20px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #ddd' }}>
-          <h3 style={{ marginBottom: '10px' }}>Update Flight Request #{editingBooking.requestId || editingBooking.id}</h3>
-          <p style={{ marginTop: 0, marginBottom: '15px', color: '#555' }}>
-            {(editingBooking.contactName || editingBooking.user?.name || 'Guest')} · {editingBooking.from} to {editingBooking.to}
-          </p>
-          <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '15px' }}>
-            <select
-              value={formData.status}
-              onChange={(event) => setFormData({ ...formData, status: event.target.value })}
-              style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-            >
-              {getOperationalStatusOptions(formData.status).map((statusOption) => (
-                <option key={statusOption} value={statusOption}>{statusOption}</option>
-              ))}
-            </select>
-            <textarea
-              value={formData.adminNotes}
-              onChange={(event) => setFormData({ ...formData, adminNotes: event.target.value })}
-              placeholder="Internal notes for your team only"
-              style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', minHeight: '100px' }}
-            />
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button type="submit" disabled={saving} style={{ padding: '10px 20px', backgroundColor: '#006837', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
+        <StaffCardSection
+          title={`Update Flight Request #${editingBooking.requestId || editingBooking.id}`}
+          description={`${editingBooking.contactName || editingBooking.user?.name || 'Guest traveler'} - ${editingBooking.from} to ${editingBooking.to}`}
+        >
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-gray-700">Request status</span>
+                <select
+                  value={formData.status}
+                  onChange={(event) => setFormData({ ...formData, status: event.target.value })}
+                  className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                >
+                  {getOperationalStatusOptions(formData.status).map((statusOption) => (
+                    <option key={statusOption} value={statusOption}>{statusOption}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-gray-700">Team notes</span>
+                <textarea
+                  value={formData.adminNotes}
+                  onChange={(event) => setFormData({ ...formData, adminNotes: event.target.value })}
+                  placeholder="Record the quote, traveler confirmation, or the next promised update."
+                  className="h-28 w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                />
+              </label>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-full bg-[#101c2d] px-6 py-3 text-sm font-black uppercase tracking-[0.18em] text-white transition hover:bg-[#16263b] disabled:cursor-not-allowed disabled:opacity-70"
+              >
                 {saving ? 'Saving...' : 'Save Request Update'}
               </button>
-              <button type="button" onClick={resetForm} style={{ padding: '10px 20px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="rounded-full border border-gray-300 px-6 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+              >
                 Cancel
               </button>
             </div>
           </form>
-        </div>
+        </StaffCardSection>
       )}
 
-      <div style={{ marginBottom: '20px' }}>
-        <input
-          type="text"
-          placeholder="Search by customer, email, route, or request ID..."
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          style={{
-            width: '100%',
-            padding: '10px',
-            borderRadius: '4px',
-            border: '1px solid #ccc',
-            fontSize: '16px',
-          }}
-        />
-      </div>
+      <StaffCardSection title="Filter and Search" description="Use quick queue filters first, then narrow further by date range or customer search.">
+        <div className="space-y-4">
+          <StaffFilterPills
+            options={getStatusFilterOptions(bookings)}
+            value={statusFilter}
+            onChange={setStatusFilter}
+          />
+          <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-gray-700">Request age</span>
+              <select
+                value={timeWindow}
+                onChange={(event) => setTimeWindow(event.target.value)}
+                className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+              >
+                {STAFF_TIME_WINDOW_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-gray-700">Search</span>
+              <input
+                type="text"
+                placeholder="Search by customer, email, route, or request ID..."
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+              />
+            </label>
+          </div>
+        </div>
+      </StaffCardSection>
 
       {filteredBookings.length === 0 ? (
-        <p>No new flight requests yet.</p>
+        <StaffEmptyState
+          title="No flight requests match this view"
+          description="Try another queue filter, widen the date range, or search with a different route or customer detail."
+        />
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={tableStyle}>
-            <thead>
-              <tr>
-                <th style={thStyle}>Request Date</th>
-                <th style={thStyle}>Customer</th>
-                <th style={thStyle}>Route</th>
-                <th style={thStyle}>Travel</th>
-                <th style={thStyle}>Request Status</th>
-                <th style={thStyle}>Internal Notes</th>
-                <th style={thStyle}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredBookings.map((booking) => (
-                <tr key={booking.id}>
-                  <td style={tdStyle}>{formatDate(booking.createdAt)}</td>
-                  <td style={tdStyle}>
-                    {booking.contactName || booking.user?.name || 'Guest'}
-                    <br />
-                    <span style={{ fontSize: '0.8em', color: '#666' }}>{booking.contactEmail || booking.user?.email || 'No email provided'}</span>
-                    <br />
-                    <span style={{ fontSize: '0.8em', color: '#666' }}>{booking.contactPhone || 'No phone provided'}</span>
-                    {!booking.userId && <div style={{ fontSize: '0.75em', color: '#856404', marginTop: '4px' }}>Guest / No account</div>}
-                  </td>
-                  <td style={tdStyle}>
-                    <strong>{booking.from} to {booking.to}</strong>
-                    <div style={{ marginTop: '8px', fontSize: '0.85em', color: '#555' }}>
-                      {booking.tripType || (booking.returnDate ? 'Round Trip' : 'One Way')}
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
+          <div className="space-y-4">
+            {filteredBookings.map((booking) => {
+              const isSelected = selectedBooking?.id === booking.id;
+              const status = getOperationalStatusLabel(booking.status);
+
+              return (
+                <button
+                  key={booking.id}
+                  type="button"
+                  onClick={() => setSelectedBookingId(booking.id)}
+                  className={`w-full rounded-[2rem] border p-5 text-left shadow-sm transition ${isSelected ? 'border-[#101c2d] bg-[#101c2d] text-white shadow-lg' : 'border-[#ebe4d3] bg-white hover:-translate-y-0.5 hover:shadow-md'}`}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className={`text-xs font-black uppercase tracking-[0.22em] ${isSelected ? 'text-white/70' : 'text-[#7a828f]'}`}>
+                        Request #{booking.requestId || booking.id}
+                      </div>
+                      <h3 className={`mt-2 text-xl font-black ${isSelected ? 'text-white' : 'text-[#101c2d]'}`}>
+                        {booking.from} to {booking.to}
+                      </h3>
                     </div>
-                  </td>
-                  <td style={tdStyle}>
-                    Departure: {formatDate(booking.departureDate)}
-                    <br />
-                    Return: {formatDate(booking.returnDate, 'One Way')}
-                    <br />
-                    Passengers: {booking.passengers || 1} ({booking.travelClass || 'Class not set'})
-                  </td>
-                  <td style={tdStyle}>
-                    <span style={{ ...getOperationalStatusBadgeStyle(booking.status), padding: '4px 8px', borderRadius: '12px', fontSize: '12px' }}>
-                      {getOperationalStatusLabel(booking.status)}
-                    </span>
-                  </td>
-                  <td style={tdStyle}>{booking.adminNotes || 'No internal notes yet.'}</td>
-                  <td style={tdStyle}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-start' }}>
-                      <button onClick={() => handleEdit(booking)} style={{ color: 'blue', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold', padding: 0 }}>
-                        Update Request
-                      </button>
-                      <button onClick={() => openWhatsApp(booking)} style={{ color: '#006837', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold', padding: 0 }}>
-                        Continue on WhatsApp
-                      </button>
-                      {isAdmin && (
-                        <button onClick={() => handleDelete(booking.id)} style={{ color: 'red', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold', padding: 0 }}>
-                          Delete
-                        </button>
-                      )}
+                    <div className="flex flex-col items-end gap-2">
+                      <StaffStatusPill status={status} />
+                      <span className={`text-xs ${isSelected ? 'text-white/70' : 'text-[#7a828f]'}`}>
+                        Received {formatAdminDate(booking.createdAt)}
+                      </span>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+
+                  <div className={`mt-4 grid gap-3 md:grid-cols-2 ${isSelected ? 'text-white/90' : 'text-[#4f5763]'}`}>
+                    <div>
+                      <div className="text-sm font-bold">{booking.contactName || booking.user?.name || 'Guest traveler'}</div>
+                      <div className="mt-1 text-sm">{booking.contactEmail || booking.user?.email || 'No email provided'}</div>
+                      <div className="mt-1 text-sm">{booking.contactPhone || 'No phone provided'}</div>
+                    </div>
+                    <div className="text-sm">
+                      <div>{booking.tripType || (booking.returnDate ? 'Round Trip' : 'One Way')}</div>
+                      <div className="mt-1">Departure: {formatAdminDate(booking.departureDate, 'To be confirmed')}</div>
+                      <div className="mt-1">Travelers: {booking.passengers || 1} ({booking.travelClass || 'Class not set'})</div>
+                    </div>
+                  </div>
+
+                  {booking.adminNotes && (
+                    <p className={`mt-4 text-sm ${isSelected ? 'text-white/85' : 'text-[#67707e]'}`}>
+                      {booking.adminNotes}
+                    </p>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedBooking && (
+            <div className="space-y-5 xl:sticky xl:top-24 xl:self-start">
+              <StaffDetailSection
+                title={`Request #${selectedBooking.requestId || selectedBooking.id}`}
+                description={buildFlightNextAction(selectedBooking)}
+              >
+                <div className="flex flex-wrap gap-3">
+                  <StaffStatusPill status={selectedBooking.status} />
+                  <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">
+                    Received {formatAdminDate(selectedBooking.createdAt)}
+                  </span>
+                  <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">
+                    Last contact {formatAdminDateTime(selectedBooking.lastContactedAt, 'not recorded')}
+                  </span>
+                </div>
+
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleEdit(selectedBooking)}
+                    className="rounded-full bg-[#101c2d] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#16263b]"
+                  >
+                    Update Request
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openWhatsApp(selectedBooking)}
+                    className="rounded-full bg-[#25D366] px-4 py-2 text-sm font-bold text-white transition hover:opacity-95"
+                  >
+                    Continue on WhatsApp
+                  </button>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(selectedBooking.id)}
+                      className="rounded-full border border-red-200 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-50"
+                    >
+                      Delete Request
+                    </button>
+                  )}
+                </div>
+              </StaffDetailSection>
+
+              <StaffDetailSection title="Traveler Details">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <StaffDetailRow label="Name" value={selectedBooking.contactName || selectedBooking.user?.name} />
+                  <StaffDetailRow label="Account type" value={selectedBooking.userId ? 'Account Holder' : 'Guest'} />
+                  <StaffDetailRow label="Email" value={selectedBooking.contactEmail || selectedBooking.user?.email} />
+                  <StaffDetailRow label="Phone / WhatsApp" value={selectedBooking.contactPhone} />
+                </div>
+              </StaffDetailSection>
+
+              <StaffDetailSection title="Route and Travel Plan">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <StaffDetailRow label="Origin" value={selectedBooking.from} />
+                  <StaffDetailRow label="Destination" value={selectedBooking.to} />
+                  <StaffDetailRow label="Departure date" value={formatAdminDate(selectedBooking.departureDate)} />
+                  <StaffDetailRow label="Return date" value={formatAdminDate(selectedBooking.returnDate, 'One Way')} />
+                  <StaffDetailRow label="Trip type" value={selectedBooking.tripType || (selectedBooking.returnDate ? 'Round Trip' : 'One Way')} />
+                  <StaffDetailRow label="Travel class" value={selectedBooking.travelClass || 'Not provided'} />
+                  <StaffDetailRow label="Passengers" value={String(selectedBooking.passengers || 1)} />
+                </div>
+              </StaffDetailSection>
+
+              <StaffDetailSection title="Team Follow-Up">
+                <div className="space-y-3">
+                  <StaffDetailRow label="Next suggested action" value={buildFlightNextAction(selectedBooking)} subtle />
+                  <StaffDetailRow label="Internal notes" value={selectedBooking.adminNotes || 'No internal notes yet.'} subtle />
+                </div>
+              </StaffDetailSection>
+            </div>
+          )}
         </div>
       )}
-    </div>
+    </StaffPageShell>
   );
 };
 

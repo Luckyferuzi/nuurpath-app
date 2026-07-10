@@ -41,6 +41,7 @@ import WishlistPage from './components/WishlistPage.jsx';
 import Team from './components/Team.jsx';
 import VerifyEmail from './components/VerifyEmail.jsx';
 import StaffPortalHeader from './components/StaffPortalHeader.jsx';
+import StaffWorkspaceLayout from './components/StaffWorkspaceLayout.jsx';
 import NotFoundPage from './components/NotFoundPage.jsx';
 import './App.css';
 
@@ -48,11 +49,13 @@ const GOOGLE_CLIENT_ID = (process.env.REACT_APP_GOOGLE_CLIENT_ID || '').trim();
 
 function AppFrame() {
   const location = useLocation();
-  const isStaffPortalRoute = location.pathname.startsWith('/staff') || location.pathname.startsWith('/admin');
+  const isAdminWorkspaceRoute = location.pathname.startsWith('/admin');
+  const isStaffPortalRoute = location.pathname.startsWith('/staff') || isAdminWorkspaceRoute;
+  const showStandaloneStaffHeader = location.pathname.startsWith('/staff');
 
   return (
     <div className="App">
-      {isStaffPortalRoute ? <StaffPortalHeader /> : <Navbar />}
+      {showStandaloneStaffHeader ? <StaffPortalHeader /> : !isAdminWorkspaceRoute ? <Navbar /> : null}
       <PublicContentProvider enabled={!isStaffPortalRoute}>
         <Routes>
           <Route path="/" element={<Home />} />
@@ -81,27 +84,29 @@ function AppFrame() {
 
           {/* Admin Routes */}
           <Route element={<AdminRoute allowedRoles={['admin', 'manager']} />}>
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/admin/consultations" element={<PrivateConsultationsAdmin />} />
-            <Route path="/admin/package-bookings" element={<PackageBookingsAdmin />} />
-            <Route path="/admin/flight-bookings" element={<FlightBookingsAdmin />} />
-            <Route path="/admin/service-inquiries" element={<ServiceInquiriesAdmin />} />
-            <Route path="/admin/reviews" element={<ManageReviews />} />
-            <Route path="/admin/chat" element={<ChatComponent />} />
-          </Route>
-          <Route
-            element={(
-              <AdminRoute
-                allowedRoles={['admin']}
-                permissionTitle="Admin Access Required"
-                permissionMessage="Only admin accounts can manage users, services, and package content."
-                fallbackPath="/admin"
-              />
-            )}
-          >
-            <Route path="/admin/users" element={<ManageUsers />} />
-            <Route path="/admin/services" element={<ManageServices />} />
-            <Route path="/admin/packages" element={<ManagePackages />} />
+            <Route path="/admin" element={<StaffWorkspaceLayout />}>
+              <Route index element={<AdminDashboard />} />
+              <Route path="consultations" element={<PrivateConsultationsAdmin />} />
+              <Route path="package-bookings" element={<PackageBookingsAdmin />} />
+              <Route path="flight-bookings" element={<FlightBookingsAdmin />} />
+              <Route path="service-inquiries" element={<ServiceInquiriesAdmin />} />
+              <Route path="reviews" element={<ManageReviews />} />
+              <Route path="chat" element={<ChatComponent />} />
+              <Route
+                element={(
+                  <AdminRoute
+                    allowedRoles={['admin']}
+                    permissionTitle="Admin Access Required"
+                    permissionMessage="Only admin accounts can manage users, services, and package content."
+                    fallbackPath="/admin"
+                  />
+                )}
+              >
+                <Route path="users" element={<ManageUsers />} />
+                <Route path="services" element={<ManageServices />} />
+                <Route path="packages" element={<ManagePackages />} />
+              </Route>
+            </Route>
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
