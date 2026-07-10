@@ -7,7 +7,8 @@ It is written to be useful for both product discussion and development execution
 Current status:
 - Phase 1 is completed.
 - Phase 2 is completed.
-- Phases 3 through 7 are still planned.
+- Phase 3 is completed.
+- Phases 4 through 7 are still planned.
 - When resuming work later, read this file first and then continue from the next approved phase.
 
 ## How To Use This Document
@@ -366,7 +367,7 @@ Backend:
 ## Phase 3: Package Ordering and Package Data-Model Improvements
 
 Status:
-- Planned
+- Completed
 
 ### Objective
 
@@ -457,6 +458,35 @@ Frontend:
 - featured packages have a clear, separate order system if needed
 - packages can represent multi-city journeys in a structured way
 - admin package editing feels simpler and more business-friendly
+
+### Completed Work
+
+- Added a real `displayOrder` field to packages and backfilled existing records so older packages keep a stable default sequence based on creation order.
+- Updated public package queries to sort by `displayOrder` instead of `createdAt`, which means customer-facing package order now follows business-controlled ordering.
+- Added structured `journeyStops` support to the package model so a package can represent multi-city routes such as Makkah, Madinah, Jeddah, or staged travel flow without relying on one flat destination string.
+- Added an admin reorder API that saves both the general package order and the separate featured-package order.
+- Rebuilt the package management screen into clearer sections for basic information, pricing, journey route, itinerary, and visibility.
+- Added an admin reorder workspace with drag-and-drop controls for:
+  - general package order
+  - featured package order
+- Added visible order badges in the admin package list so staff can immediately see both display order and featured position.
+- Added journey-route rendering to the public package details page so structured multi-city packages are visible to customers.
+- Updated the itinerary PDF generation route to include the structured journey route when available.
+- Updated seed and helper package-creation scripts so they are aware of the new ordering and journey-stop fields.
+
+### Implementation Notes
+
+- General package order and featured package order are now intentionally separate systems:
+  - `displayOrder` controls the main public package sequence
+  - `featuredOrder` controls the homepage featured-package sequence
+- The package editor still keeps the existing itinerary field for day-by-day detail, while `journeyStops` now covers the higher-level multi-city route structure.
+- Featured packages still flow through the general package list, but homepage-focused components now sort the featured subset by `featuredOrder` first, then fall back to `displayOrder`.
+- The current structured journey-stop model focuses on the operationally useful fields that staff need most right now:
+  - city
+  - stay label
+  - accommodation
+  - notes
+- More advanced route content such as stop-specific media or richer inclusions can still be added later without replacing this Phase 3 foundation.
 
 ### Out Of Scope For Phase 3
 

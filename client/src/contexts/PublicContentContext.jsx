@@ -6,6 +6,25 @@ const REFRESH_INTERVAL_MS = 45000;
 
 const PublicContentContext = createContext(null);
 
+function sortFeaturedPackages(packages) {
+  return [...packages]
+    .filter((pkg) => pkg?.isFeatured)
+    .sort((firstPackage, secondPackage) => {
+      const firstOrder = Number.isFinite(firstPackage?.featuredOrder) ? firstPackage.featuredOrder : Number.MAX_SAFE_INTEGER;
+      const secondOrder = Number.isFinite(secondPackage?.featuredOrder) ? secondPackage.featuredOrder : Number.MAX_SAFE_INTEGER;
+
+      if (firstOrder !== secondOrder) {
+        return firstOrder - secondOrder;
+      }
+
+      if ((firstPackage?.displayOrder || 0) !== (secondPackage?.displayOrder || 0)) {
+        return (firstPackage?.displayOrder || 0) - (secondPackage?.displayOrder || 0);
+      }
+
+      return (firstPackage?.id || 0) - (secondPackage?.id || 0);
+    });
+}
+
 function canUseSessionStorage() {
   return typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined';
 }
@@ -220,7 +239,7 @@ export const PublicContentProvider = ({ children, enabled = true }) => {
   }, [enabled, refreshAllPublicContent]);
 
   const featuredPackages = useMemo(
-    () => packages.filter((pkg) => pkg?.isFeatured),
+    () => sortFeaturedPackages(packages),
     [packages]
   );
 

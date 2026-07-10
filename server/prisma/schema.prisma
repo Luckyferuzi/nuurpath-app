@@ -81,7 +81,9 @@ model Package {
   price         Float
   description   String
   itinerary     String?
+  journeyStops  Json?
   isFeatured    Boolean  @default(false)
+  displayOrder  Int      @default(0)
   featuredOrder Int?
   images        String[]
   createdAt     DateTime @default(now())
@@ -90,6 +92,9 @@ model Package {
   bookings PackageBooking[]
   reviews  Review[]
   wishlist Wishlist[]
+
+  @@index([displayOrder])
+  @@index([isFeatured, featuredOrder])
 }
 
 model ChatMessage {

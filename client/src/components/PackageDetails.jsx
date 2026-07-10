@@ -217,6 +217,7 @@ const PackageDetails = () => {
       .filter((item) => String(item?._id || item?.id) !== String(pkg?._id || pkg?.id || id))
       .slice(0, 3)
   ), [packages, pkg?._id, pkg?.id, id]);
+  const journeyStops = Array.isArray(pkg?.journeyStops) ? pkg.journeyStops : [];
 
   if (loading) {
     return <div className="p-10 text-center">Loading package details...</div>;
@@ -309,6 +310,33 @@ const PackageDetails = () => {
                 <h3 className="mb-3 text-xl font-bold text-[#0B1C3E]">Package Overview</h3>
                 <p className="leading-relaxed text-gray-600">{pkg.description}</p>
               </div>
+
+              {journeyStops.length > 0 && (
+                <div>
+                  <h3 className="mb-3 text-xl font-bold text-[#0B1C3E]">Journey Route</h3>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {journeyStops.map((stop, index) => (
+                      <div key={`${stop.city}-${index}`} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <h4 className="font-bold text-[#0B1C3E]">{stop.city}</h4>
+                          <span className="rounded-full bg-[#0B1C3E]/10 px-3 py-1 text-xs font-bold uppercase tracking-[2px] text-[#0B1C3E]">
+                            Stop {index + 1}
+                          </span>
+                        </div>
+                        {stop.stayLabel && (
+                          <p className="text-sm font-semibold text-[#006837]">{stop.stayLabel}</p>
+                        )}
+                        {stop.accommodation && (
+                          <p className="mt-2 text-sm text-gray-600">Accommodation: {stop.accommodation}</p>
+                        )}
+                        {stop.notes && (
+                          <p className="mt-2 text-sm text-gray-600">{stop.notes}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {pkg.itinerary && (
                 <div>

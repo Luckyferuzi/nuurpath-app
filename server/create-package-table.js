@@ -16,8 +16,11 @@ async function main() {
                 "price" DECIMAL(10,2) NOT NULL,
                 "images" TEXT[],
                 "isFeatured" BOOLEAN NOT NULL DEFAULT false,
+                "displayOrder" INTEGER NOT NULL DEFAULT 0,
+                "featuredOrder" INTEGER,
                 "description" TEXT NOT NULL,
                 "itinerary" TEXT,
+                "journeyStops" JSONB,
                 "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 "updatedAt" TIMESTAMP(3) NOT NULL,
 

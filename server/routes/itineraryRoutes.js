@@ -8,8 +8,13 @@ const PDFDocument = require('pdfkit');
 // @access  Public
 router.get('/:packageId/pdf', async (req, res) => {
     try {
+        const packageId = Number.parseInt(req.params.packageId, 10);
+        if (!Number.isInteger(packageId) || packageId <= 0) {
+            return res.status(400).json({ msg: 'Invalid package id' });
+        }
+
         const pkg = await prisma.package.findUnique({
-            where: { id: parseInt(req.params.packageId) }
+            where: { id: packageId }
         });
 
         if (!pkg) {
@@ -31,6 +36,26 @@ router.get('/:packageId/pdf', async (req, res) => {
         doc.text(`Duration: ${pkg.duration}`);
         doc.text(`Type: ${pkg.type}`);
         doc.moveDown();
+
+        if (Array.isArray(pkg.journeyStops) && pkg.journeyStops.length > 0) {
+            doc.fontSize(18).text('Journey Route', { underline: true });
+            doc.moveDown(0.5);
+
+            pkg.journeyStops.forEach((stop, index) => {
+                doc.fontSize(13).font('Helvetica-Bold').text(`Stop ${index + 1}: ${stop.city}`);
+                doc.fontSize(12).font('Helvetica');
+                if (stop.stayLabel) {
+                    doc.text(`Stay: ${stop.stayLabel}`);
+                }
+                if (stop.accommodation) {
+                    doc.text(`Accommodation: ${stop.accommodation}`);
+                }
+                if (stop.notes) {
+                    doc.text(stop.notes);
+                }
+                doc.moveDown();
+            });
+        }
 
         // Itinerary Content
         if (pkg.itinerary) {

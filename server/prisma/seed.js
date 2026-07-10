@@ -57,6 +57,8 @@ async function main() {
 
   const packages = [
     {
+        displayOrder: 1,
+        featuredOrder: 1,
         title: 'Premium Umrah Holiday Package 24th Dec 2025 - 3rd Jan 2026',
         destination: 'Makkah & Madinah',
         duration: '10 Days',
@@ -64,9 +66,15 @@ async function main() {
         price: 2600,
         images: ['https://images.unsplash.com/photo-1565552629477-e027f78f998c?q=80&w=1000&auto=format&fit=crop'],
         isFeatured: true,
+        journeyStops: [
+          { order: 1, city: 'Makkah', stayLabel: '5 Nights', accommodation: '5-star hotel near Haram', notes: 'Main spiritual stay and guided support.' },
+          { order: 2, city: 'Madinah', stayLabel: '4 Nights', accommodation: 'Hotel near Masjid an-Nabawi', notes: 'Ziyarat and guided follow-up.' },
+        ],
         description: 'Experience a deeply spiritual Ramadan journey with luxury 5-star hotel stays. Includes visa processing, guided tours, and premium transportation.'
     },
     {
+        displayOrder: 2,
+        featuredOrder: 2,
         title: 'Umrah January 2026 15th Jan - 26th Jan 2026',
         destination: 'Makkah & Madinah',
         duration: '10 Days',
@@ -74,9 +82,14 @@ async function main() {
         price: 1800,
         images: ['https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?q=80&w=1000&auto=format&fit=crop'],
         isFeatured: true,
+        journeyStops: [
+          { order: 1, city: 'Makkah', stayLabel: '5 Nights', accommodation: 'Customer-friendly hotel near Haram', notes: 'Balanced package for guided Umrah support.' },
+          { order: 2, city: 'Madinah', stayLabel: '4 Nights', accommodation: 'Comfortable hotel with team coordination', notes: 'Spiritual visits and guidance.' },
+        ],
         description: 'Experience a deeply spiritual Ramadan journey with luxury 5-star hotel stays. Includes visa processing, guided tours, and premium transportation.'
     },
     {
+        displayOrder: 3,
         title: 'Luxury Dubai City Escape',
         destination: 'United Arab Emirates',
         duration: '7 Days',
@@ -84,6 +97,9 @@ async function main() {
         price: 1800,
         images: ['https://images.unsplash.com/photo-1512453979798-5ea904ac6605?q=80&w=1000&auto=format&fit=crop'],
         isFeatured: false,
+        journeyStops: [
+          { order: 1, city: 'Dubai', stayLabel: '7 Days', accommodation: 'Luxury city hotel', notes: 'City tours, yacht options, and desert experiences.' },
+        ],
         description: 'Discover the future in the heart of the desert with private tours, yacht experiences, and desert safaris.'
     }
   ];
