@@ -22,6 +22,134 @@ const {
     toTrimmedString,
 } = require('../utils/validation');
 
+function normalizeFreeText(value) {
+    return String(value || '').trim().toLowerCase();
+}
+
+function inferServiceRequestFocus(inquiry) {
+    const combinedText = [
+        inquiry.service?.title,
+        inquiry.serviceType,
+        inquiry.message,
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    if (combinedText.includes('passport')) {
+        return 'Passport support';
+    }
+
+    if (combinedText.includes('visa')) {
+        return 'Visa support';
+    }
+
+    if (combinedText.includes('document')) {
+        return 'Document support';
+    }
+
+    return inquiry.service?.title || inquiry.serviceType || 'Service support';
+}
+
+function inferDocumentReadiness(documentStatus) {
+    const normalizedStatus = normalizeFreeText(documentStatus);
+
+    if (!normalizedStatus) {
+        return 'Document status not provided yet';
+    }
+
+    if (
+        normalizedStatus.includes('complete') ||
+        normalizedStatus.includes('ready') ||
+        normalizedStatus.includes('available') ||
+        normalizedStatus.includes('uploaded')
+    ) {
+        return 'Documents look ready for review';
+    }
+
+    if (
+        normalizedStatus.includes('missing') ||
+        normalizedStatus.includes('not ready') ||
+        normalizedStatus.includes('renew') ||
+        normalizedStatus.includes('expired')
+    ) {
+        return 'Documents are still missing or need work';
+    }
+
+    return 'Documents need manual review';
+}
+
+function inferServicePriority(urgency) {
+    const normalizedUrgency = normalizeFreeText(urgency);
+
+    if (
+        normalizedUrgency.includes('urgent') ||
+        normalizedUrgency.includes('asap') ||
+        normalizedUrgency.includes('high') ||
+        normalizedUrgency.includes('immediate') ||
+        normalizedUrgency.includes('today')
+    ) {
+        return 'High';
+    }
+
+    if (
+        normalizedUrgency.includes('soon') ||
+        normalizedUrgency.includes('medium') ||
+        normalizedUrgency.includes('this week')
+    ) {
+        return 'Medium';
+    }
+
+    return normalizedUrgency ? 'Normal' : 'Standard';
+}
+
+function buildServiceNextAction(inquiry) {
+    const status = normalizeOperationalStatus(inquiry.status) || 'New';
+    const documentStatus = normalizeFreeText(inquiry.documentStatus);
+    const priority = inferServicePriority(inquiry.urgency);
+
+    if (status === 'Cancelled' || status === 'Lost') {
+        return 'No further action is needed unless the customer asks to restart the request.';
+    }
+
+    if (status === 'Completed') {
+        return 'The request is complete. Any further contact should be for after-service support only.';
+    }
+
+    if (status === 'Confirmed Offline') {
+        return 'Keep the customer informed about the final service delivery steps and handoff.';
+    }
+
+    if (status === 'Docs Requested') {
+        return 'Wait for the requested documents and make it clear in internal notes what is still missing.';
+    }
+
+    if (status === 'Docs Received') {
+        return 'Review the received documents and confirm whether the case is ready for the next processing step.';
+    }
+
+    if (status === 'Quoted') {
+        return 'Confirm the quote with the customer and move the request into active follow-up if they are ready.';
+    }
+
+    if (status === 'Contacted' || status === 'WhatsApp Follow-up') {
+        return 'Continue the conversation on WhatsApp and record the next promised action in internal notes.';
+    }
+
+    if (status === 'Qualified') {
+        return documentStatus
+            ? 'Verify the current document situation and prepare the remaining checklist or submission step.'
+            : 'Confirm eligibility requirements and explain the document checklist clearly to the customer.';
+    }
+
+    if (priority === 'High') {
+        return 'This request sounds urgent. Respond quickly, confirm the exact need, and move it into active follow-up.';
+    }
+
+    if (documentStatus.includes('missing') || documentStatus.includes('renew') || documentStatus.includes('expired')) {
+        return 'Ask the customer for the missing or corrected documents before proceeding.';
+    }
+
+    return 'Review the request details, confirm what support is needed, and contact the customer with the next step.';
+}
+
 function serializeServiceInquiry(inquiry) {
     if (!inquiry || typeof inquiry !== 'object') {
         return inquiry;
@@ -32,6 +160,10 @@ function serializeServiceInquiry(inquiry) {
         inquiryId: inquiry.id,
         serviceTitle: inquiry.service?.title || inquiry.serviceType,
         customerMessage: inquiry.message || null,
+        requestFocus: inferServiceRequestFocus(inquiry),
+        documentReadiness: inferDocumentReadiness(inquiry.documentStatus),
+        priorityLabel: inferServicePriority(inquiry.urgency),
+        nextActionHint: buildServiceNextAction(inquiry),
         status: normalizeOperationalStatus(inquiry.status) || 'New',
     };
 }

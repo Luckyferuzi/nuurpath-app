@@ -90,7 +90,7 @@ const PrivateConsultationsAdmin = () => {
     try {
       if (editingId) {
         await axios.put(`/appointments/private/${editingId}`, formData);
-        setMessage({ type: 'success', text: 'Consultation pipeline updated successfully.' });
+        setMessage({ type: 'success', text: 'Consultation request updated successfully.' });
       } else {
         const createPayload = {
           name: formData.name,
@@ -235,7 +235,7 @@ const PrivateConsultationsAdmin = () => {
 
       {showForm && (
         <div style={{ backgroundColor: '#f9f9f9', padding: '20px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #ddd' }}>
-          <h3 style={{ marginBottom: '15px' }}>{editingId ? `Update Pipeline for Consultation #${editingId}` : 'New Consultation Request'}</h3>
+          <h3 style={{ marginBottom: '15px' }}>{editingId ? `Update Consultation Request #${editingId}` : 'New Consultation Request'}</h3>
           <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '15px' }}>
             <input type="text" placeholder="Name" value={formData.name} onChange={(event) => setFormData({ ...formData, name: event.target.value })} required style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
             <input type="email" placeholder="Email" value={formData.email} onChange={(event) => setFormData({ ...formData, email: event.target.value })} required style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
@@ -258,7 +258,7 @@ const PrivateConsultationsAdmin = () => {
             />
             <div style={{ display: 'flex', gap: '10px' }}>
               <button type="submit" disabled={submitting} style={{ padding: '10px 20px', backgroundColor: '#006837', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
-                {submitting ? 'Saving...' : editingId ? 'Save Pipeline Update' : 'Create Request'}
+                {submitting ? 'Saving...' : editingId ? 'Save Request Update' : 'Create Request'}
               </button>
               <button type="button" onClick={resetForm} style={{ padding: '10px 20px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
                 Cancel
@@ -295,7 +295,7 @@ const PrivateConsultationsAdmin = () => {
                 <th style={thStyle}>Customer</th>
                 <th style={thStyle}>Preferred Slot</th>
                 <th style={thStyle}>Request Summary</th>
-                <th style={thStyle}>Pipeline</th>
+                <th style={thStyle}>Request Status</th>
                 <th style={thStyle}>Internal Notes</th>
                 <th style={thStyle}>Actions</th>
               </tr>
@@ -327,7 +327,7 @@ const PrivateConsultationsAdmin = () => {
                   <td style={tdStyle}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-start' }}>
                       <button onClick={() => handleEdit(consultation)} style={{ color: 'blue', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold', padding: 0 }}>
-                        Update Pipeline
+                        Update Request
                       </button>
                       <button onClick={() => openWhatsApp(consultation)} style={{ color: '#006837', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold', padding: 0 }}>
                         Continue on WhatsApp

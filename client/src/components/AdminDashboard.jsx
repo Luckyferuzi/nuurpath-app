@@ -99,9 +99,9 @@ const AdminDashboard = () => {
         <div style={containerStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>
                 <div>
-                    <h2 style={{ margin: 0 }}>{isAdmin ? 'Operations Dashboard' : 'Lead Pipeline Dashboard'}</h2>
+                    <h2 style={{ margin: 0 }}>{isAdmin ? 'Operations Dashboard' : 'Lead Follow-Up Dashboard'}</h2>
                     <p style={{ margin: '6px 0 0 0', color: '#666' }}>
-                        Track customer requests, follow-ups, and offline confirmations from one operational pipeline.
+                        Track customer requests, follow-ups, and offline confirmations from one operational workspace.
                     </p>
                 </div>
             </div>
@@ -214,7 +214,7 @@ const AdminDashboard = () => {
                     onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 5px 15px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-5px)'; }}
                     onMouseLeave={e => { e.currentTarget.style.boxShadow = cardStyle.boxShadow; e.currentTarget.style.transform = 'none'; }}
                 >
-                    <h3 style={{ color: '#0056b3', marginBottom: '10px' }}>Package Request Pipeline</h3>
+                    <h3 style={{ color: '#0056b3', marginBottom: '10px' }}>Package Request Follow-Up</h3>
                     <p style={{ color: '#555' }}>Move package leads from new inquiry to offline confirmation.</p>
                 </Link>
                 <Link
@@ -223,7 +223,7 @@ const AdminDashboard = () => {
                     onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 5px 15px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-5px)'; }}
                     onMouseLeave={e => { e.currentTarget.style.boxShadow = cardStyle.boxShadow; e.currentTarget.style.transform = 'none'; }}
                 >
-                    <h3 style={{ color: '#0056b3', marginBottom: '10px' }}>Flight Request Pipeline</h3>
+                    <h3 style={{ color: '#0056b3', marginBottom: '10px' }}>Flight Request Follow-Up</h3>
                     <p style={{ color: '#555' }}>Track flight leads, quotes, and WhatsApp follow-up steps.</p>
                 </Link>
                 <Link
@@ -232,7 +232,7 @@ const AdminDashboard = () => {
                     onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 5px 15px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-5px)'; }}
                     onMouseLeave={e => { e.currentTarget.style.boxShadow = cardStyle.boxShadow; e.currentTarget.style.transform = 'none'; }}
                 >
-                    <h3 style={{ color: '#0056b3', marginBottom: '10px' }}>Service Inquiry Pipeline</h3>
+                    <h3 style={{ color: '#0056b3', marginBottom: '10px' }}>Service Request Follow-Up</h3>
                     <p style={{ color: '#555' }}>Manage visa, passport, and document support follow-ups.</p>
                 </Link>
                 {isAdmin && (

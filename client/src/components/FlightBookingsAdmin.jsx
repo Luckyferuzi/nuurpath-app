@@ -140,7 +140,7 @@ const FlightBookingsAdmin = () => {
       return;
     }
 
-    const headers = ['ID', 'Contact Name', 'Email', 'Phone', 'From', 'To', 'Departure', 'Return', 'Passengers', 'Class', 'Pipeline Status', 'Internal Notes', 'Request Date'];
+    const headers = ['ID', 'Contact Name', 'Email', 'Phone', 'From', 'To', 'Departure', 'Return', 'Passengers', 'Class', 'Request Status', 'Internal Notes', 'Request Date'];
     const csvContent = [
       headers.join(','),
       ...bookings.map((booking) => {
@@ -169,7 +169,7 @@ const FlightBookingsAdmin = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `flight_pipeline_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `flight_requests_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -222,7 +222,7 @@ const FlightBookingsAdmin = () => {
 
   return (
     <div style={containerStyle}>
-      <h2 style={{ marginBottom: '20px' }}>Flight Request Pipeline</h2>
+      <h2 style={{ marginBottom: '20px' }}>Flight Request Follow-Up</h2>
 
       {error && (
         <div style={{ color: 'red', marginBottom: '20px', padding: '10px', backgroundColor: '#ffe0e0', borderRadius: '5px' }}>
@@ -246,7 +246,7 @@ const FlightBookingsAdmin = () => {
 
       {editingBooking && (
         <div style={{ backgroundColor: '#f9f9f9', padding: '20px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #ddd' }}>
-          <h3 style={{ marginBottom: '10px' }}>Update Pipeline for Flight Request #{editingBooking.requestId || editingBooking.id}</h3>
+          <h3 style={{ marginBottom: '10px' }}>Update Flight Request #{editingBooking.requestId || editingBooking.id}</h3>
           <p style={{ marginTop: 0, marginBottom: '15px', color: '#555' }}>
             {(editingBooking.contactName || editingBooking.user?.name || 'Guest')} · {editingBooking.from} to {editingBooking.to}
           </p>
@@ -268,7 +268,7 @@ const FlightBookingsAdmin = () => {
             />
             <div style={{ display: 'flex', gap: '10px' }}>
               <button type="submit" disabled={saving} style={{ padding: '10px 20px', backgroundColor: '#006837', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
-                {saving ? 'Saving...' : 'Save Pipeline Update'}
+                {saving ? 'Saving...' : 'Save Request Update'}
               </button>
               <button type="button" onClick={resetForm} style={{ padding: '10px 20px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
                 Cancel
@@ -305,7 +305,7 @@ const FlightBookingsAdmin = () => {
                 <th style={thStyle}>Customer</th>
                 <th style={thStyle}>Route</th>
                 <th style={thStyle}>Travel</th>
-                <th style={thStyle}>Pipeline</th>
+                <th style={thStyle}>Request Status</th>
                 <th style={thStyle}>Internal Notes</th>
                 <th style={thStyle}>Actions</th>
               </tr>
@@ -344,7 +344,7 @@ const FlightBookingsAdmin = () => {
                   <td style={tdStyle}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-start' }}>
                       <button onClick={() => handleEdit(booking)} style={{ color: 'blue', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold', padding: 0 }}>
-                        Update Pipeline
+                        Update Request
                       </button>
                       <button onClick={() => openWhatsApp(booking)} style={{ color: '#006837', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold', padding: 0 }}>
                         Continue on WhatsApp

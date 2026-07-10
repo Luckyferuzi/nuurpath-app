@@ -18,17 +18,152 @@ const {
   normalizeOperationalStatus,
   shouldSetLastContactedAt,
 } = require('../utils/operationalPipeline');
+const {
+  extractSafeFilenameFromReference,
+  toProtectedBookingDocumentUrl,
+} = require('../utils/upload');
+const {
+  STORED_FILE_ROUTE_PREFIXES,
+  buildProtectedBookingStoredFileUrl,
+  extractStoredFileIdFromReference,
+} = require('../utils/storedFiles');
+
+function normalizePackageBookingDocumentReference(value) {
+  const storedFileId = extractStoredFileIdFromReference(
+    value,
+    [STORED_FILE_ROUTE_PREFIXES.BOOKING_DOCUMENT]
+  );
+
+  if (storedFileId !== null) {
+    return buildProtectedBookingStoredFileUrl(storedFileId);
+  }
+
+  const legacyFilename = extractSafeFilenameFromReference(value);
+  return legacyFilename ? toProtectedBookingDocumentUrl(legacyFilename) : null;
+}
+
+function buildPackageBookingMissingDetails(booking) {
+  const missing = [];
+
+  if (!booking.locationFrom) {
+    missing.push('departure city');
+  }
+
+  if (!booking.travelDate) {
+    missing.push('preferred travel date');
+  }
+
+  if (!booking.passportNumber) {
+    missing.push('passport number');
+  }
+
+  if (!booking.passportExpiryDate) {
+    missing.push('passport expiry date');
+  }
+
+  if (!booking.dateOfBirth) {
+    missing.push('date of birth');
+  }
+
+  if (!booking.nationality) {
+    missing.push('nationality');
+  }
+
+  if (!booking.passportCopy) {
+    missing.push('passport copy');
+  }
+
+  return missing;
+}
+
+function buildPackageBookingNextAction(booking) {
+  const status = normalizeOperationalStatus(booking.status) || 'New';
+  const hasPassportPack = Boolean(
+    booking.passportNumber &&
+    booking.passportExpiryDate &&
+    booking.dateOfBirth &&
+    booking.nationality &&
+    booking.passportCopy
+  );
+
+  if (status === 'Cancelled' || status === 'Lost') {
+    return 'No follow-up is needed unless the traveler asks to reopen the request.';
+  }
+
+  if (status === 'Completed') {
+    return 'Travel is marked complete. A final thank-you or testimonial follow-up can happen separately.';
+  }
+
+  if (status === 'Confirmed Offline') {
+    return 'Keep the traveler updated on final travel coordination and any remaining logistics.';
+  }
+
+  if (status === 'Quoted') {
+    return 'Follow up on the quote, confirm customer readiness, and note any agreed next step.';
+  }
+
+  if (status === 'Docs Requested') {
+    return 'Wait for the remaining passport items and record exactly what is still missing in team notes.';
+  }
+
+  if (status === 'Docs Received') {
+    return hasPassportPack
+      ? 'Review the passport details against the travel plan and move the request toward quoting or confirmation.'
+      : 'Review the submitted passport items and confirm what is still missing before the next step.';
+  }
+
+  if (status === 'Contacted' || status === 'WhatsApp Follow-up') {
+    return booking.passportCopy
+      ? 'Continue the WhatsApp conversation and move the traveler toward quote or confirmation.'
+      : 'Continue on WhatsApp and ask for the passport copy before moving further.';
+  }
+
+  if (status === 'Qualified') {
+    return hasPassportPack
+      ? 'The core travel and passport details are available. Prepare the quote or confirmation path.'
+      : 'Confirm the traveler details and collect the remaining passport information.';
+  }
+
+  if (hasPassportPack) {
+    return 'Review the submitted passport details and continue the next travel step with the customer.';
+  }
+
+  return 'Review the request, greet the traveler on WhatsApp, and collect the missing passport details.';
+}
 
 function serializePackageBookingForStaff(booking) {
   if (!booking || typeof booking !== 'object') {
     return booking;
   }
 
+  const passportCopyUrl = normalizePackageBookingDocumentReference(booking.passportCopy);
+  const missingInformation = buildPackageBookingMissingDetails({
+    ...booking,
+    passportCopy: passportCopyUrl,
+  });
+
   return {
     ...booking,
     requestId: booking.id,
     packageTitle: booking.package?.title || null,
     customerNotes: booking.specialRequests || booking.notes || null,
+    departureCity: booking.locationFrom || null,
+    customerType: booking.userId ? 'Account Holder' : 'Guest',
+    passportCopy: passportCopyUrl,
+    passportCopyUrl,
+    passportCopyAvailable: Boolean(passportCopyUrl),
+    hasPassportDetails: Boolean(
+      booking.passportNumber ||
+      booking.passportExpiryDate ||
+      booking.dateOfBirth ||
+      booking.nationality ||
+      passportCopyUrl
+    ),
+    missingInformation,
+    nextActionHint: buildPackageBookingNextAction({
+      ...booking,
+      passportCopy: passportCopyUrl,
+    }),
     status: normalizeOperationalStatus(booking.status) || 'New',
   };
 }

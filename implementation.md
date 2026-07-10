@@ -8,7 +8,8 @@ Current status:
 - Phase 1 is completed.
 - Phase 2 is completed.
 - Phase 3 is completed.
-- Phases 4 through 7 are still planned.
+- Phase 4 is completed.
+- Phases 5 through 7 are still planned.
 - When resuming work later, read this file first and then continue from the next approved phase.
 
 ## How To Use This Document
@@ -499,7 +500,7 @@ Frontend:
 ## Phase 4: Admin Request Visibility and Customer Data Completeness
 
 Status:
-- Planned
+- Completed
 
 ### Objective
 
@@ -573,6 +574,51 @@ Backend:
 - passport documents can be accessed securely by authorized staff
 - request lists are still readable without showing every field inline
 - passport and visa support requests are easier to understand and follow up on
+
+### Completed Work
+
+- Reworked the package request admin screen into a split operational layout:
+  - lightweight request cards for scanning
+  - a focused detail panel for the selected request
+  - clearer quick actions for update, WhatsApp follow-up, document preview, document download, and delete
+- Exposed customer-submitted package booking details more clearly in admin, including:
+  - departure city
+  - passport number
+  - passport expiry date
+  - date of birth
+  - nationality
+  - customer notes and special requests
+- Added secure passport-document access in the package request workspace through authenticated API file retrieval, so staff can open or download the stored passport copy without relying on a public link.
+- Updated the staff-facing package booking serializer so passport document references are normalized into protected booking-document URLs even when older stored references exist.
+- Added staff-friendly helper fields to package booking responses, including:
+  - customer type
+  - missing-information summary
+  - next-action hint
+  - passport-copy availability
+- Reworked the service inquiry admin screen into the same lighter list-plus-detail pattern so staff can scan requests quickly and open full context when needed.
+- Improved service inquiry presentation to highlight:
+  - urgency or priority
+  - document readiness
+  - request focus
+  - customer message
+  - suggested next action
+- Updated the service inquiry serializer with operational helper fields so the frontend can present requests more clearly without duplicating too much decision logic in the browser.
+- Standardized wording in the main request workspaces and dashboard links away from heavier “pipeline” language toward clearer “request” and “follow-up” wording.
+
+### Implementation Notes
+
+- Protected passport documents are still role-restricted on the backend. The Phase 4 frontend now accesses them through authenticated requests and browser-generated object URLs instead of direct unauthenticated links.
+- Package request detail now intentionally separates:
+  - quick list scanning
+  - full request review
+  - update actions
+  This creates a stronger foundation for the broader responsiveness and navigation work planned in Phase 5.
+- Service inquiry “next action” is currently a rules-based helper derived from:
+  - request status
+  - urgency text
+  - document-status text
+  This is meant to guide staff quickly, not replace human judgment.
+- Flight requests and consultation requests were not fully redesigned in this phase, but wording was aligned so the request system feels more consistent while Phase 5 remains pending.
 
 ### Out Of Scope For Phase 4
 
