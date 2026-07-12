@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from '../lib/api';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { getOperationalStatusLabel, getOperationalStatusOptions } from '../lib/operationalPipeline.js';
+import { formatDayAge, getAttentionToneClass, getStaffDisplayName, getStaffRoleLabel, isOwnedByCurrentStaff } from '../lib/staffOwnership.js';
 import { matchesCreatedAtWindow, STAFF_TIME_WINDOW_OPTIONS } from '../lib/staffFilters.js';
 import { formatAdminDate, formatAdminDateTime } from '../lib/staffRequestUtils.js';
 import { buildConsultationLeadFollowUpMessage, buildDirectWhatsAppUrl } from '../lib/whatsapp.js';
@@ -11,6 +12,7 @@ import {
   StaffDetailSection,
   StaffEmptyState,
   StaffFilterPills,
+  StaffInfoPill,
   StaffMetricCard,
   StaffPageShell,
   StaffStatusPill,
@@ -19,6 +21,9 @@ import {
 const STATUS_FILTERS = [
   { value: 'all', label: 'All requests' },
   { value: 'new', label: 'New requests' },
+  { value: 'mine', label: 'My queue' },
+  { value: 'unassigned', label: 'Unassigned' },
+  { value: 'overdue', label: 'Overdue' },
   { value: 'follow-up', label: 'Ready for follow-up' },
   { value: 'confirmed', label: 'Confirmed' },
   { value: 'completed', label: 'Completed' },
@@ -51,7 +56,7 @@ function buildConsultationNextAction(consultation) {
   return 'Review the request details, contact the customer, and confirm the consultation slot clearly.';
 }
 
-function matchesStatusFilter(consultation, statusFilter) {
+function matchesStatusFilter(consultation, statusFilter, currentUserId) {
   const status = getOperationalStatusLabel(consultation?.status);
 
   if (statusFilter === 'all') {
@@ -60,6 +65,18 @@ function matchesStatusFilter(consultation, statusFilter) {
 
   if (statusFilter === 'new') {
     return status === 'New';
+  }
+
+  if (statusFilter === 'mine') {
+    return isOwnedByCurrentStaff(consultation, currentUserId);
+  }
+
+  if (statusFilter === 'unassigned') {
+    return Boolean(consultation?.isUnassigned);
+  }
+
+  if (statusFilter === 'overdue') {
+    return Boolean(consultation?.isOverdueFollowUp);
   }
 
   if (statusFilter === 'follow-up') {
@@ -81,10 +98,10 @@ function matchesStatusFilter(consultation, statusFilter) {
   return true;
 }
 
-function getStatusFilterOptions(consultations) {
+function getStatusFilterOptions(consultations, currentUserId) {
   return STATUS_FILTERS.map((option) => ({
     ...option,
-    count: consultations.filter((consultation) => matchesStatusFilter(consultation, option.value)).length,
+    count: consultations.filter((consultation) => matchesStatusFilter(consultation, option.value, currentUserId)).length,
   }));
 }
 
@@ -97,6 +114,7 @@ const EMPTY_FORM_DATA = {
   description: '',
   status: 'New',
   adminNotes: '',
+  assignedStaffId: '',
 };
 
 const PrivateConsultationsAdmin = () => {
@@ -112,9 +130,12 @@ const PrivateConsultationsAdmin = () => {
   const [editingId, setEditingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [staffDirectory, setStaffDirectory] = useState([]);
+  const [assigningId, setAssigningId] = useState(null);
   const [formData, setFormData] = useState(EMPTY_FORM_DATA);
 
   const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
+  const currentUserId = Number(user?.id || 0);
 
   const fetchConsultations = useCallback(async () => {
     try {
@@ -131,6 +152,24 @@ const PrivateConsultationsAdmin = () => {
   useEffect(() => {
     fetchConsultations();
   }, [fetchConsultations]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setStaffDirectory([]);
+      return;
+    }
+
+    const fetchStaffDirectory = async () => {
+      try {
+        const response = await axios.get('/admin/staff-directory');
+        setStaffDirectory(Array.isArray(response.data) ? response.data : []);
+      } catch (err) {
+        console.error('Failed to load staff directory', err);
+      }
+    };
+
+    fetchStaffDirectory();
+  }, [isAdmin]);
 
   useEffect(() => {
     if (!consultations.length) {
@@ -161,6 +200,7 @@ const PrivateConsultationsAdmin = () => {
       description: consultation.description || '',
       status: getOperationalStatusLabel(consultation.status),
       adminNotes: consultation.adminNotes || '',
+      assignedStaffId: consultation.assignedStaff?.id ? String(consultation.assignedStaff.id) : '',
     });
     setEditingId(consultation.id);
     setShowForm(true);
@@ -175,7 +215,15 @@ const PrivateConsultationsAdmin = () => {
 
     try {
       if (editingId) {
-        await axios.put(`/appointments/private/${editingId}`, formData);
+        const updatePayload = {
+          ...formData,
+        };
+
+        if (!isAdmin) {
+          delete updatePayload.assignedStaffId;
+        }
+
+        await axios.put(`/appointments/private/${editingId}`, updatePayload);
         setMessage({ type: 'success', text: 'Consultation request updated successfully.' });
       } else {
         const createPayload = {
@@ -187,13 +235,22 @@ const PrivateConsultationsAdmin = () => {
           description: formData.description,
           status: formData.status,
         };
+        if (isAdmin) {
+          createPayload.assignedStaffId = formData.assignedStaffId;
+        }
         const createResponse = await axios.post('/appointments/private', createPayload);
         const createdConsultationId = createResponse.data?.id;
 
-        if (createdConsultationId && (formData.adminNotes.trim() || getOperationalStatusLabel(formData.status) !== 'New')) {
-          await axios.put(`/appointments/private/${createdConsultationId}`, {
+        if (createdConsultationId && (formData.adminNotes.trim() || getOperationalStatusLabel(formData.status) !== 'New' || (isAdmin && formData.assignedStaffId !== ''))) {
+          const followUpPayload = {
             status: formData.status,
             adminNotes: formData.adminNotes,
+          };
+          if (isAdmin) {
+            followUpPayload.assignedStaffId = formData.assignedStaffId;
+          }
+          await axios.put(`/appointments/private/${createdConsultationId}`, {
+            ...followUpPayload,
           });
         }
 
@@ -207,6 +264,26 @@ const PrivateConsultationsAdmin = () => {
       setError(err.response?.data?.msg || err.message || 'Failed to save consultation request.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleAssignToMe = async (consultation) => {
+    setAssigningId(consultation.id);
+    setMessage(null);
+
+    try {
+      await axios.put(`/appointments/private/${consultation.id}`, { assignedStaffId: currentUserId });
+      setError(null);
+      setMessage({
+        type: 'success',
+        text: `Consultation request #${consultation.requestId || consultation.id} is now assigned to you.`,
+      });
+      await fetchConsultations();
+      setSelectedConsultationId(consultation.id);
+    } catch (err) {
+      setError(err.response?.data?.msg || err.message || 'Failed to assign this consultation request.');
+    } finally {
+      setAssigningId(null);
     }
   };
 
@@ -249,7 +326,7 @@ const PrivateConsultationsAdmin = () => {
     const term = searchTerm.toLowerCase();
 
     return consultations.filter((consultation) => (
-      matchesStatusFilter(consultation, statusFilter) &&
+      matchesStatusFilter(consultation, statusFilter, currentUserId) &&
       matchesCreatedAtWindow(consultation, timeWindow) &&
       (
         !term ||
@@ -259,7 +336,7 @@ const PrivateConsultationsAdmin = () => {
         String(consultation.phone || '').toLowerCase().includes(term)
       )
     ));
-  }, [consultations, searchTerm, statusFilter, timeWindow]);
+  }, [consultations, currentUserId, searchTerm, statusFilter, timeWindow]);
 
   const selectedConsultation = filteredConsultations.find((consultation) => consultation.id === selectedConsultationId)
     || filteredConsultations[0]
@@ -275,22 +352,22 @@ const PrivateConsultationsAdmin = () => {
       tone: 'default',
     },
     {
-      label: 'Ready Follow-Up',
-      value: consultations.filter((consultation) => ['Contacted', 'Qualified', 'WhatsApp Follow-up'].includes(getOperationalStatusLabel(consultation.status))).length,
-      hint: 'Requests already moving through contact and scheduling discussion.',
+      label: 'My Queue',
+      value: consultations.filter((consultation) => isOwnedByCurrentStaff(consultation, currentUserId)).length,
+      hint: 'Consultation requests currently assigned to your staff account.',
       tone: 'warm',
     },
     {
-      label: 'Confirmed',
-      value: consultations.filter((consultation) => getOperationalStatusLabel(consultation.status) === 'Confirmed Offline').length,
-      hint: 'Consultation slots already confirmed with the customer.',
-      tone: 'accent',
+      label: 'Overdue Follow-Up',
+      value: consultations.filter((consultation) => consultation.isOverdueFollowUp).length,
+      hint: 'Requests that need another team touch soonest.',
+      tone: 'danger',
     },
     {
-      label: 'Closed',
-      value: consultations.filter((consultation) => ['Cancelled', 'Lost'].includes(getOperationalStatusLabel(consultation.status))).length,
-      hint: 'Requests no longer active.',
-      tone: 'danger',
+      label: 'Unassigned',
+      value: consultations.filter((consultation) => consultation.isUnassigned).length,
+      hint: 'Open consultations that still need a clear owner.',
+      tone: 'accent',
     },
   ];
 
@@ -414,7 +491,7 @@ const PrivateConsultationsAdmin = () => {
               />
             </label>
 
-            <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+            <div className={`grid gap-4 ${isAdmin ? 'xl:grid-cols-[220px_220px_minmax(0,1fr)]' : 'lg:grid-cols-[260px_minmax(0,1fr)]'}`}>
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-gray-700">Request status</span>
                 <select
@@ -427,6 +504,23 @@ const PrivateConsultationsAdmin = () => {
                   ))}
                 </select>
               </label>
+              {isAdmin && (
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Request owner</span>
+                  <select
+                    value={formData.assignedStaffId}
+                    onChange={(event) => setFormData({ ...formData, assignedStaffId: event.target.value })}
+                    className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                  >
+                    <option value="">Keep unassigned</option>
+                    {staffDirectory.map((staffMember) => (
+                      <option key={staffMember.id} value={staffMember.id}>
+                        {staffMember.name || staffMember.email} ({getStaffRoleLabel(staffMember.role)})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-gray-700">Team notes</span>
                 <textarea
@@ -461,7 +555,7 @@ const PrivateConsultationsAdmin = () => {
       <StaffCardSection title="Filter and Search" description="Switch between quick queues first, then narrow by age or customer detail.">
         <div className="space-y-4">
           <StaffFilterPills
-            options={getStatusFilterOptions(consultations)}
+            options={getStatusFilterOptions(consultations, currentUserId)}
             value={statusFilter}
             onChange={setStatusFilter}
           />
@@ -532,11 +626,26 @@ const PrivateConsultationsAdmin = () => {
                       <div className="text-sm font-bold">{consultation.email}</div>
                       <div className="mt-1 text-sm">{consultation.phone}</div>
                       {!consultation.userId && <div className="mt-2 text-xs font-semibold uppercase tracking-[0.18em]">Guest request</div>}
+                      <div className="mt-2 text-xs uppercase tracking-[0.18em]">
+                        Owner {getStaffDisplayName(consultation.assignedStaff, 'Unassigned')}
+                      </div>
                     </div>
                     <div className="text-sm">
                       <div>Date: {consultation.date || 'TBD'}</div>
                       <div className="mt-1">Time: {consultation.time || 'TBD'}</div>
+                      <div className="mt-1">Last action: {formatAdminDateTime(consultation.lastActionAt, 'Not recorded')}</div>
                     </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <span className={`rounded-full px-3 py-1 text-xs font-bold ${isSelected ? 'bg-white/15 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                      {consultation.isUnassigned ? 'Unassigned' : `${getStaffRoleLabel(consultation.assignedStaff?.role)} owner`}
+                    </span>
+                    {consultation.isOverdueFollowUp && (
+                      <span className={`rounded-full px-3 py-1 text-xs font-bold ${isSelected ? 'bg-white/20 text-white' : getAttentionToneClass('high')}`}>
+                        Overdue {formatDayAge(consultation.daysSinceLastFollowUp, 'Today')}
+                      </span>
+                    )}
                   </div>
 
                   {consultation.description && (
@@ -557,11 +666,22 @@ const PrivateConsultationsAdmin = () => {
               >
                 <div className="flex flex-wrap gap-3">
                   <StaffStatusPill status={selectedConsultation.status} />
+                  <StaffInfoPill tone={selectedConsultation.isUnassigned ? 'danger' : isOwnedByCurrentStaff(selectedConsultation, currentUserId) ? 'accent' : 'info'}>
+                    Owner {getStaffDisplayName(selectedConsultation.assignedStaff, 'Unassigned')}
+                  </StaffInfoPill>
+                  {selectedConsultation.isOverdueFollowUp && (
+                    <StaffInfoPill tone="danger">
+                      Overdue {formatDayAge(selectedConsultation.daysSinceLastFollowUp, 'Today')}
+                    </StaffInfoPill>
+                  )}
                   <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">
                     Received {formatAdminDate(selectedConsultation.createdAt)}
                   </span>
                   <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">
                     Last contact {formatAdminDateTime(selectedConsultation.lastContactedAt, 'not recorded')}
+                  </span>
+                  <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">
+                    Last action {formatAdminDateTime(selectedConsultation.lastActionAt, 'not recorded')}
                   </span>
                 </div>
 
@@ -580,6 +700,16 @@ const PrivateConsultationsAdmin = () => {
                   >
                     Continue on WhatsApp
                   </button>
+                  {!isOwnedByCurrentStaff(selectedConsultation, currentUserId) && (
+                    <button
+                      type="button"
+                      onClick={() => handleAssignToMe(selectedConsultation)}
+                      disabled={assigningId === selectedConsultation.id}
+                      className="rounded-full border border-[#006837] px-4 py-2 text-sm font-bold text-[#006837] transition hover:bg-[#006837] hover:text-white disabled:opacity-60"
+                    >
+                      {assigningId === selectedConsultation.id ? 'Assigning...' : 'Take Ownership'}
+                    </button>
+                  )}
                   {isAdmin && (
                     <button
                       type="button"
@@ -598,6 +728,27 @@ const PrivateConsultationsAdmin = () => {
                   <StaffDetailRow label="Account type" value={selectedConsultation.userId ? 'Account Holder' : 'Guest'} />
                   <StaffDetailRow label="Email" value={selectedConsultation.email} />
                   <StaffDetailRow label="Phone / WhatsApp" value={selectedConsultation.phone} />
+                </div>
+              </StaffDetailSection>
+
+              <StaffDetailSection title="Ownership and Accountability">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <StaffDetailRow
+                    label="Request owner"
+                    value={`${getStaffDisplayName(selectedConsultation.assignedStaff, 'Unassigned')}${selectedConsultation.assignedStaff ? ` (${getStaffRoleLabel(selectedConsultation.assignedStaff.role)})` : ''}`}
+                  />
+                  <StaffDetailRow label="Assigned on" value={formatAdminDateTime(selectedConsultation.assignedAt, 'Not assigned yet')} />
+                  <StaffDetailRow
+                    label="Last updated by"
+                    value={`${getStaffDisplayName(selectedConsultation.lastUpdatedBy, 'Not recorded')}${selectedConsultation.lastUpdatedBy ? ` (${getStaffRoleLabel(selectedConsultation.lastUpdatedBy.role)})` : ''}`}
+                  />
+                  <StaffDetailRow label="Last action time" value={formatAdminDateTime(selectedConsultation.lastActionAt, 'Not recorded')} />
+                  <StaffDetailRow label="Last status change" value={formatAdminDateTime(selectedConsultation.lastStatusChangedAt, 'Not recorded')} />
+                  <StaffDetailRow
+                    label="Attention flags"
+                    value={selectedConsultation.attentionReasons?.length ? selectedConsultation.attentionReasons.join(', ') : 'No special attention flag right now.'}
+                    subtle
+                  />
                 </div>
               </StaffDetailSection>
 

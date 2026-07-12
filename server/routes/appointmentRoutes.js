@@ -20,6 +20,11 @@ const {
     toPositiveInteger,
     toTrimmedString,
 } = require('../utils/validation');
+const {
+    STAFF_USER_SUMMARY_SELECT,
+    buildRequestWorkflowSignals,
+    resolveAssignedStaffInput,
+} = require('../utils/staffRequestIntelligence');
 
 function isValidTimeString(value) {
     if (!isNonEmptyString(value)) {
@@ -38,13 +43,31 @@ function serializePrivateConsultation(consultation, { includeInternalFields = fa
     const normalizedStatus = normalizeOperationalStatus(consultation.status) || 'New';
     const serializedConsultation = {
         ...consultation,
+        ...buildRequestWorkflowSignals(consultation),
         requestId: consultation.id,
         status: normalizedStatus,
     };
 
     if (!includeInternalFields) {
         delete serializedConsultation.adminNotes;
+        delete serializedConsultation.assignedAt;
+        delete serializedConsultation.assignedStaff;
+        delete serializedConsultation.attentionLevel;
+        delete serializedConsultation.attentionReasons;
+        delete serializedConsultation.daysSinceLastAction;
+        delete serializedConsultation.daysSinceLastFollowUp;
+        delete serializedConsultation.isAssignedToStaff;
+        delete serializedConsultation.isOverdueFollowUp;
+        delete serializedConsultation.isUnassigned;
+        delete serializedConsultation.isWaitingForDocuments;
+        delete serializedConsultation.lastActionAt;
         delete serializedConsultation.lastContactedAt;
+        delete serializedConsultation.lastStatusChangedAt;
+        delete serializedConsultation.lastUpdatedBy;
+        delete serializedConsultation.needsAttention;
+        delete serializedConsultation.priorityLabel;
+        delete serializedConsultation.queueBucket;
+        delete serializedConsultation.queueLabel;
     }
 
     return serializedConsultation;
@@ -70,6 +93,15 @@ router.get('/private', auth, async (req, res) => {
         const consultations = await prisma.privateConsultation.findMany({
             where,
             orderBy: { createdAt: 'desc' },
+            include: {
+                user: true,
+                assignedStaff: {
+                    select: STAFF_USER_SUMMARY_SELECT,
+                },
+                lastUpdatedBy: {
+                    select: STAFF_USER_SUMMARY_SELECT,
+                },
+            },
         });
 
         return res.json(consultations.map((consultation) => serializePrivateConsultation(consultation, { includeInternalFields })));
@@ -110,6 +142,7 @@ router.post('/private', privateConsultationLimiter, softAuth, async (req, res) =
             date: toTrimmedString(date),
             time: toTrimmedString(time),
             status: 'Pending',
+            lastStatusChangedAt: new Date(),
         };
 
         if (req.user && req.user.id) {
@@ -148,7 +181,25 @@ router.put('/private/:id', auth, requireAdminOrManager, async (req, res) => {
             return sendInvalidId(res);
         }
 
-        const { name, email, phone, description, date, time, status, adminNotes } = req.body;
+        const { name, email, phone, description, date, time, status, adminNotes, assignedStaffId } = req.body;
+        const actorId = toPositiveInteger(req.user.id);
+        if (actorId === null) {
+            return sendValidationError(res, 'Invalid staff user id.');
+        }
+
+        const existingConsultation = await prisma.privateConsultation.findUnique({
+            where: { id },
+            select: {
+                id: true,
+                status: true,
+                assignedStaffId: true,
+            },
+        });
+
+        if (!existingConsultation) {
+            return res.status(404).json({ msg: 'Consultation request not found' });
+        }
+
         const updateData = {};
 
         if (name !== undefined) {
@@ -206,6 +257,9 @@ router.put('/private/:id', auth, requireAdminOrManager, async (req, res) => {
             }
 
             updateData.status = normalizedStatus;
+            if (normalizedStatus !== (normalizeOperationalStatus(existingConsultation.status) || 'New')) {
+                updateData.lastStatusChangedAt = new Date();
+            }
             if (shouldSetLastContactedAt(normalizedStatus)) {
                 updateData.lastContactedAt = new Date();
             }
@@ -215,13 +269,34 @@ router.put('/private/:id', auth, requireAdminOrManager, async (req, res) => {
             updateData.adminNotes = isNonEmptyString(adminNotes) ? toTrimmedString(adminNotes) : null;
         }
 
+        if (assignedStaffId !== undefined) {
+            const assignmentResolution = await resolveAssignedStaffInput(prisma, assignedStaffId, req.user);
+            if (assignmentResolution.hasAssignmentChange) {
+                updateData.assignedStaffId = assignmentResolution.assignedStaffId;
+                if (assignmentResolution.assignedStaffId !== existingConsultation.assignedStaffId) {
+                    updateData.assignedAt = assignmentResolution.assignedStaffId ? new Date() : null;
+                }
+            }
+        }
+
         if (Object.keys(updateData).length === 0) {
             return sendValidationError(res, 'No valid consultation fields were provided for update.');
         }
 
+        updateData.lastUpdatedByUserId = actorId;
+
         const updated = await prisma.privateConsultation.update({
             where: { id },
             data: updateData,
+            include: {
+                user: true,
+                assignedStaff: {
+                    select: STAFF_USER_SUMMARY_SELECT,
+                },
+                lastUpdatedBy: {
+                    select: STAFF_USER_SUMMARY_SELECT,
+                },
+            },
         });
 
         return res.json(serializePrivateConsultation(updated, { includeInternalFields: true }));

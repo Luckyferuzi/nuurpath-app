@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from '../lib/api';
+import { useAuth } from '../contexts/AuthContext.jsx';
 import { getOperationalStatusLabel, getOperationalStatusOptions } from '../lib/operationalPipeline.js';
+import { formatDayAge, getAttentionToneClass, getStaffDisplayName, getStaffRoleLabel, isOwnedByCurrentStaff } from '../lib/staffOwnership.js';
 import { matchesCreatedAtWindow, STAFF_TIME_WINDOW_OPTIONS } from '../lib/staffFilters.js';
 import { formatAdminDate, formatAdminDateTime } from '../lib/staffRequestUtils.js';
 import { buildDirectWhatsAppUrl, buildServiceLeadFollowUpMessage } from '../lib/whatsapp.js';
@@ -10,6 +12,7 @@ import {
   StaffDetailSection,
   StaffEmptyState,
   StaffFilterPills,
+  StaffInfoPill,
   StaffMetricCard,
   StaffPageShell,
   StaffStatusPill,
@@ -18,7 +21,10 @@ import {
 const STATUS_FILTERS = [
   { value: 'all', label: 'All requests' },
   { value: 'new', label: 'New requests' },
+  { value: 'mine', label: 'My queue' },
+  { value: 'unassigned', label: 'Unassigned' },
   { value: 'urgent', label: 'Urgent' },
+  { value: 'overdue', label: 'Overdue' },
   { value: 'documents', label: 'Waiting for documents' },
   { value: 'follow-up', label: 'Ready for follow-up' },
   { value: 'confirmed', label: 'Confirmed' },
@@ -74,7 +80,7 @@ function requiresDocumentFollowUp(inquiry) {
   return documentText.includes('missing') || documentText.includes('need') || documentText.includes('expired');
 }
 
-function matchesStatusFilter(inquiry, statusFilter) {
+function matchesStatusFilter(inquiry, statusFilter, currentUserId) {
   const status = getOperationalStatusLabel(inquiry?.status);
 
   if (statusFilter === 'all') {
@@ -85,8 +91,20 @@ function matchesStatusFilter(inquiry, statusFilter) {
     return status === 'New';
   }
 
+  if (statusFilter === 'mine') {
+    return isOwnedByCurrentStaff(inquiry, currentUserId);
+  }
+
+  if (statusFilter === 'unassigned') {
+    return Boolean(inquiry?.isUnassigned);
+  }
+
   if (statusFilter === 'urgent') {
     return String(inquiry?.priorityLabel || '').toLowerCase() === 'high';
+  }
+
+  if (statusFilter === 'overdue') {
+    return Boolean(inquiry?.isOverdueFollowUp);
   }
 
   if (statusFilter === 'documents') {
@@ -112,14 +130,15 @@ function matchesStatusFilter(inquiry, statusFilter) {
   return true;
 }
 
-function getStatusFilterOptions(inquiries) {
+function getStatusFilterOptions(inquiries, currentUserId) {
   return STATUS_FILTERS.map((option) => ({
     ...option,
-    count: inquiries.filter((inquiry) => matchesStatusFilter(inquiry, option.value)).length,
+    count: inquiries.filter((inquiry) => matchesStatusFilter(inquiry, option.value, currentUserId)).length,
   }));
 }
 
 const ServiceInquiriesAdmin = () => {
+  const { user } = useAuth();
   const [inquiries, setInquiries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -129,11 +148,17 @@ const ServiceInquiriesAdmin = () => {
   const [timeWindow, setTimeWindow] = useState('30d');
   const [selectedInquiryId, setSelectedInquiryId] = useState(null);
   const [editingInquiry, setEditingInquiry] = useState(null);
+  const [staffDirectory, setStaffDirectory] = useState([]);
   const [formData, setFormData] = useState({
     status: 'New',
     adminNotes: '',
+    assignedStaffId: '',
   });
   const [saving, setSaving] = useState(false);
+  const [assigningId, setAssigningId] = useState(null);
+
+  const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
+  const currentUserId = Number(user?.id || 0);
 
   const fetchInquiries = useCallback(async () => {
     try {
@@ -152,6 +177,24 @@ const ServiceInquiriesAdmin = () => {
   }, [fetchInquiries]);
 
   useEffect(() => {
+    if (!isAdmin) {
+      setStaffDirectory([]);
+      return;
+    }
+
+    const fetchStaffDirectory = async () => {
+      try {
+        const response = await axios.get('/admin/staff-directory');
+        setStaffDirectory(Array.isArray(response.data) ? response.data : []);
+      } catch (err) {
+        console.error('Failed to load staff directory', err);
+      }
+    };
+
+    fetchStaffDirectory();
+  }, [isAdmin]);
+
+  useEffect(() => {
     if (!inquiries.length) {
       setSelectedInquiryId(null);
       return;
@@ -168,6 +211,7 @@ const ServiceInquiriesAdmin = () => {
     setFormData({
       status: getOperationalStatusLabel(inquiry.status),
       adminNotes: inquiry.adminNotes || '',
+      assignedStaffId: inquiry.assignedStaff?.id ? String(inquiry.assignedStaff.id) : '',
     });
     setMessage(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -175,7 +219,7 @@ const ServiceInquiriesAdmin = () => {
 
   const resetForm = () => {
     setEditingInquiry(null);
-    setFormData({ status: 'New', adminNotes: '' });
+    setFormData({ status: 'New', adminNotes: '', assignedStaffId: '' });
     setSaving(false);
   };
 
@@ -189,7 +233,15 @@ const ServiceInquiriesAdmin = () => {
     setMessage(null);
 
     try {
-      const response = await axios.put(`/services/inquiries/${editingInquiry.id}`, formData);
+      const payload = {
+        ...formData,
+      };
+
+      if (!isAdmin) {
+        delete payload.assignedStaffId;
+      }
+
+      const response = await axios.put(`/services/inquiries/${editingInquiry.id}`, payload);
       const updatedInquiry = response.data;
 
       setInquiries((previous) => previous.map((inquiry) => (
@@ -205,6 +257,29 @@ const ServiceInquiriesAdmin = () => {
     } catch (err) {
       setError(err.response?.data?.msg || err.message || 'Failed to update service inquiry.');
       setSaving(false);
+    }
+  };
+
+  const handleAssignToMe = async (inquiry) => {
+    setAssigningId(inquiry.id);
+    setMessage(null);
+
+    try {
+      const response = await axios.put(`/services/inquiries/${inquiry.id}`, { assignedStaffId: currentUserId });
+      const updatedInquiry = response.data;
+      setInquiries((previous) => previous.map((currentInquiry) => (
+        currentInquiry.id === updatedInquiry.id ? updatedInquiry : currentInquiry
+      )));
+      setSelectedInquiryId(updatedInquiry.id);
+      setError(null);
+      setMessage({
+        type: 'success',
+        text: `Service request #${updatedInquiry.inquiryId || updatedInquiry.id} is now assigned to you.`,
+      });
+    } catch (err) {
+      setError(err.response?.data?.msg || err.message || 'Failed to assign this service request.');
+    } finally {
+      setAssigningId(null);
     }
   };
 
@@ -247,6 +322,10 @@ const ServiceInquiriesAdmin = () => {
       'Priority',
       'Document Status',
       'Request Status',
+      'Owner',
+      'Last Updated By',
+      'Last Action',
+      'Overdue Follow-Up',
       'Customer Message',
       'Internal Notes',
       'Request Date',
@@ -261,6 +340,8 @@ const ServiceInquiriesAdmin = () => {
         const customerMessage = String(inquiry.customerMessage || '').replace(/"/g, '""');
         const adminNotes = String(inquiry.adminNotes || '').replace(/"/g, '""');
         const documentStatus = String(inquiry.documentStatus || inquiry.documentReadiness || '').replace(/"/g, '""');
+        const owner = String(getStaffDisplayName(inquiry.assignedStaff, 'Unassigned')).replace(/"/g, '""');
+        const lastUpdatedBy = String(getStaffDisplayName(inquiry.lastUpdatedBy, 'Not recorded')).replace(/"/g, '""');
 
         return [
           inquiry.inquiryId || inquiry.id,
@@ -275,6 +356,10 @@ const ServiceInquiriesAdmin = () => {
           inquiry.priorityLabel || '',
           `"${documentStatus}"`,
           `"${getOperationalStatusLabel(inquiry.status)}"`,
+          `"${owner}"`,
+          `"${lastUpdatedBy}"`,
+          formatAdminDateTime(inquiry.lastActionAt, ''),
+          inquiry.isOverdueFollowUp ? 'Yes' : 'No',
           `"${customerMessage}"`,
           `"${adminNotes}"`,
           formatAdminDate(inquiry.createdAt, ''),
@@ -296,7 +381,7 @@ const ServiceInquiriesAdmin = () => {
     const term = searchTerm.toLowerCase();
 
     return inquiries.filter((inquiry) => (
-      matchesStatusFilter(inquiry, statusFilter) &&
+      matchesStatusFilter(inquiry, statusFilter, currentUserId) &&
       matchesCreatedAtWindow(inquiry, timeWindow) &&
       (
         !term ||
@@ -307,7 +392,7 @@ const ServiceInquiriesAdmin = () => {
         String(inquiry.country || '').toLowerCase().includes(term)
       )
     ));
-  }, [inquiries, searchTerm, statusFilter, timeWindow]);
+  }, [currentUserId, inquiries, searchTerm, statusFilter, timeWindow]);
 
   const selectedInquiry = filteredInquiries.find((inquiry) => inquiry.id === selectedInquiryId)
     || filteredInquiries[0]
@@ -323,24 +408,21 @@ const ServiceInquiriesAdmin = () => {
       tone: 'danger',
     },
     {
-      label: 'Document Chase',
-      value: inquiries.filter((inquiry) => requiresDocumentFollowUp(inquiry)).length,
-      hint: 'Requests still waiting on missing, renewed, or incomplete documents.',
+      label: 'My Queue',
+      value: inquiries.filter((inquiry) => isOwnedByCurrentStaff(inquiry, currentUserId)).length,
+      hint: 'Service requests currently assigned to your staff account.',
       tone: 'warm',
     },
     {
-      label: 'Active Follow-Up',
-      value: inquiries.filter((inquiry) => !['New', 'Completed', 'Cancelled', 'Lost'].includes(getOperationalStatusLabel(inquiry.status))).length,
-      hint: 'Requests that are already in conversation, documents, quote, or delivery stages.',
+      label: 'Overdue Follow-Up',
+      value: inquiries.filter((inquiry) => inquiry.isOverdueFollowUp).length,
+      hint: 'Requests that need the next staff reply or document chase urgently.',
       tone: 'accent',
     },
     {
-      label: 'Completed Work',
-      value: inquiries.filter((inquiry) => {
-        const status = getOperationalStatusLabel(inquiry.status);
-        return status === 'Confirmed Offline' || status === 'Completed';
-      }).length,
-      hint: 'Requests already confirmed offline or fully completed.',
+      label: 'Document Chase',
+      value: inquiries.filter((inquiry) => requiresDocumentFollowUp(inquiry)).length,
+      hint: 'Requests still waiting on missing, renewed, or incomplete documents.',
       tone: 'default',
     },
   ];
@@ -387,7 +469,7 @@ const ServiceInquiriesAdmin = () => {
           description={`${editingInquiry.serviceTitle || editingInquiry.serviceType} for ${editingInquiry.contactName}`}
         >
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+            <div className={`grid gap-4 ${isAdmin ? 'xl:grid-cols-[220px_220px_minmax(0,1fr)]' : 'lg:grid-cols-[260px_minmax(0,1fr)]'}`}>
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-gray-700">Request status</span>
                 <select
@@ -400,6 +482,23 @@ const ServiceInquiriesAdmin = () => {
                   ))}
                 </select>
               </label>
+              {isAdmin && (
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Request owner</span>
+                  <select
+                    value={formData.assignedStaffId}
+                    onChange={(event) => setFormData({ ...formData, assignedStaffId: event.target.value })}
+                    className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                  >
+                    <option value="">Keep unassigned</option>
+                    {staffDirectory.map((staffMember) => (
+                      <option key={staffMember.id} value={staffMember.id}>
+                        {staffMember.name || staffMember.email} ({getStaffRoleLabel(staffMember.role)})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-gray-700">Team notes</span>
                 <textarea
@@ -434,7 +533,7 @@ const ServiceInquiriesAdmin = () => {
       <StaffCardSection title="Filter and Search" description="Switch between urgent, document, and follow-up queues before narrowing by time or search.">
         <div className="space-y-4">
           <StaffFilterPills
-            options={getStatusFilterOptions(inquiries)}
+            options={getStatusFilterOptions(inquiries, currentUserId)}
             value={statusFilter}
             onChange={setStatusFilter}
           />
@@ -508,11 +607,15 @@ const ServiceInquiriesAdmin = () => {
                       <div className="text-sm font-bold">{inquiry.contactName}</div>
                       <div className="mt-1 text-sm">{inquiry.contactEmail}</div>
                       <div className="mt-1 text-sm">{inquiry.contactPhone || 'No phone provided'}</div>
+                      <div className="mt-2 text-xs uppercase tracking-[0.18em]">
+                        Owner {getStaffDisplayName(inquiry.assignedStaff, 'Unassigned')}
+                      </div>
                     </div>
                     <div className="text-sm">
                       <div>Country or destination: {inquiry.country || 'Not provided'}</div>
                       <div className="mt-1">Preferred date: {formatAdminDate(inquiry.preferredDate, 'To be confirmed')}</div>
                       <div className="mt-1">Applicants: {inquiry.applicants || 'Not provided'}</div>
+                      <div className="mt-1">Last action: {formatAdminDateTime(inquiry.lastActionAt, 'Not recorded')}</div>
                     </div>
                   </div>
 
@@ -523,9 +626,17 @@ const ServiceInquiriesAdmin = () => {
                     <span className={`rounded-full px-3 py-1 text-xs font-bold ${isSelected ? 'bg-white/15 text-white' : getDocumentToneClass(inquiry.documentReadiness || inquiry.documentStatus)}`}>
                       {inquiry.documentReadiness || inquiry.documentStatus || 'Document status not provided'}
                     </span>
+                    <span className={`rounded-full px-3 py-1 text-xs font-bold ${isSelected ? 'bg-white/15 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                      {inquiry.isUnassigned ? 'Unassigned' : `${getStaffRoleLabel(inquiry.assignedStaff?.role)} owner`}
+                    </span>
                     {!inquiry.userId && (
                       <span className={`rounded-full px-3 py-1 text-xs font-bold ${isSelected ? 'bg-white/15 text-white' : 'bg-gray-100 text-gray-700'}`}>
                         Guest
+                      </span>
+                    )}
+                    {inquiry.isOverdueFollowUp && (
+                      <span className={`rounded-full px-3 py-1 text-xs font-bold ${isSelected ? 'bg-white/20 text-white' : getAttentionToneClass('high')}`}>
+                        Overdue {formatDayAge(inquiry.daysSinceLastFollowUp, 'Today')}
                       </span>
                     )}
                   </div>
@@ -548,11 +659,22 @@ const ServiceInquiriesAdmin = () => {
               >
                 <div className="flex flex-wrap gap-3">
                   <StaffStatusPill status={selectedInquiry.status} />
+                  <StaffInfoPill tone={selectedInquiry.isUnassigned ? 'danger' : isOwnedByCurrentStaff(selectedInquiry, currentUserId) ? 'accent' : 'info'}>
+                    Owner {getStaffDisplayName(selectedInquiry.assignedStaff, 'Unassigned')}
+                  </StaffInfoPill>
                   <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${getPriorityToneClass(selectedInquiry.priorityLabel)}`}>
                     {selectedInquiry.priorityLabel || 'Standard'} priority
                   </span>
+                  {selectedInquiry.isOverdueFollowUp && (
+                    <StaffInfoPill tone="danger">
+                      Overdue {formatDayAge(selectedInquiry.daysSinceLastFollowUp, 'Today')}
+                    </StaffInfoPill>
+                  )}
                   <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">
                     Last contact {formatAdminDateTime(selectedInquiry.lastContactedAt, 'not recorded')}
+                  </span>
+                  <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">
+                    Last action {formatAdminDateTime(selectedInquiry.lastActionAt, 'not recorded')}
                   </span>
                 </div>
 
@@ -571,6 +693,16 @@ const ServiceInquiriesAdmin = () => {
                   >
                     Continue on WhatsApp
                   </button>
+                  {!isOwnedByCurrentStaff(selectedInquiry, currentUserId) && (
+                    <button
+                      type="button"
+                      onClick={() => handleAssignToMe(selectedInquiry)}
+                      disabled={assigningId === selectedInquiry.id}
+                      className="rounded-full border border-[#006837] px-4 py-2 text-sm font-bold text-[#006837] transition hover:bg-[#006837] hover:text-white disabled:opacity-60"
+                    >
+                      {assigningId === selectedInquiry.id ? 'Assigning...' : 'Take Ownership'}
+                    </button>
+                  )}
                 </div>
               </StaffDetailSection>
 
@@ -580,6 +712,27 @@ const ServiceInquiriesAdmin = () => {
                   <StaffDetailRow label="Account type" value={selectedInquiry.userId ? 'Account Holder' : 'Guest'} />
                   <StaffDetailRow label="Email" value={selectedInquiry.contactEmail} />
                   <StaffDetailRow label="Phone / WhatsApp" value={selectedInquiry.contactPhone} />
+                </div>
+              </StaffDetailSection>
+
+              <StaffDetailSection title="Ownership and Accountability">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <StaffDetailRow
+                    label="Request owner"
+                    value={`${getStaffDisplayName(selectedInquiry.assignedStaff, 'Unassigned')}${selectedInquiry.assignedStaff ? ` (${getStaffRoleLabel(selectedInquiry.assignedStaff.role)})` : ''}`}
+                  />
+                  <StaffDetailRow label="Assigned on" value={formatAdminDateTime(selectedInquiry.assignedAt, 'Not assigned yet')} />
+                  <StaffDetailRow
+                    label="Last updated by"
+                    value={`${getStaffDisplayName(selectedInquiry.lastUpdatedBy, 'Not recorded')}${selectedInquiry.lastUpdatedBy ? ` (${getStaffRoleLabel(selectedInquiry.lastUpdatedBy.role)})` : ''}`}
+                  />
+                  <StaffDetailRow label="Last action time" value={formatAdminDateTime(selectedInquiry.lastActionAt, 'Not recorded')} />
+                  <StaffDetailRow label="Last status change" value={formatAdminDateTime(selectedInquiry.lastStatusChangedAt, 'Not recorded')} />
+                  <StaffDetailRow
+                    label="Attention flags"
+                    value={selectedInquiry.attentionReasons?.length ? selectedInquiry.attentionReasons.join(', ') : 'No special attention flag right now.'}
+                    subtle
+                  />
                 </div>
               </StaffDetailSection>
 

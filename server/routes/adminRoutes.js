@@ -10,6 +10,11 @@ const {
     isNewOperationalStatus,
     isWonOperationalStatus,
 } = require('../utils/operationalPipeline');
+const {
+    STAFF_USER_SUMMARY_SELECT,
+    buildRequestWorkflowSignals,
+    buildStaffWhereClause,
+} = require('../utils/staffRequestIntelligence');
 const { sendInvalidId, sendValidationError, toPositiveInteger } = require('../utils/validation');
 
 async function countAdmins() {
@@ -21,6 +26,78 @@ async function countAdmins() {
             },
         },
     });
+}
+
+function normalizeFreeText(value) {
+    return String(value || '').trim().toLowerCase();
+}
+
+function packageRequestNeedsDocuments(booking) {
+    if ((booking.status || '').toLowerCase() === 'docs requested') {
+        return true;
+    }
+
+    return !booking.locationFrom ||
+        !booking.travelDate ||
+        !booking.passportNumber ||
+        !booking.passportExpiryDate ||
+        !booking.dateOfBirth ||
+        !booking.nationality ||
+        !booking.passportCopy;
+}
+
+function serviceRequestPriorityLabel(urgency) {
+    const normalizedUrgency = normalizeFreeText(urgency);
+
+    if (
+        normalizedUrgency.includes('urgent') ||
+        normalizedUrgency.includes('asap') ||
+        normalizedUrgency.includes('high') ||
+        normalizedUrgency.includes('immediate') ||
+        normalizedUrgency.includes('today')
+    ) {
+        return 'High';
+    }
+
+    if (
+        normalizedUrgency.includes('soon') ||
+        normalizedUrgency.includes('medium') ||
+        normalizedUrgency.includes('this week')
+    ) {
+        return 'Medium';
+    }
+
+    return normalizedUrgency ? 'Normal' : 'Standard';
+}
+
+function serviceRequestNeedsDocuments(inquiry) {
+    const normalizedStatus = normalizeFreeText(inquiry.status);
+    const normalizedDocumentStatus = normalizeFreeText(inquiry.documentStatus);
+
+    if (normalizedStatus === 'docs requested') {
+        return true;
+    }
+
+    return normalizedDocumentStatus.includes('missing') ||
+        normalizedDocumentStatus.includes('need') ||
+        normalizedDocumentStatus.includes('expired') ||
+        normalizedDocumentStatus.includes('renew');
+}
+
+function buildOperationalWorkflow(record) {
+    switch (record.type) {
+        case 'package':
+            return buildRequestWorkflowSignals(record, {
+                waitingForDocuments: packageRequestNeedsDocuments(record),
+            });
+        case 'service':
+            return buildRequestWorkflowSignals(record, {
+                waitingForDocuments: serviceRequestNeedsDocuments(record),
+                priorityLabel: serviceRequestPriorityLabel(record.urgency),
+            });
+        default:
+            return buildRequestWorkflowSignals(record);
+    }
 }
 
 // @route   GET api/admin/stats
@@ -37,12 +114,7 @@ router.get('/stats', auth, requireAdminOrManager, async (req, res) => {
             },
         });
 
-        // Calculate Booking Trends (Last 6 Months)
-        const sixMonthsAgo = new Date();
-        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-        sixMonthsAgo.setHours(0, 0, 0, 0);
-
-        const [packageBookings, flightBookings, consultations, serviceInquiries, publishedMediaPosts, activeNewsletterSubscribers] = await prisma.$transaction([
+        const [packageBookings, flightBookings, consultations, serviceInquiries, publishedMediaPosts, activeNewsletterSubscribers, staffMembers] = await prisma.$transaction([
             prisma.packageBooking.findMany({
                 include: {
                     package: {
@@ -51,27 +123,42 @@ router.get('/stats', auth, requireAdminOrManager, async (req, res) => {
                             price: true,
                         },
                     },
+                    assignedStaff: {
+                        select: STAFF_USER_SUMMARY_SELECT,
+                    },
+                    lastUpdatedBy: {
+                        select: STAFF_USER_SUMMARY_SELECT,
+                    },
                 },
             }),
             prisma.flightBooking.findMany({
-                select: {
-                    id: true,
-                    status: true,
-                    createdAt: true,
+                include: {
+                    assignedStaff: {
+                        select: STAFF_USER_SUMMARY_SELECT,
+                    },
+                    lastUpdatedBy: {
+                        select: STAFF_USER_SUMMARY_SELECT,
+                    },
                 },
             }),
             prisma.privateConsultation.findMany({
-                select: {
-                    id: true,
-                    status: true,
-                    createdAt: true,
+                include: {
+                    assignedStaff: {
+                        select: STAFF_USER_SUMMARY_SELECT,
+                    },
+                    lastUpdatedBy: {
+                        select: STAFF_USER_SUMMARY_SELECT,
+                    },
                 },
             }),
             prisma.serviceInquiry.findMany({
-                select: {
-                    id: true,
-                    status: true,
-                    createdAt: true,
+                include: {
+                    assignedStaff: {
+                        select: STAFF_USER_SUMMARY_SELECT,
+                    },
+                    lastUpdatedBy: {
+                        select: STAFF_USER_SUMMARY_SELECT,
+                    },
                 },
             }),
             prisma.mediaPost.count({
@@ -84,6 +171,14 @@ router.get('/stats', auth, requireAdminOrManager, async (req, res) => {
                     isActive: true,
                 },
             }),
+            prisma.user.findMany({
+                where: buildStaffWhereClause(),
+                select: STAFF_USER_SUMMARY_SELECT,
+                orderBy: [
+                    { role: 'asc' },
+                    { name: 'asc' },
+                ],
+            }),
         ]);
 
         const allOperationalRecords = [
@@ -92,6 +187,13 @@ router.get('/stats', auth, requireAdminOrManager, async (req, res) => {
             ...consultations.map((record) => ({ type: 'consultation', ...record })),
             ...serviceInquiries.map((record) => ({ type: 'service', ...record })),
         ];
+        const workflowRecords = allOperationalRecords.map((record) => ({
+            ...record,
+            workflow: buildOperationalWorkflow(record),
+        }));
+        const openRecords = workflowRecords.filter((record) => (
+            !isWonOperationalStatus(record.status) && !isLostOperationalStatus(record.status)
+        ));
 
         const pipelineValue = packageBookings.reduce((total, booking) => {
             if (isLostOperationalStatus(booking.status)) {
@@ -105,6 +207,37 @@ router.get('/stats', auth, requireAdminOrManager, async (req, res) => {
         const activeFollowUps = allOperationalRecords.filter((record) => isActiveFollowUpStatus(record.status)).length;
         const completedRequests = allOperationalRecords.filter((record) => isWonOperationalStatus(record.status)).length;
         const lostOrCancelled = allOperationalRecords.filter((record) => isLostOperationalStatus(record.status)).length;
+        const overdueFollowUps = openRecords.filter((record) => record.workflow.isOverdueFollowUp).length;
+        const waitingForDocuments = openRecords.filter((record) => record.workflow.isWaitingForDocuments).length;
+        const unassignedOpenRequests = openRecords.filter((record) => record.workflow.isUnassigned).length;
+
+        const handledRequestsCount = completedRequests + lostOrCancelled;
+        const conversionRate = handledRequestsCount > 0
+            ? Math.round((completedRequests / handledRequestsCount) * 100)
+            : 0;
+
+        const openRequestBreakdown = [
+            { name: 'Package Requests', value: openRecords.filter((record) => record.type === 'package').length },
+            { name: 'Flight Requests', value: openRecords.filter((record) => record.type === 'flight').length },
+            { name: 'Consultations', value: openRecords.filter((record) => record.type === 'consultation').length },
+            { name: 'Service Inquiries', value: openRecords.filter((record) => record.type === 'service').length },
+        ];
+
+        const teamWorkload = staffMembers.map((staffMember) => {
+            const assignedRecords = workflowRecords.filter((record) => record.workflow.assignedStaff?.id === staffMember.id);
+            const assignedOpenRecords = assignedRecords.filter((record) => (
+                !isWonOperationalStatus(record.status) && !isLostOperationalStatus(record.status)
+            ));
+
+            return {
+                ...staffMember,
+                openRequests: assignedOpenRecords.length,
+                overdueFollowUps: assignedOpenRecords.filter((record) => record.workflow.isOverdueFollowUp).length,
+                waitingForDocuments: assignedOpenRecords.filter((record) => record.workflow.isWaitingForDocuments).length,
+                wonRequests: assignedRecords.filter((record) => isWonOperationalStatus(record.status)).length,
+                recentlyUpdatedRequests: assignedOpenRecords.filter((record) => (record.workflow.daysSinceLastAction ?? 99) <= 2).length,
+            };
+        });
 
         const trends = [];
         const now = new Date();
@@ -160,12 +293,28 @@ router.get('/stats', auth, requireAdminOrManager, async (req, res) => {
             activeFollowUps,
             completedRequests,
             lostOrCancelled,
+            overdueFollowUps,
+            waitingForDocuments,
+            unassignedOpenRequests,
             totalPackageRequests: packageBookings.length,
             totalFlightRequests: flightBookings.length,
             totalConsultations: consultations.length,
             totalServiceInquiries: serviceInquiries.length,
             publishedMediaPosts,
             activeNewsletterSubscribers,
+            conversionSummary: {
+                wonCount: completedRequests,
+                lostCount: lostOrCancelled,
+                conversionRate,
+            },
+            attentionSummary: [
+                { name: 'New requests', value: newRequests },
+                { name: 'Unassigned open', value: unassignedOpenRequests },
+                { name: 'Waiting documents', value: waitingForDocuments },
+                { name: 'Overdue follow-up', value: overdueFollowUps },
+            ],
+            openRequestBreakdown,
+            teamWorkload,
             trends,
             requestDistribution: [
                 { name: 'Package Requests', value: packageBookings.length },
@@ -176,6 +325,27 @@ router.get('/stats', auth, requireAdminOrManager, async (req, res) => {
         });
     } catch (err) {
         console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   GET api/admin/staff-directory
+// @desc    Get assignable staff accounts
+// @access  Private (Admin/Manager)
+router.get('/staff-directory', auth, requireAdminOrManager, async (req, res) => {
+    try {
+        const staffMembers = await prisma.user.findMany({
+            where: buildStaffWhereClause(),
+            select: STAFF_USER_SUMMARY_SELECT,
+            orderBy: [
+                { role: 'asc' },
+                { name: 'asc' },
+            ],
+        });
+
+        res.json(staffMembers);
+    } catch (err) {
+        console.error('Error fetching staff directory:', err.message);
         res.status(500).send('Server Error');
     }
 });

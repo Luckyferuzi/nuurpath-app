@@ -27,6 +27,11 @@ const {
   buildProtectedBookingStoredFileUrl,
   extractStoredFileIdFromReference,
 } = require('../utils/storedFiles');
+const {
+  STAFF_USER_SUMMARY_SELECT,
+  buildRequestWorkflowSignals,
+  resolveAssignedStaffInput,
+} = require('../utils/staffRequestIntelligence');
 
 function normalizePackageBookingDocumentReference(value) {
   const storedFileId = extractStoredFileIdFromReference(
@@ -141,9 +146,13 @@ function serializePackageBookingForStaff(booking) {
     ...booking,
     passportCopy: passportCopyUrl,
   });
+  const workflowSignals = buildRequestWorkflowSignals(booking, {
+    waitingForDocuments: missingInformation.length > 0,
+  });
 
   return {
     ...booking,
+    ...workflowSignals,
     requestId: booking.id,
     packageTitle: booking.package?.title || null,
     customerNotes: booking.specialRequests || booking.notes || null,
@@ -200,6 +209,12 @@ router.get('/', auth, requireAdminOrManager, async (req, res) => {
       include: {
         user: true,
         package: true,
+        assignedStaff: {
+          select: STAFF_USER_SUMMARY_SELECT,
+        },
+        lastUpdatedBy: {
+          select: STAFF_USER_SUMMARY_SELECT,
+        },
       },
     });
 
@@ -224,7 +239,13 @@ router.post('/', auth, requireAdminOrManager, async (req, res) => {
       passengers,
       status,
       adminNotes,
+      assignedStaffId,
     } = req.body;
+
+    const actorId = toPositiveInteger(req.user.id);
+    if (actorId === null) {
+      return sendValidationError(res, 'Invalid staff user id.');
+    }
 
     const normalizedPackageId = toPositiveInteger(packageId);
     if (normalizedPackageId === null) {
@@ -275,6 +296,14 @@ router.post('/', auth, requireAdminOrManager, async (req, res) => {
       userId = existingUser.id;
     }
 
+    let resolvedAssignedStaffId = actorId;
+    if (assignedStaffId !== undefined) {
+      const assignmentResolution = await resolveAssignedStaffInput(prisma, assignedStaffId, req.user);
+      if (assignmentResolution.hasAssignmentChange) {
+        resolvedAssignedStaffId = assignmentResolution.assignedStaffId;
+      }
+    }
+
     const newBooking = await prisma.packageBooking.create({
       data: {
         userId,
@@ -286,9 +315,22 @@ router.post('/', auth, requireAdminOrManager, async (req, res) => {
         passengers: passengerCount,
         status: normalizedStatus,
         adminNotes: isNonEmptyString(adminNotes) ? toTrimmedString(adminNotes) : null,
+        assignedStaffId: resolvedAssignedStaffId,
+        assignedAt: resolvedAssignedStaffId ? new Date() : null,
         lastContactedAt: shouldSetLastContactedAt(normalizedStatus) ? new Date() : null,
+        lastUpdatedByUserId: actorId,
+        lastStatusChangedAt: new Date(),
       },
-      include: { user: true, package: true },
+      include: {
+        user: true,
+        package: true,
+        assignedStaff: {
+          select: STAFF_USER_SUMMARY_SELECT,
+        },
+        lastUpdatedBy: {
+          select: STAFF_USER_SUMMARY_SELECT,
+        },
+      },
     });
 
     if (normalizedStatus === 'Confirmed Offline') {
@@ -321,7 +363,26 @@ router.put('/:id', auth, requireAdminOrManager, async (req, res) => {
       passengers,
       status,
       adminNotes,
+      assignedStaffId,
     } = req.body;
+
+    const actorId = toPositiveInteger(req.user.id);
+    if (actorId === null) {
+      return sendValidationError(res, 'Invalid staff user id.');
+    }
+
+    const existingBooking = await prisma.packageBooking.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        status: true,
+        assignedStaffId: true,
+      },
+    });
+
+    if (!existingBooking) {
+      return res.status(404).json({ msg: 'Package request not found' });
+    }
 
     const updateData = {};
 
@@ -392,6 +453,9 @@ router.put('/:id', auth, requireAdminOrManager, async (req, res) => {
       }
 
       updateData.status = normalizedStatus;
+      if (normalizedStatus !== (normalizeOperationalStatus(existingBooking.status) || 'New')) {
+        updateData.lastStatusChangedAt = new Date();
+      }
       if (shouldSetLastContactedAt(normalizedStatus)) {
         updateData.lastContactedAt = new Date();
       }
@@ -401,14 +465,35 @@ router.put('/:id', auth, requireAdminOrManager, async (req, res) => {
       updateData.adminNotes = isNonEmptyString(adminNotes) ? toTrimmedString(adminNotes) : null;
     }
 
+    if (assignedStaffId !== undefined) {
+      const assignmentResolution = await resolveAssignedStaffInput(prisma, assignedStaffId, req.user);
+      if (assignmentResolution.hasAssignmentChange) {
+        updateData.assignedStaffId = assignmentResolution.assignedStaffId;
+        if (assignmentResolution.assignedStaffId !== existingBooking.assignedStaffId) {
+          updateData.assignedAt = assignmentResolution.assignedStaffId ? new Date() : null;
+        }
+      }
+    }
+
     if (Object.keys(updateData).length === 0) {
       return sendValidationError(res, 'No valid package request fields were provided for update.');
     }
 
+    updateData.lastUpdatedByUserId = actorId;
+
     const updated = await prisma.packageBooking.update({
       where: { id },
       data: updateData,
-      include: { package: true, user: true },
+      include: {
+        package: true,
+        user: true,
+        assignedStaff: {
+          select: STAFF_USER_SUMMARY_SELECT,
+        },
+        lastUpdatedBy: {
+          select: STAFF_USER_SUMMARY_SELECT,
+        },
+      },
     });
 
     if (updateData.status === 'Confirmed Offline') {

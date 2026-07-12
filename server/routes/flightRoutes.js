@@ -21,6 +21,11 @@ const {
     toPositiveInteger,
     toTrimmedString,
 } = require('../utils/validation');
+const {
+    STAFF_USER_SUMMARY_SELECT,
+    buildRequestWorkflowSignals,
+    resolveAssignedStaffInput,
+} = require('../utils/staffRequestIntelligence');
 
 function serializeFlightRequest(booking, { includeInternalFields = false } = {}) {
     if (!booking || typeof booking !== 'object') {
@@ -30,6 +35,7 @@ function serializeFlightRequest(booking, { includeInternalFields = false } = {})
     const normalizedStatus = normalizeOperationalStatus(booking.status) || 'New';
     const serializedBooking = {
         ...booking,
+        ...buildRequestWorkflowSignals(booking),
         status: normalizedStatus,
         requestId: booking.id,
         tripType: booking.returnDate ? 'Round Trip' : 'One Way',
@@ -37,7 +43,24 @@ function serializeFlightRequest(booking, { includeInternalFields = false } = {})
 
     if (!includeInternalFields) {
         delete serializedBooking.adminNotes;
+        delete serializedBooking.assignedAt;
+        delete serializedBooking.assignedStaff;
+        delete serializedBooking.attentionLevel;
+        delete serializedBooking.attentionReasons;
+        delete serializedBooking.daysSinceLastAction;
+        delete serializedBooking.daysSinceLastFollowUp;
+        delete serializedBooking.isAssignedToStaff;
+        delete serializedBooking.isOverdueFollowUp;
+        delete serializedBooking.isUnassigned;
+        delete serializedBooking.isWaitingForDocuments;
+        delete serializedBooking.lastActionAt;
         delete serializedBooking.lastContactedAt;
+        delete serializedBooking.lastStatusChangedAt;
+        delete serializedBooking.lastUpdatedBy;
+        delete serializedBooking.needsAttention;
+        delete serializedBooking.priorityLabel;
+        delete serializedBooking.queueBucket;
+        delete serializedBooking.queueLabel;
     }
 
     return serializedBooking;
@@ -64,7 +87,15 @@ router.get('/', auth, async (req, res) => {
         const bookings = await prisma.flightBooking.findMany({
             where,
             orderBy: { createdAt: 'desc' },
-            include: { user: true },
+            include: {
+                user: true,
+                assignedStaff: {
+                    select: STAFF_USER_SUMMARY_SELECT,
+                },
+                lastUpdatedBy: {
+                    select: STAFF_USER_SUMMARY_SELECT,
+                },
+            },
         });
 
         return res.json(bookings.map((booking) => serializeFlightRequest(booking, { includeInternalFields })));
@@ -141,6 +172,7 @@ router.post('/', flightRequestLimiter, softAuth, async (req, res) => {
                 contactPhone: toTrimmedString(contactPhone),
                 userId: validUserId,
                 status: 'Pending',
+                lastStatusChangedAt: new Date(),
             },
         });
 
@@ -180,7 +212,15 @@ router.get('/:id', auth, async (req, res) => {
 
         const booking = await prisma.flightBooking.findUnique({
             where: { id },
-            include: { user: true },
+            include: {
+                user: true,
+                assignedStaff: {
+                    select: STAFF_USER_SUMMARY_SELECT,
+                },
+                lastUpdatedBy: {
+                    select: STAFF_USER_SUMMARY_SELECT,
+                },
+            },
         });
 
         if (!booking) {
@@ -209,7 +249,25 @@ router.put('/:id', auth, requireAdminOrManager, async (req, res) => {
             return sendInvalidId(res);
         }
 
-        const { status, adminNotes } = req.body;
+        const { status, adminNotes, assignedStaffId } = req.body;
+        const actorId = toPositiveInteger(req.user.id);
+        if (actorId === null) {
+            return sendValidationError(res, 'Invalid staff user id.');
+        }
+
+        const existingBooking = await prisma.flightBooking.findUnique({
+            where: { id },
+            select: {
+                id: true,
+                status: true,
+                assignedStaffId: true,
+            },
+        });
+
+        if (!existingBooking) {
+            return res.status(404).json({ msg: 'Flight request not found' });
+        }
+
         const updateData = {};
 
         if (status !== undefined) {
@@ -219,6 +277,9 @@ router.put('/:id', auth, requireAdminOrManager, async (req, res) => {
             }
 
             updateData.status = normalizedStatus;
+            if (normalizedStatus !== (normalizeOperationalStatus(existingBooking.status) || 'New')) {
+                updateData.lastStatusChangedAt = new Date();
+            }
             if (shouldSetLastContactedAt(normalizedStatus)) {
                 updateData.lastContactedAt = new Date();
             }
@@ -228,14 +289,34 @@ router.put('/:id', auth, requireAdminOrManager, async (req, res) => {
             updateData.adminNotes = isNonEmptyString(adminNotes) ? toTrimmedString(adminNotes) : null;
         }
 
+        if (assignedStaffId !== undefined) {
+            const assignmentResolution = await resolveAssignedStaffInput(prisma, assignedStaffId, req.user);
+            if (assignmentResolution.hasAssignmentChange) {
+                updateData.assignedStaffId = assignmentResolution.assignedStaffId;
+                if (assignmentResolution.assignedStaffId !== existingBooking.assignedStaffId) {
+                    updateData.assignedAt = assignmentResolution.assignedStaffId ? new Date() : null;
+                }
+            }
+        }
+
         if (Object.keys(updateData).length === 0) {
             return sendValidationError(res, 'No valid flight request fields were provided for update.');
         }
 
+        updateData.lastUpdatedByUserId = actorId;
+
         const booking = await prisma.flightBooking.update({
             where: { id },
             data: updateData,
-            include: { user: true },
+            include: {
+                user: true,
+                assignedStaff: {
+                    select: STAFF_USER_SUMMARY_SELECT,
+                },
+                lastUpdatedBy: {
+                    select: STAFF_USER_SUMMARY_SELECT,
+                },
+            },
         });
 
         return res.json(serializeFlightRequest(booking, { includeInternalFields: true }));

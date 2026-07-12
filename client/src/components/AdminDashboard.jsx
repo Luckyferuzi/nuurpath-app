@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import axios from '../lib/api';
 import { useAuth } from '../contexts/AuthContext.jsx';
-import { StaffCardSection, StaffMetricCard, StaffPageShell } from './staff/WorkspacePrimitives.jsx';
+import { StaffCardSection, StaffInfoPill, StaffMetricCard, StaffPageShell } from './staff/WorkspacePrimitives.jsx';
 import { getStaffWorkspaceSections } from '../lib/staffWorkspace.js';
 
 const CHART_COLORS = ['#006837', '#D4AF37', '#0B1C3E', '#5c7cfa'];
@@ -17,12 +17,23 @@ const AdminDashboard = () => {
     activeFollowUps: 0,
     completedRequests: 0,
     lostOrCancelled: 0,
+    overdueFollowUps: 0,
+    waitingForDocuments: 0,
+    unassignedOpenRequests: 0,
     totalPackageRequests: 0,
     totalFlightRequests: 0,
     totalConsultations: 0,
     totalServiceInquiries: 0,
     publishedMediaPosts: 0,
     activeNewsletterSubscribers: 0,
+    conversionSummary: {
+      wonCount: 0,
+      lostCount: 0,
+      conversionRate: 0,
+    },
+    attentionSummary: [],
+    openRequestBreakdown: [],
+    teamWorkload: [],
     trends: [],
     requestDistribution: [],
   });
@@ -63,26 +74,30 @@ const AdminDashboard = () => {
       tone: 'accent',
     },
     {
-      label: 'New Requests',
-      value: loading ? '...' : stats.newRequests,
-      hint: 'Fresh requests that still need the first team response.',
-      tone: 'default',
+      label: 'Overdue Follow-Up',
+      value: loading ? '...' : stats.overdueFollowUps,
+      hint: 'Requests that have gone too long without the next team touch.',
+      tone: 'danger',
     },
     {
-      label: 'Ready Follow-Up',
-      value: loading ? '...' : stats.activeFollowUps,
-      hint: 'Requests already moving through contact, documents, or quotation.',
+      label: 'Unassigned Open',
+      value: loading ? '...' : stats.unassignedOpenRequests,
+      hint: 'Open requests that still need a clear owner.',
       tone: 'warm',
     },
     {
-      label: 'Confirmed or Done',
-      value: loading ? '...' : stats.completedRequests,
-      hint: 'Requests already confirmed offline or fully completed.',
+      label: 'Waiting Documents',
+      value: loading ? '...' : stats.waitingForDocuments,
+      hint: 'Open work currently blocked by missing customer documents or details.',
       tone: 'default',
     },
   ];
 
   const queueMetrics = [
+    { label: 'New Requests', value: loading ? '...' : stats.newRequests, hint: 'Fresh requests that still need the first response.', tone: 'default' },
+    { label: 'Ready Follow-Up', value: loading ? '...' : stats.activeFollowUps, hint: 'Requests already moving through contact, documents, or quotation.', tone: 'warm' },
+    { label: 'Confirmed or Done', value: loading ? '...' : stats.completedRequests, hint: 'Requests already confirmed offline or fully completed.', tone: 'accent' },
+    { label: 'Conversion Rate', value: loading ? '...' : `${stats.conversionSummary?.conversionRate || 0}%`, hint: 'Won versus lost outcomes among handled requests.', tone: 'accent' },
     { label: 'Package Requests', value: loading ? '...' : stats.totalPackageRequests, hint: 'Package leads in the system.', tone: 'accent' },
     { label: 'Flight Requests', value: loading ? '...' : stats.totalFlightRequests, hint: 'Flight inquiries waiting or in follow-up.', tone: 'warm' },
     { label: 'Consultations', value: loading ? '...' : stats.totalConsultations, hint: 'Private consultation bookings to review.', tone: 'default' },
@@ -99,9 +114,9 @@ const AdminDashboard = () => {
     {
       title: 'Requests needing quick attention',
       items: [
-        `New requests: ${loading ? '...' : stats.newRequests}`,
-        `Active follow-up: ${loading ? '...' : stats.activeFollowUps}`,
-        `Closed or lost: ${loading ? '...' : stats.lostOrCancelled}`,
+        `Overdue follow-up: ${loading ? '...' : stats.overdueFollowUps}`,
+        `Waiting for documents: ${loading ? '...' : stats.waitingForDocuments}`,
+        `Unassigned open work: ${loading ? '...' : stats.unassignedOpenRequests}`,
       ],
     },
     {
@@ -169,7 +184,7 @@ const AdminDashboard = () => {
               <ResponsiveContainer>
                 <PieChart>
                   <Pie
-                    data={stats.requestDistribution}
+                    data={(stats.openRequestBreakdown && stats.openRequestBreakdown.length > 0) ? stats.openRequestBreakdown : stats.requestDistribution}
                     cx="50%"
                     cy="50%"
                     innerRadius={58}
@@ -178,7 +193,7 @@ const AdminDashboard = () => {
                     dataKey="value"
                     label
                   >
-                    {(stats.requestDistribution || []).map((entry, index) => (
+                    {((stats.openRequestBreakdown && stats.openRequestBreakdown.length > 0) ? stats.openRequestBreakdown : stats.requestDistribution || []).map((entry, index) => (
                       <Cell key={`${entry.name}-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                     ))}
                   </Pie>
@@ -204,6 +219,61 @@ const AdminDashboard = () => {
             </div>
           </StaffCardSection>
         </div>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <StaffCardSection title="Open Queue Pressure" description="These counts help the team see where the operational pressure is building right now.">
+          <div className="grid gap-4 md:grid-cols-2">
+            {(stats.attentionSummary || []).map((item) => (
+              <div key={item.name} className="rounded-[1.5rem] border border-[#efe8d8] bg-[#fbfaf7] p-5">
+                <div className="text-xs font-black uppercase tracking-[0.22em] text-[#8a7443]">{item.name}</div>
+                <div className="mt-4 text-3xl font-black text-[#101c2d]">{loading ? '...' : item.value}</div>
+              </div>
+            ))}
+          </div>
+        </StaffCardSection>
+
+        <StaffCardSection title="Team Ownership" description="See who is carrying active work, where follow-up is aging, and where support may be needed.">
+          <div className="space-y-4">
+            {(stats.teamWorkload || []).length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-[#d8cdb7] bg-[#fbfaf7] px-5 py-6 text-sm text-[#67707e]">
+                No assigned staff workload is available yet.
+              </div>
+            ) : (
+              (stats.teamWorkload || []).map((member) => (
+                <div key={member.id} className="rounded-[1.5rem] border border-[#efe8d8] bg-[#fbfaf7] p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-black text-[#101c2d]">{member.name || member.email}</h3>
+                      <p className="mt-1 text-sm text-[#67707e]">{member.email}</p>
+                    </div>
+                    <StaffInfoPill tone={String(member.role || '').toLowerCase() === 'admin' ? 'dark' : 'info'}>
+                      {String(member.role || '').toLowerCase() === 'admin' ? 'Admin' : 'Manager'}
+                    </StaffInfoPill>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-white bg-white px-4 py-3 shadow-sm">
+                      <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a828f]">Open queue</div>
+                      <div className="mt-2 text-2xl font-black text-[#101c2d]">{loading ? '...' : member.openRequests}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white bg-white px-4 py-3 shadow-sm">
+                      <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a828f]">Overdue</div>
+                      <div className="mt-2 text-2xl font-black text-[#b42318]">{loading ? '...' : member.overdueFollowUps}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white bg-white px-4 py-3 shadow-sm">
+                      <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a828f]">Waiting docs</div>
+                      <div className="mt-2 text-2xl font-black text-[#8a7443]">{loading ? '...' : member.waitingForDocuments}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white bg-white px-4 py-3 shadow-sm">
+                      <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a828f]">Won or done</div>
+                      <div className="mt-2 text-2xl font-black text-[#006837]">{loading ? '...' : member.wonRequests}</div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </StaffCardSection>
       </div>
 
       <StaffCardSection title="Workspace Areas" description="These grouped links help staff move through the workspace without hunting across unrelated pages.">

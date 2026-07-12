@@ -21,6 +21,11 @@ const {
     toPositiveInteger,
     toTrimmedString,
 } = require('../utils/validation');
+const {
+    STAFF_USER_SUMMARY_SELECT,
+    buildRequestWorkflowSignals,
+    resolveAssignedStaffInput,
+} = require('../utils/staffRequestIntelligence');
 
 function normalizeFreeText(value) {
     return String(value || '').trim().toLowerCase();
@@ -155,14 +160,24 @@ function serializeServiceInquiry(inquiry) {
         return inquiry;
     }
 
+    const priorityLabel = inferServicePriority(inquiry.urgency);
+    const documentReadiness = inferDocumentReadiness(inquiry.documentStatus);
+
     return {
         ...inquiry,
+        ...buildRequestWorkflowSignals(inquiry, {
+            waitingForDocuments: inferDocumentReadiness(inquiry.documentStatus).toLowerCase().includes('missing') ||
+                inferDocumentReadiness(inquiry.documentStatus).toLowerCase().includes('need') ||
+                inferDocumentReadiness(inquiry.documentStatus).toLowerCase().includes('expired') ||
+                (normalizeOperationalStatus(inquiry.status) || 'New') === 'Docs Requested',
+            priorityLabel,
+        }),
         inquiryId: inquiry.id,
         serviceTitle: inquiry.service?.title || inquiry.serviceType,
         customerMessage: inquiry.message || null,
         requestFocus: inferServiceRequestFocus(inquiry),
-        documentReadiness: inferDocumentReadiness(inquiry.documentStatus),
-        priorityLabel: inferServicePriority(inquiry.urgency),
+        documentReadiness,
+        priorityLabel,
         nextActionHint: buildServiceNextAction(inquiry),
         status: normalizeOperationalStatus(inquiry.status) || 'New',
     };
@@ -274,6 +289,7 @@ router.post('/inquiries', serviceInquiryLimiter, softAuth, async (req, res) => {
                 documentStatus: isNonEmptyString(documentStatus) ? toTrimmedString(documentStatus) : null,
                 message: isNonEmptyString(message) ? toTrimmedString(message) : null,
                 status: 'New',
+                lastStatusChangedAt: new Date(),
             },
             include: {
                 service: {
@@ -309,6 +325,12 @@ router.get('/inquiries', auth, requireAdminOrManager, async (req, res) => {
             include: {
                 user: true,
                 service: true,
+                assignedStaff: {
+                    select: STAFF_USER_SUMMARY_SELECT,
+                },
+                lastUpdatedBy: {
+                    select: STAFF_USER_SUMMARY_SELECT,
+                },
             },
         });
 
@@ -329,7 +351,25 @@ router.put('/inquiries/:id', auth, requireAdminOrManager, async (req, res) => {
             return sendInvalidId(res);
         }
 
-        const { status, adminNotes } = req.body;
+        const { status, adminNotes, assignedStaffId } = req.body;
+        const actorId = toPositiveInteger(req.user.id);
+        if (actorId === null) {
+            return sendValidationError(res, 'Invalid staff user id.');
+        }
+
+        const existingInquiry = await prisma.serviceInquiry.findUnique({
+            where: { id },
+            select: {
+                id: true,
+                status: true,
+                assignedStaffId: true,
+            },
+        });
+
+        if (!existingInquiry) {
+            return res.status(404).json({ msg: 'Service inquiry not found' });
+        }
+
         const updateData = {};
 
         if (status !== undefined) {
@@ -339,6 +379,9 @@ router.put('/inquiries/:id', auth, requireAdminOrManager, async (req, res) => {
             }
 
             updateData.status = normalizedStatus;
+            if (normalizedStatus !== (normalizeOperationalStatus(existingInquiry.status) || 'New')) {
+                updateData.lastStatusChangedAt = new Date();
+            }
             if (shouldSetLastContactedAt(normalizedStatus)) {
                 updateData.lastContactedAt = new Date();
             }
@@ -348,9 +391,21 @@ router.put('/inquiries/:id', auth, requireAdminOrManager, async (req, res) => {
             updateData.adminNotes = isNonEmptyString(adminNotes) ? toTrimmedString(adminNotes) : null;
         }
 
+        if (assignedStaffId !== undefined) {
+            const assignmentResolution = await resolveAssignedStaffInput(prisma, assignedStaffId, req.user);
+            if (assignmentResolution.hasAssignmentChange) {
+                updateData.assignedStaffId = assignmentResolution.assignedStaffId;
+                if (assignmentResolution.assignedStaffId !== existingInquiry.assignedStaffId) {
+                    updateData.assignedAt = assignmentResolution.assignedStaffId ? new Date() : null;
+                }
+            }
+        }
+
         if (Object.keys(updateData).length === 0) {
             return sendValidationError(res, 'No valid inquiry fields were provided for update.');
         }
+
+        updateData.lastUpdatedByUserId = actorId;
 
         const updatedInquiry = await prisma.serviceInquiry.update({
             where: { id },
@@ -358,6 +413,12 @@ router.put('/inquiries/:id', auth, requireAdminOrManager, async (req, res) => {
             include: {
                 user: true,
                 service: true,
+                assignedStaff: {
+                    select: STAFF_USER_SUMMARY_SELECT,
+                },
+                lastUpdatedBy: {
+                    select: STAFF_USER_SUMMARY_SELECT,
+                },
             },
         });
 

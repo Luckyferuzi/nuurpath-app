@@ -14,6 +14,11 @@ const {
   isNonEmptyString,
   toTrimmedString,
 } = require('../utils/validation');
+const {
+  STAFF_USER_SUMMARY_SELECT,
+  buildRequestWorkflowSignals,
+  resolveAssignedStaffInput,
+} = require('../utils/staffRequestIntelligence');
 
 function serializeConsultationForStaff(consultation) {
   if (!consultation || typeof consultation !== 'object') {
@@ -22,6 +27,7 @@ function serializeConsultationForStaff(consultation) {
 
   return {
     ...consultation,
+    ...buildRequestWorkflowSignals(consultation),
     requestId: consultation.id,
     status: normalizeOperationalStatus(consultation.status) || 'New',
   };
@@ -33,7 +39,15 @@ router.get('/', auth, requireAdminOrManager, async (req, res) => {
   try {
     const consultations = await prisma.privateConsultation.findMany({
       orderBy: { createdAt: 'desc' },
-      include: { user: true },
+      include: {
+        user: true,
+        assignedStaff: {
+          select: STAFF_USER_SUMMARY_SELECT,
+        },
+        lastUpdatedBy: {
+          select: STAFF_USER_SUMMARY_SELECT,
+        },
+      },
     });
 
     return res.json(consultations.map(serializeConsultationForStaff));
@@ -52,7 +66,25 @@ router.put('/:id', auth, requireAdminOrManager, async (req, res) => {
       return sendInvalidId(res);
     }
 
-    const { status, adminNotes } = req.body;
+    const { status, adminNotes, assignedStaffId } = req.body;
+    const actorId = toPositiveInteger(req.user.id);
+    if (actorId === null) {
+      return sendValidationError(res, 'Invalid staff user id.');
+    }
+
+    const existingConsultation = await prisma.privateConsultation.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        status: true,
+        assignedStaffId: true,
+      },
+    });
+
+    if (!existingConsultation) {
+      return res.status(404).json({ msg: 'Consultation request not found' });
+    }
+
     const updateData = {};
 
     if (status !== undefined) {
@@ -62,6 +94,9 @@ router.put('/:id', auth, requireAdminOrManager, async (req, res) => {
       }
 
       updateData.status = normalizedStatus;
+      if (normalizedStatus !== (normalizeOperationalStatus(existingConsultation.status) || 'New')) {
+        updateData.lastStatusChangedAt = new Date();
+      }
       if (shouldSetLastContactedAt(normalizedStatus)) {
         updateData.lastContactedAt = new Date();
       }
@@ -71,14 +106,34 @@ router.put('/:id', auth, requireAdminOrManager, async (req, res) => {
       updateData.adminNotes = isNonEmptyString(adminNotes) ? toTrimmedString(adminNotes) : null;
     }
 
+    if (assignedStaffId !== undefined) {
+      const assignmentResolution = await resolveAssignedStaffInput(prisma, assignedStaffId, req.user);
+      if (assignmentResolution.hasAssignmentChange) {
+        updateData.assignedStaffId = assignmentResolution.assignedStaffId;
+        if (assignmentResolution.assignedStaffId !== existingConsultation.assignedStaffId) {
+          updateData.assignedAt = assignmentResolution.assignedStaffId ? new Date() : null;
+        }
+      }
+    }
+
     if (Object.keys(updateData).length === 0) {
       return sendValidationError(res, 'No valid consultation fields were provided for update.');
     }
 
+    updateData.lastUpdatedByUserId = actorId;
+
     const updated = await prisma.privateConsultation.update({
       where: { id },
       data: updateData,
-      include: { user: true },
+      include: {
+        user: true,
+        assignedStaff: {
+          select: STAFF_USER_SUMMARY_SELECT,
+        },
+        lastUpdatedBy: {
+          select: STAFF_USER_SUMMARY_SELECT,
+        },
+      },
     });
 
     return res.json(serializeConsultationForStaff(updated));

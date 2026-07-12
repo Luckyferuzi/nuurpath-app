@@ -87,6 +87,23 @@ export function StaffStatusPill({ status }) {
   );
 }
 
+export function StaffInfoPill({ children, tone = 'neutral' }) {
+  const toneClasses = {
+    neutral: 'bg-gray-100 text-gray-700',
+    accent: 'bg-green-100 text-green-700',
+    warm: 'bg-amber-100 text-amber-700',
+    info: 'bg-blue-100 text-blue-700',
+    danger: 'bg-red-100 text-red-700',
+    dark: 'bg-[#101c2d] text-white',
+  };
+
+  return (
+    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${toneClasses[tone] || toneClasses.neutral}`}>
+      {children}
+    </span>
+  );
+}
+
 export function StaffFilterPills({ options, value, onChange }) {
   return (
     <div className="flex flex-wrap gap-2">

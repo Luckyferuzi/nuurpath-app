@@ -11,7 +11,7 @@ Current status:
 - Phase 4 is completed.
 - Phase 5 is completed.
 - Phase 6 is completed.
-- Phase 7 is still planned.
+- Phase 7 is completed.
 - When resuming work later, read this file first and then continue from the next approved phase.
 
 ## How To Use This Document
@@ -936,7 +936,7 @@ Backend:
 ## Phase 7: Manager Workflow Intelligence and Operational Maturity
 
 Status:
-- Planned
+- Completed
 
 ### Objective
 
@@ -995,6 +995,66 @@ Frontend:
 - ownership is clear
 - overdue work becomes visible without manual searching
 - dashboard metrics support operational decision-making
+
+### Completed Work
+
+- Added staff ownership and accountability fields across every main request type:
+  - package requests
+  - flight requests
+  - private consultations
+  - service inquiries
+- Each request now tracks:
+  - assigned owner
+  - assignment time
+  - last staff member who updated the request
+  - last status-change time
+- Added backend workflow intelligence so staff-facing request payloads now include:
+  - owner summary
+  - last updater summary
+  - last action time
+  - overdue-follow-up flag
+  - waiting-for-documents flag where relevant
+  - attention level
+  - attention reasons
+  - queue bucket labels
+- Added a staff directory API for assignable admin and manager accounts so ownership controls can stay role-aware in the workspace.
+- Updated all main staff request workspaces to show clearer operational accountability:
+  - package requests
+  - flight requests
+  - consultations
+  - service requests
+- Added queue filters for smarter daily work views, including:
+  - my queue
+  - unassigned
+  - overdue
+  - document-chase queues where relevant
+- Added quick "take ownership" actions so staff can claim work directly from the request detail view without extra navigation.
+- Added owner controls for admin users inside request update forms so admins can reassign or clear ownership intentionally.
+- Added ownership and accountability detail sections inside request side panels so staff can see:
+  - current owner
+  - assignment time
+  - last updater
+  - last action time
+  - last status change
+  - attention flags
+- Expanded the operations dashboard with Phase 7 reporting for:
+  - overdue follow-up count
+  - unassigned open requests
+  - waiting-for-documents pressure
+  - conversion rate
+  - open-request breakdown by request type
+  - workload by staff member
+
+### Implementation Notes
+
+- Managers can assign requests to themselves through the workspace, but cross-staff reassignment and clearing ownership remain admin-controlled so accountability stays predictable.
+- Public or customer-created requests still enter the system normally, but now begin unassigned until a staff owner claims them or an admin assigns them.
+- Manual staff-created requests can now carry ownership intentionally, and staff-originated updates always record the last updater for later accountability.
+- Overdue visibility is currently rules-based:
+  - new requests become overdue if they sit too long without the first response
+  - active follow-up requests become overdue after a longer follow-up window
+  - document-blocked requests use a slightly wider follow-up threshold
+- Service-request urgency still combines customer-entered urgency text with operational follow-up rules rather than a separate scoring engine.
 
 ---
 

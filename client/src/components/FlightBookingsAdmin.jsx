@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from '../lib/api';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { getOperationalStatusLabel, getOperationalStatusOptions } from '../lib/operationalPipeline.js';
+import { formatDayAge, getAttentionToneClass, getStaffDisplayName, getStaffRoleLabel, isOwnedByCurrentStaff } from '../lib/staffOwnership.js';
 import { matchesCreatedAtWindow, STAFF_TIME_WINDOW_OPTIONS } from '../lib/staffFilters.js';
 import { formatAdminDate, formatAdminDateTime } from '../lib/staffRequestUtils.js';
 import { buildDirectWhatsAppUrl, buildFlightLeadFollowUpMessage } from '../lib/whatsapp.js';
@@ -11,6 +12,7 @@ import {
   StaffDetailSection,
   StaffEmptyState,
   StaffFilterPills,
+  StaffInfoPill,
   StaffMetricCard,
   StaffPageShell,
   StaffStatusPill,
@@ -19,6 +21,9 @@ import {
 const STATUS_FILTERS = [
   { value: 'all', label: 'All requests' },
   { value: 'new', label: 'New requests' },
+  { value: 'mine', label: 'My queue' },
+  { value: 'unassigned', label: 'Unassigned' },
+  { value: 'overdue', label: 'Overdue' },
   { value: 'follow-up', label: 'Ready for follow-up' },
   { value: 'quoted', label: 'Quoted' },
   { value: 'confirmed', label: 'Confirmed' },
@@ -56,7 +61,7 @@ function buildFlightNextAction(booking) {
   return 'Review the route details, greet the traveler, and move the request into active follow-up.';
 }
 
-function matchesStatusFilter(booking, statusFilter) {
+function matchesStatusFilter(booking, statusFilter, currentUserId) {
   const status = getOperationalStatusLabel(booking?.status);
 
   if (statusFilter === 'all') {
@@ -65,6 +70,18 @@ function matchesStatusFilter(booking, statusFilter) {
 
   if (statusFilter === 'new') {
     return status === 'New';
+  }
+
+  if (statusFilter === 'mine') {
+    return isOwnedByCurrentStaff(booking, currentUserId);
+  }
+
+  if (statusFilter === 'unassigned') {
+    return Boolean(booking?.isUnassigned);
+  }
+
+  if (statusFilter === 'overdue') {
+    return Boolean(booking?.isOverdueFollowUp);
   }
 
   if (statusFilter === 'follow-up') {
@@ -90,10 +107,10 @@ function matchesStatusFilter(booking, statusFilter) {
   return true;
 }
 
-function getStatusFilterOptions(bookings) {
+function getStatusFilterOptions(bookings, currentUserId) {
   return STATUS_FILTERS.map((option) => ({
     ...option,
-    count: bookings.filter((booking) => matchesStatusFilter(booking, option.value)).length,
+    count: bookings.filter((booking) => matchesStatusFilter(booking, option.value, currentUserId)).length,
   }));
 }
 
@@ -109,12 +126,16 @@ const FlightBookingsAdmin = () => {
   const [selectedBookingId, setSelectedBookingId] = useState(null);
   const [editingBooking, setEditingBooking] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [staffDirectory, setStaffDirectory] = useState([]);
+  const [assigningId, setAssigningId] = useState(null);
   const [formData, setFormData] = useState({
     status: 'New',
     adminNotes: '',
+    assignedStaffId: '',
   });
 
   const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
+  const currentUserId = Number(user?.id || 0);
 
   const fetchBookings = useCallback(async () => {
     try {
@@ -133,6 +154,24 @@ const FlightBookingsAdmin = () => {
   }, [fetchBookings]);
 
   useEffect(() => {
+    if (!isAdmin) {
+      setStaffDirectory([]);
+      return;
+    }
+
+    const fetchStaffDirectory = async () => {
+      try {
+        const response = await axios.get('/admin/staff-directory');
+        setStaffDirectory(Array.isArray(response.data) ? response.data : []);
+      } catch (err) {
+        console.error('Failed to load staff directory', err);
+      }
+    };
+
+    fetchStaffDirectory();
+  }, [isAdmin]);
+
+  useEffect(() => {
     if (!bookings.length) {
       setSelectedBookingId(null);
       return;
@@ -149,6 +188,7 @@ const FlightBookingsAdmin = () => {
     setFormData({
       status: 'New',
       adminNotes: '',
+      assignedStaffId: '',
     });
     setSaving(false);
   };
@@ -158,6 +198,7 @@ const FlightBookingsAdmin = () => {
     setFormData({
       status: getOperationalStatusLabel(booking.status),
       adminNotes: booking.adminNotes || '',
+      assignedStaffId: booking.assignedStaff?.id ? String(booking.assignedStaff.id) : '',
     });
     setMessage(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -173,7 +214,15 @@ const FlightBookingsAdmin = () => {
     setMessage(null);
 
     try {
-      const response = await axios.put(`/flights/${editingBooking.id}`, formData);
+      const payload = {
+        ...formData,
+      };
+
+      if (!isAdmin) {
+        delete payload.assignedStaffId;
+      }
+
+      const response = await axios.put(`/flights/${editingBooking.id}`, payload);
       const updatedBooking = response.data;
 
       setBookings((previous) => previous.map((booking) => (
@@ -186,6 +235,26 @@ const FlightBookingsAdmin = () => {
     } catch (err) {
       setError(err.response?.data?.msg || err.message || 'Failed to update flight request.');
       setSaving(false);
+    }
+  };
+
+  const handleAssignToMe = async (booking) => {
+    setAssigningId(booking.id);
+    setMessage(null);
+
+    try {
+      const response = await axios.put(`/flights/${booking.id}`, { assignedStaffId: currentUserId });
+      const updatedBooking = response.data;
+      setBookings((previous) => previous.map((currentBooking) => (
+        currentBooking.id === updatedBooking.id ? updatedBooking : currentBooking
+      )));
+      setSelectedBookingId(updatedBooking.id);
+      setError(null);
+      setMessage({ type: 'success', text: `Flight request #${updatedBooking.requestId || updatedBooking.id} is now assigned to you.` });
+    } catch (err) {
+      setError(err.response?.data?.msg || err.message || 'Failed to assign this flight request.');
+    } finally {
+      setAssigningId(null);
     }
   };
 
@@ -236,12 +305,14 @@ const FlightBookingsAdmin = () => {
       return;
     }
 
-    const headers = ['ID', 'Contact Name', 'Email', 'Phone', 'From', 'To', 'Departure', 'Return', 'Passengers', 'Class', 'Request Status', 'Internal Notes', 'Request Date'];
+    const headers = ['ID', 'Contact Name', 'Email', 'Phone', 'From', 'To', 'Departure', 'Return', 'Passengers', 'Class', 'Request Status', 'Owner', 'Last Updated By', 'Last Action', 'Overdue Follow-Up', 'Internal Notes', 'Request Date'];
     const csvContent = [
       headers.join(','),
       ...bookings.map((booking) => {
         const name = String(booking.contactName || booking.user?.name || 'Guest').replace(/"/g, '""');
         const notes = String(booking.adminNotes || '').replace(/"/g, '""');
+        const owner = String(getStaffDisplayName(booking.assignedStaff, 'Unassigned')).replace(/"/g, '""');
+        const lastUpdatedBy = String(getStaffDisplayName(booking.lastUpdatedBy, 'Not recorded')).replace(/"/g, '""');
 
         return [
           booking.requestId || booking.id,
@@ -255,6 +326,10 @@ const FlightBookingsAdmin = () => {
           booking.passengers || 1,
           booking.travelClass || '',
           `"${getOperationalStatusLabel(booking.status)}"`,
+          `"${owner}"`,
+          `"${lastUpdatedBy}"`,
+          formatAdminDateTime(booking.lastActionAt, ''),
+          booking.isOverdueFollowUp ? 'Yes' : 'No',
           `"${notes}"`,
           formatAdminDate(booking.createdAt),
         ].join(',');
@@ -280,7 +355,7 @@ const FlightBookingsAdmin = () => {
       const route = `${booking.from || ''} ${booking.to || ''}`.toLowerCase();
 
       return (
-        matchesStatusFilter(booking, statusFilter) &&
+        matchesStatusFilter(booking, statusFilter, currentUserId) &&
         matchesCreatedAtWindow(booking, timeWindow) &&
         (
           !term ||
@@ -291,7 +366,7 @@ const FlightBookingsAdmin = () => {
         )
       );
     });
-  }, [bookings, searchTerm, statusFilter, timeWindow]);
+  }, [bookings, currentUserId, searchTerm, statusFilter, timeWindow]);
 
   const selectedBooking = filteredBookings.find((booking) => booking.id === selectedBookingId)
     || filteredBookings[0]
@@ -307,22 +382,22 @@ const FlightBookingsAdmin = () => {
       tone: 'default',
     },
     {
-      label: 'Quoted',
-      value: bookings.filter((booking) => getOperationalStatusLabel(booking.status) === 'Quoted').length,
-      hint: 'Requests already moved into fare quotation.',
+      label: 'My Queue',
+      value: bookings.filter((booking) => isOwnedByCurrentStaff(booking, currentUserId)).length,
+      hint: 'Flight requests currently assigned to your staff account.',
       tone: 'warm',
     },
     {
-      label: 'Confirmed',
-      value: bookings.filter((booking) => getOperationalStatusLabel(booking.status) === 'Confirmed Offline').length,
-      hint: 'Requests already confirmed offline and moving toward fulfillment.',
-      tone: 'accent',
+      label: 'Overdue Follow-Up',
+      value: bookings.filter((booking) => booking.isOverdueFollowUp).length,
+      hint: 'Requests that have gone too long without the next reply or update.',
+      tone: 'danger',
     },
     {
-      label: 'Closed',
-      value: bookings.filter((booking) => ['Cancelled', 'Lost'].includes(getOperationalStatusLabel(booking.status))).length,
-      hint: 'Requests no longer active.',
-      tone: 'danger',
+      label: 'Unassigned',
+      value: bookings.filter((booking) => booking.isUnassigned).length,
+      hint: 'Open requests that still do not have a clear owner.',
+      tone: 'accent',
     },
   ];
 
@@ -368,7 +443,7 @@ const FlightBookingsAdmin = () => {
           description={`${editingBooking.contactName || editingBooking.user?.name || 'Guest traveler'} - ${editingBooking.from} to ${editingBooking.to}`}
         >
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+            <div className={`grid gap-4 ${isAdmin ? 'xl:grid-cols-[220px_220px_minmax(0,1fr)]' : 'lg:grid-cols-[260px_minmax(0,1fr)]'}`}>
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-gray-700">Request status</span>
                 <select
@@ -381,6 +456,23 @@ const FlightBookingsAdmin = () => {
                   ))}
                 </select>
               </label>
+              {isAdmin && (
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Request owner</span>
+                  <select
+                    value={formData.assignedStaffId}
+                    onChange={(event) => setFormData({ ...formData, assignedStaffId: event.target.value })}
+                    className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                  >
+                    <option value="">Keep unassigned</option>
+                    {staffDirectory.map((staffMember) => (
+                      <option key={staffMember.id} value={staffMember.id}>
+                        {staffMember.name || staffMember.email} ({getStaffRoleLabel(staffMember.role)})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
 
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-gray-700">Team notes</span>
@@ -416,7 +508,7 @@ const FlightBookingsAdmin = () => {
       <StaffCardSection title="Filter and Search" description="Use quick queue filters first, then narrow further by date range or customer search.">
         <div className="space-y-4">
           <StaffFilterPills
-            options={getStatusFilterOptions(bookings)}
+            options={getStatusFilterOptions(bookings, currentUserId)}
             value={statusFilter}
             onChange={setStatusFilter}
           />
@@ -488,12 +580,27 @@ const FlightBookingsAdmin = () => {
                       <div className="text-sm font-bold">{booking.contactName || booking.user?.name || 'Guest traveler'}</div>
                       <div className="mt-1 text-sm">{booking.contactEmail || booking.user?.email || 'No email provided'}</div>
                       <div className="mt-1 text-sm">{booking.contactPhone || 'No phone provided'}</div>
+                      <div className="mt-2 text-xs uppercase tracking-[0.18em]">
+                        Owner {getStaffDisplayName(booking.assignedStaff, 'Unassigned')}
+                      </div>
                     </div>
                     <div className="text-sm">
                       <div>{booking.tripType || (booking.returnDate ? 'Round Trip' : 'One Way')}</div>
                       <div className="mt-1">Departure: {formatAdminDate(booking.departureDate, 'To be confirmed')}</div>
                       <div className="mt-1">Travelers: {booking.passengers || 1} ({booking.travelClass || 'Class not set'})</div>
+                      <div className="mt-1">Last action: {formatAdminDateTime(booking.lastActionAt, 'Not recorded')}</div>
                     </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <span className={`rounded-full px-3 py-1 text-xs font-bold ${isSelected ? 'bg-white/15 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                      {booking.isUnassigned ? 'Unassigned' : `${getStaffRoleLabel(booking.assignedStaff?.role)} owner`}
+                    </span>
+                    {booking.isOverdueFollowUp && (
+                      <span className={`rounded-full px-3 py-1 text-xs font-bold ${isSelected ? 'bg-white/20 text-white' : getAttentionToneClass('high')}`}>
+                        Overdue {formatDayAge(booking.daysSinceLastFollowUp, 'Today')}
+                      </span>
+                    )}
                   </div>
 
                   {booking.adminNotes && (
@@ -514,11 +621,22 @@ const FlightBookingsAdmin = () => {
               >
                 <div className="flex flex-wrap gap-3">
                   <StaffStatusPill status={selectedBooking.status} />
+                  <StaffInfoPill tone={selectedBooking.isUnassigned ? 'danger' : isOwnedByCurrentStaff(selectedBooking, currentUserId) ? 'accent' : 'info'}>
+                    Owner {getStaffDisplayName(selectedBooking.assignedStaff, 'Unassigned')}
+                  </StaffInfoPill>
+                  {selectedBooking.isOverdueFollowUp && (
+                    <StaffInfoPill tone="danger">
+                      Overdue {formatDayAge(selectedBooking.daysSinceLastFollowUp, 'Today')}
+                    </StaffInfoPill>
+                  )}
                   <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">
                     Received {formatAdminDate(selectedBooking.createdAt)}
                   </span>
                   <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">
                     Last contact {formatAdminDateTime(selectedBooking.lastContactedAt, 'not recorded')}
+                  </span>
+                  <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">
+                    Last action {formatAdminDateTime(selectedBooking.lastActionAt, 'not recorded')}
                   </span>
                 </div>
 
@@ -537,6 +655,16 @@ const FlightBookingsAdmin = () => {
                   >
                     Continue on WhatsApp
                   </button>
+                  {!isOwnedByCurrentStaff(selectedBooking, currentUserId) && (
+                    <button
+                      type="button"
+                      onClick={() => handleAssignToMe(selectedBooking)}
+                      disabled={assigningId === selectedBooking.id}
+                      className="rounded-full border border-[#006837] px-4 py-2 text-sm font-bold text-[#006837] transition hover:bg-[#006837] hover:text-white disabled:opacity-60"
+                    >
+                      {assigningId === selectedBooking.id ? 'Assigning...' : 'Take Ownership'}
+                    </button>
+                  )}
                   {isAdmin && (
                     <button
                       type="button"
@@ -555,6 +683,27 @@ const FlightBookingsAdmin = () => {
                   <StaffDetailRow label="Account type" value={selectedBooking.userId ? 'Account Holder' : 'Guest'} />
                   <StaffDetailRow label="Email" value={selectedBooking.contactEmail || selectedBooking.user?.email} />
                   <StaffDetailRow label="Phone / WhatsApp" value={selectedBooking.contactPhone} />
+                </div>
+              </StaffDetailSection>
+
+              <StaffDetailSection title="Ownership and Accountability">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <StaffDetailRow
+                    label="Request owner"
+                    value={`${getStaffDisplayName(selectedBooking.assignedStaff, 'Unassigned')}${selectedBooking.assignedStaff ? ` (${getStaffRoleLabel(selectedBooking.assignedStaff.role)})` : ''}`}
+                  />
+                  <StaffDetailRow label="Assigned on" value={formatAdminDateTime(selectedBooking.assignedAt, 'Not assigned yet')} />
+                  <StaffDetailRow
+                    label="Last updated by"
+                    value={`${getStaffDisplayName(selectedBooking.lastUpdatedBy, 'Not recorded')}${selectedBooking.lastUpdatedBy ? ` (${getStaffRoleLabel(selectedBooking.lastUpdatedBy.role)})` : ''}`}
+                  />
+                  <StaffDetailRow label="Last action time" value={formatAdminDateTime(selectedBooking.lastActionAt, 'Not recorded')} />
+                  <StaffDetailRow label="Last status change" value={formatAdminDateTime(selectedBooking.lastStatusChangedAt, 'Not recorded')} />
+                  <StaffDetailRow
+                    label="Attention flags"
+                    value={selectedBooking.attentionReasons?.length ? selectedBooking.attentionReasons.join(', ') : 'No special attention flag right now.'}
+                    subtle
+                  />
                 </div>
               </StaffDetailSection>
 
