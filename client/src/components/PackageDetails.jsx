@@ -281,18 +281,18 @@ const PackageDetails = () => {
         <div className="grid gap-6 lg:grid-cols-[380px_minmax(0,1fr)] lg:items-start">
           <div>
             <div className="relative overflow-hidden rounded-[1.55rem] border border-[#ece4d6] bg-[#f5f0e6] shadow-sm">
-              <div className="flex aspect-[5/4] items-center justify-center p-4 sm:p-5">
+              <div className="h-[280px] overflow-hidden sm:h-[320px] lg:h-[360px]">
                 {pkg.images && pkg.images.length > 0 ? (
                   <img
                     src={getImageUrl(pkg.images[0])}
                     alt={pkg.title}
-                    className="h-full w-full object-contain"
+                    className="h-full w-full object-cover"
                     fetchPriority="high"
                     decoding="async"
                     onError={(e) => { e.target.style.display = 'none'; }}
                   />
                 ) : (
-                  <div className="flex h-full min-h-[260px] w-full items-center justify-center rounded-[1.1rem] bg-[#d9d1c2] text-sm font-semibold text-[#4d5562]">
+                  <div className="flex h-full w-full items-center justify-center bg-[#d9d1c2] text-sm font-semibold text-[#4d5562]">
                     Package image coming soon
                   </div>
                 )}

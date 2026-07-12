@@ -1304,6 +1304,9 @@ Frontend:
   - shrinking the main package image treatment
   - keeping the information hierarchy calmer
   - making related packages smaller, split-summary cards instead of heavier preview blocks
+- Refined package image framing after review so it now follows a clearer rule:
+  - homepage featured packages preserve the full image inside a proper framed area
+  - package-list and package-details images use moderate filled frames so they look balanced instead of floating inside oversized containers
 
 ### Implementation Notes
 
