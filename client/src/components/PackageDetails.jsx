@@ -4,7 +4,23 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 import { usePublicContent } from '../contexts/PublicContentContext.jsx';
 import { useExchangeRates } from '../hooks/useExchangeRates.js';
 import axios, { resolveBackendUrl } from '../lib/api';
-import WeatherWidget from './WeatherWidget';
+import { PublicPageShell } from './PublicPageShell.jsx';
+import {
+  formatPackagePrice,
+  getPackageHighlights,
+  getPackageJourneyLabel,
+  getPackageJourneyStops,
+  getPackageRouteSummary,
+  getPackageShortDescription,
+  getPackageSupportLine,
+  getPackageTypeLabel,
+} from '../lib/packagePresentation.js';
+
+const REQUEST_STEPS = [
+  'Send the package request online.',
+  'NuurPath reviews availability and important details.',
+  'Our team continues the follow-up with you on WhatsApp.',
+];
 
 const PackageDetails = () => {
   const { isAuthenticated } = useAuth();
@@ -191,19 +207,6 @@ const PackageDetails = () => {
     }
   };
 
-  const getFormattedPrice = () => {
-    if (!pkg || typeof pkg.price !== 'number') {
-      return pkg?.price;
-    }
-
-    const rate = rates[currency] || 1;
-
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-    }).format(pkg.price * rate);
-  };
-
   const getImageUrl = (path) => {
     if (!path) {
       return '';
@@ -217,7 +220,13 @@ const PackageDetails = () => {
       .filter((item) => String(item?._id || item?.id) !== String(pkg?._id || pkg?.id || id))
       .slice(0, 3)
   ), [packages, pkg?._id, pkg?.id, id]);
-  const journeyStops = Array.isArray(pkg?.journeyStops) ? pkg.journeyStops : [];
+  const journeyStops = getPackageJourneyStops(pkg);
+  const routeSummary = getPackageRouteSummary(pkg);
+  const typeLabel = getPackageTypeLabel(pkg?.type);
+  const highlights = getPackageHighlights(pkg);
+  const journeyLabel = getPackageJourneyLabel(pkg);
+  const supportLine = getPackageSupportLine(pkg);
+  const heroSummary = getPackageShortDescription(pkg?.description, 200);
 
   if (loading) {
     return <div className="p-10 text-center">Loading package details...</div>;
@@ -245,8 +254,14 @@ const PackageDetails = () => {
     itineraryData = null;
   }
 
+  const formattedPrice = formatPackagePrice(
+    pkg?.price,
+    currency,
+    rates[currency] || 1
+  );
+
   return (
-    <div className="container mx-auto p-6">
+    <PublicPageShell background="soft" contentClassName="py-10 sm:py-12 lg:py-16">
       <style>{`
         @media print {
           nav, footer, button, .no-print { display: none !important; }
@@ -257,245 +272,341 @@ const PackageDetails = () => {
         &larr; Back to Packages
       </Link>
 
-      <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-lg">
-        {pkg.images && pkg.images.length > 0 && (
-          <div className="relative h-64 w-full overflow-hidden md:h-96">
-            <img
-              src={getImageUrl(pkg.images[0])}
-              alt={pkg.title}
-              className="h-full w-full object-cover"
-              fetchPriority="high"
-              decoding="async"
-              onError={(e) => { e.target.style.display = 'none'; }}
-            />
-          </div>
-        )}
-
-        <div className="p-8">
-          <div className="mb-6 flex flex-col items-start justify-between md:flex-row md:items-center">
-            <div>
-              <h1 className="mb-2 text-3xl font-bold text-[#0B1C3E] md:text-4xl">{pkg.title}</h1>
-              {averageRating && (
-                <div className="mb-4 flex items-center gap-2 md:mb-0">
-                  <span className="text-xl text-yellow-500">&#9733;</span>
-                  <span className="text-lg font-bold text-gray-700">{averageRating}</span>
-                  <span className="text-sm text-gray-500">({reviews.length} reviews)</span>
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-col items-end">
-              <span className="mb-1 text-xs font-bold uppercase tracking-[2px] text-gray-500">Starting from</span>
-              <span className="text-3xl font-bold text-[#D4AF37]">{getFormattedPrice()}</span>
-              <span className="mt-1 text-sm text-gray-500">Estimated package price</span>
-              {typeof pkg.price === 'number' && (
-                <select
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
-                  className="mt-1 cursor-pointer rounded border border-gray-200 bg-gray-50 p-1 text-xs text-gray-600 focus:border-[#0B1C3E] focus:outline-none"
-                >
-                  <option value="USD">USD (US Dollar)</option>
-                  <option value="EUR">EUR (Euro)</option>
-                  <option value="GBP">GBP (British Pound)</option>
-                  <option value="SAR">SAR (Saudi Riyal)</option>
-                  <option value="AED">AED (UAE Dirham)</option>
-                </select>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-            <div className="space-y-6 md:col-span-2">
-              <div>
-                <h3 className="mb-3 text-xl font-bold text-[#0B1C3E]">Package Overview</h3>
-                <p className="leading-relaxed text-gray-600">{pkg.description}</p>
+      <section className="overflow-hidden rounded-[1.8rem] border border-[#e5dece] bg-white shadow-[0_16px_44px_rgba(16,28,45,0.06)]">
+        <div className="grid lg:grid-cols-[1.08fr_0.92fr]">
+          <div className="relative min-h-[320px] bg-[#ebe6da] lg:min-h-[100%]">
+            {pkg.images && pkg.images.length > 0 ? (
+              <img
+                src={getImageUrl(pkg.images[0])}
+                alt={pkg.title}
+                className="h-full w-full object-cover"
+                fetchPriority="high"
+                decoding="async"
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+            ) : (
+              <div className="flex h-full min-h-[320px] items-center justify-center bg-[#d9d1c2] text-sm font-semibold text-[#4d5562]">
+                Package image coming soon
               </div>
+            )}
+            {pkg.isFeatured ? (
+              <span className="absolute left-5 top-5 rounded-full bg-white px-4 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-[#0B1C3E]">
+                Featured package
+              </span>
+            ) : null}
+          </div>
 
-              {journeyStops.length > 0 && (
+          <div className="p-6 sm:p-8 lg:p-10">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7240]">
+              {typeLabel}
+            </p>
+            <h1 className="mt-3 text-3xl font-black tracking-tight text-[#101c2d] sm:text-4xl">
+              {pkg.title}
+            </h1>
+
+            {averageRating ? (
+              <div className="mt-4 flex items-center gap-2 text-sm text-[#4d5562]">
+                <span className="text-yellow-500">&#9733;</span>
+                <span className="font-bold text-[#101c2d]">{averageRating}</span>
+                <span>from {reviews.length} traveler reviews</span>
+              </div>
+            ) : null}
+
+            <p className="mt-5 text-base leading-8 text-[#5f6774]">
+              {heroSummary}
+            </p>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              {highlights.map((item) => (
+                <span key={item} className="rounded-full border border-[#e5dece] bg-[#faf8f3] px-3 py-1.5 text-xs font-semibold text-[#4d5562]">
+                  {item}
+                </span>
+              ))}
+            </div>
+
+            <div className="mt-6 rounded-[1.35rem] border border-[#ece4d6] bg-[#faf8f3] p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <h3 className="mb-3 text-xl font-bold text-[#0B1C3E]">Journey Route</h3>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {journeyStops.map((stop, index) => (
-                      <div key={`${stop.city}-${index}`} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                        <div className="mb-2 flex items-center justify-between gap-3">
-                          <h4 className="font-bold text-[#0B1C3E]">{stop.city}</h4>
-                          <span className="rounded-full bg-[#0B1C3E]/10 px-3 py-1 text-xs font-bold uppercase tracking-[2px] text-[#0B1C3E]">
-                            Stop {index + 1}
-                          </span>
-                        </div>
-                        {stop.stayLabel && (
-                          <p className="text-sm font-semibold text-[#006837]">{stop.stayLabel}</p>
-                        )}
-                        {stop.accommodation && (
-                          <p className="mt-2 text-sm text-gray-600">Accommodation: {stop.accommodation}</p>
-                        )}
-                        {stop.notes && (
-                          <p className="mt-2 text-sm text-gray-600">{stop.notes}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                  <span className="block text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Starting from</span>
+                  <span className="mt-1 block text-3xl font-black text-[#006837]">
+                    {formattedPrice}
+                  </span>
+                  <p className="mt-2 text-sm font-semibold text-[#2d5f50]">
+                    {journeyLabel}
+                  </p>
                 </div>
-              )}
-
-              {pkg.itinerary && (
-                <div>
-                  <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-xl font-bold text-[#0B1C3E]">Itinerary</h3>
-                    <button
-                      onClick={handleDownloadItinerary}
-                      className="flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1 text-sm font-medium text-[#0B1C3E] transition-colors hover:bg-gray-50 hover:text-[#D4AF37]"
-                      title="Download PDF"
-                      type="button"
+                {typeof pkg.price === 'number' ? (
+                  <label className="block">
+                    <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Currency</span>
+                    <select
+                      value={currency}
+                      onChange={(e) => setCurrency(e.target.value)}
+                      className="rounded-xl border border-[#d8cfbf] bg-white px-3 py-2 text-sm text-[#4d5562] focus:border-[#0B1C3E] focus:outline-none"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      PDF
-                    </button>
-                  </div>
-
-                  {itineraryData ? (
-                    <div className="relative ml-3 space-y-6 border-l-2 border-gray-200 pl-6">
-                      {itineraryData.map((day, idx) => (
-                        <div key={idx} className="relative">
-                          <span className="absolute -left-[1.95rem] top-0 h-4 w-4 rounded-full border-2 border-white bg-[#D4AF37] shadow-sm"></span>
-                          <h4 className="text-lg font-bold text-[#0B1C3E]">Day {day.day}: {day.title}</h4>
-                          {day.image && (
-                            <img
-                              src={getImageUrl(day.image)}
-                              alt={day.title}
-                              className="my-3 h-64 w-full rounded-lg object-cover shadow-sm"
-                              loading="lazy"
-                              decoding="async"
-                            />
-                          )}
-                          <p className="mt-1 text-gray-600">{day.description}</p>
-                          {day.location && (
-                            <div className="mt-3">
-                              <p className="mb-1 text-xs font-bold text-gray-500">Location: {day.location}</p>
-                              <div className="h-48 w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-100 shadow-sm">
-                                <iframe
-                                  width="100%"
-                                  height="100%"
-                                  frameBorder="0"
-                                  scrolling="no"
-                                  marginHeight="0"
-                                  marginWidth="0"
-                                  src={`https://maps.google.com/maps?q=${encodeURIComponent(day.location)}&t=&z=13&ie=UTF8&iwloc=&output=embed`}
-                                  title={`Map for Day ${day.day}`}
-                                  loading="lazy"
-                                ></iframe>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="whitespace-pre-line text-gray-600">{pkg.itinerary}</p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <WeatherWidget destination={pkg.destination} />
-              <div className="h-fit rounded-xl border border-gray-100 bg-gray-50 p-6">
-                <h3 className="mb-4 text-lg font-bold text-[#0B1C3E]">Package Details</h3>
-                <ul className="mb-6 space-y-3 text-gray-600">
-                  {pkg.destination && (
-                    <li>Destination: {pkg.destination}</li>
-                  )}
-                  {pkg.duration && (
-                    <li>Duration: {pkg.duration}</li>
-                  )}
-                  {pkg.type && (
-                    <li>Type: {pkg.type}</li>
-                  )}
-                </ul>
-
-                <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-gray-700">
-                  Submitting this request does not require online payment. Our team will review your details and continue with you on WhatsApp to confirm availability and next steps.
-                </div>
-
-                <button
-                  onClick={() => navigate(`/book/${pkg._id || pkg.id}`)}
-                  className="w-full rounded-lg bg-[#0B1C3E] py-3 font-bold text-white shadow-md transition-colors hover:bg-[#1a2f55]"
-                  type="button"
-                >
-                  Request Package
-                </button>
-                <button
-                  onClick={toggleWishlist}
-                  className={`mt-3 w-full rounded-lg border py-3 font-bold transition-colors ${isWishlisted ? 'border-red-200 bg-red-50 text-red-600' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'}`}
-                  type="button"
-                >
-                  {isWishlisted ? 'Remove Saved Package' : 'Save Package'}
-                </button>
-                <button
-                  onClick={handleShare}
-                  className="relative mt-3 w-full rounded-lg border border-blue-200 bg-blue-50 py-3 font-bold text-blue-600 transition-colors hover:bg-blue-100"
-                  type="button"
-                >
-                  Share Package Link
-                  {shareFeedback && (
-                    <span className="absolute -top-10 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded bg-black px-2 py-1 text-xs text-white shadow-lg">
-                      {shareFeedback}
-                    </span>
-                  )}
-                </button>
-                <button
-                  onClick={() => window.print()}
-                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white py-3 font-bold text-gray-700 transition-colors hover:bg-gray-50"
-                  type="button"
-                >
-                  Print Package Details
-                </button>
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                      <option value="SAR">SAR</option>
+                      <option value="AED">AED</option>
+                    </select>
+                  </label>
+                ) : null}
               </div>
             </div>
+
+            <div className="mt-5 rounded-[1.25rem] border border-[#ece4d6] bg-white p-4 text-sm leading-7 text-[#5f6774]">
+              {supportLine}
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <button
+                onClick={() => navigate(`/book/${pkg._id || pkg.id}`)}
+                className="flex-1 rounded-full bg-[#0B1C3E] px-6 py-3 text-sm font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-[#1a2f55]"
+                type="button"
+              >
+                Request This Package
+              </button>
+              {pkg.itinerary ? (
+                <button
+                  onClick={handleDownloadItinerary}
+                  className="rounded-full border border-[#d8cfbf] bg-white px-6 py-3 text-sm font-black uppercase tracking-[0.16em] text-[#101c2d] transition-colors hover:bg-[#faf8f3]"
+                  type="button"
+                >
+                  Download Itinerary
+                </button>
+              ) : null}
+            </div>
+
+            <div className="no-print mt-4 flex flex-wrap gap-3">
+              <button
+                onClick={toggleWishlist}
+                className={`rounded-full px-5 py-3 text-sm font-black uppercase tracking-[0.12em] transition-colors ${
+                  isWishlisted
+                    ? 'bg-[#fbe6e6] text-[#b84f4f]'
+                    : 'border border-[#d8cfbf] bg-white text-[#101c2d] hover:bg-[#faf8f3]'
+                }`}
+                type="button"
+              >
+                {isWishlisted ? 'Saved' : 'Save Package'}
+              </button>
+              <button
+                onClick={handleShare}
+                className="rounded-full border border-[#d8cfbf] bg-white px-5 py-3 text-sm font-black uppercase tracking-[0.12em] text-[#101c2d] transition-colors hover:bg-[#faf8f3]"
+                type="button"
+              >
+                Share Link
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="rounded-full border border-[#d8cfbf] bg-white px-5 py-3 text-sm font-black uppercase tracking-[0.12em] text-[#101c2d] transition-colors hover:bg-[#faf8f3]"
+                type="button"
+              >
+                Print
+              </button>
+            </div>
+
+            {shareFeedback ? (
+              <p className="mt-3 text-sm font-medium text-[#2d5f50]">{shareFeedback}</p>
+            ) : null}
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="mt-12">
-        <h2 className="mb-6 text-2xl font-bold text-[#0B1C3E]">Traveler Reviews</h2>
-        {reviews.length > 0 ? (
-          <div className="grid gap-6 md:grid-cols-2">
-            {reviews.map((review) => (
-              <div key={review.id} className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
-                <div className="mb-4 flex items-start justify-between">
-                  <div>
-                    <p className="font-bold text-[#0B1C3E]">{review.name || 'Traveler'}</p>
-                    <p className="text-xs text-gray-500">{new Date(review.createdAt).toLocaleDateString()}</p>
-                  </div>
-                  <div className="flex text-yellow-500">
-                    {[...Array(5)].map((_, i) => (
-                      <span key={i}>{i < review.rating ? '\u2605' : '\u2606'}</span>
-                    ))}
-                  </div>
+      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_320px]">
+        <div className="space-y-8">
+          <section className="rounded-[1.6rem] border border-[#e5dece] bg-white p-6 shadow-sm sm:p-8">
+            <h2 className="text-2xl font-black tracking-tight text-[#101c2d]">Package overview</h2>
+            <p className="mt-4 text-base leading-8 text-[#5f6774]">
+              {pkg.description}
+            </p>
+          </section>
+
+          {journeyStops.length > 0 ? (
+            <section className="rounded-[1.6rem] border border-[#e5dece] bg-white p-6 shadow-sm sm:p-8">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-2xl font-black tracking-tight text-[#101c2d]">Journey route</h2>
+                  <p className="mt-2 text-sm leading-7 text-[#5f6774]">
+                    {routeSummary}
+                  </p>
                 </div>
-                <p className="italic text-gray-600">
-                  "{review.comment.replace(`Review for ${pkg.title}: `, '').replace(`Review for ${pkg.title}`, '')}"
-                </p>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-xl bg-gray-50 p-8 text-center italic text-gray-500">
-            No reviews yet for this package. Be the first to request it and share your experience later.
-          </div>
-        )}
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                {journeyStops.map((stop, index) => (
+                  <article key={`${stop.city}-${index}`} className="rounded-[1.3rem] border border-[#ece4d6] bg-[#faf8f3] p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-lg font-black text-[#101c2d]">{stop.city}</h3>
+                      <span className="rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-[#0B1C3E]">
+                        Stop {index + 1}
+                      </span>
+                    </div>
+                    {stop.stayLabel ? (
+                      <p className="mt-3 text-sm font-semibold text-[#2d5f50]">{stop.stayLabel}</p>
+                    ) : null}
+                    {stop.accommodation ? (
+                      <p className="mt-3 text-sm leading-7 text-[#5f6774]">
+                        Accommodation: {stop.accommodation}
+                      </p>
+                    ) : null}
+                    {stop.notes ? (
+                      <p className="mt-3 text-sm leading-7 text-[#5f6774]">{stop.notes}</p>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {pkg.itinerary ? (
+            <section className="rounded-[1.6rem] border border-[#e5dece] bg-white p-6 shadow-sm sm:p-8">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-2xl font-black tracking-tight text-[#101c2d]">Itinerary</h2>
+                  <p className="mt-2 text-sm leading-7 text-[#5f6774]">
+                    A clearer view of how this journey is expected to flow.
+                  </p>
+                </div>
+                <button
+                  onClick={handleDownloadItinerary}
+                  className="no-print rounded-full border border-[#d8cfbf] bg-white px-5 py-3 text-sm font-black uppercase tracking-[0.12em] text-[#101c2d] transition-colors hover:bg-[#faf8f3]"
+                  type="button"
+                >
+                  Download PDF
+                </button>
+              </div>
+
+              {itineraryData ? (
+                <div className="mt-6 space-y-5">
+                  {itineraryData.map((day, index) => (
+                    <article key={`${day.day || index}-${day.title || 'day'}`} className="rounded-[1.35rem] border border-[#ece4d6] bg-[#faf8f3] p-5">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <h3 className="text-lg font-black text-[#101c2d]">
+                          Day {day.day || index + 1}: {day.title}
+                        </h3>
+                        {day.location ? (
+                          <span className="text-sm font-semibold text-[#2d5f50]">{day.location}</span>
+                        ) : null}
+                      </div>
+                      {day.image ? (
+                        <img
+                          src={getImageUrl(day.image)}
+                          alt={day.title}
+                          className="mt-4 h-64 w-full rounded-[1.1rem] object-cover"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      ) : null}
+                      <p className="mt-4 text-sm leading-7 text-[#5f6774]">
+                        {day.description}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-6 whitespace-pre-line text-sm leading-7 text-[#5f6774]">{pkg.itinerary}</p>
+              )}
+            </section>
+          ) : null}
+
+          <section className="rounded-[1.6rem] border border-[#e5dece] bg-white p-6 shadow-sm sm:p-8">
+            <h2 className="text-2xl font-black tracking-tight text-[#101c2d]">Traveler reviews</h2>
+            {reviews.length > 0 ? (
+              <div className="mt-6 grid gap-5 md:grid-cols-2">
+                {reviews.map((review) => (
+                  <article key={review.id} className="rounded-[1.3rem] border border-[#ece4d6] bg-[#faf8f3] p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-black text-[#101c2d]">{review.name || 'Traveler'}</p>
+                        <p className="mt-1 text-xs text-[#6a7280]">{new Date(review.createdAt).toLocaleDateString()}</p>
+                      </div>
+                      <div className="flex text-yellow-500">
+                        {[...Array(5)].map((_, index) => (
+                          <span key={index}>{index < review.rating ? '\u2605' : '\u2606'}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <p className="mt-4 text-sm italic leading-7 text-[#5f6774]">
+                      "{review.comment.replace(`Review for ${pkg.title}: `, '').replace(`Review for ${pkg.title}`, '')}"
+                    </p>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm leading-7 text-[#6a7280]">
+                No reviews yet for this package. Once travelers begin requesting it, this section can reflect their experience.
+              </p>
+            )}
+          </section>
+        </div>
+
+        <aside className="space-y-6">
+          <section className="rounded-[1.6rem] border border-[#e5dece] bg-white p-6 shadow-sm">
+            <h2 className="text-xl font-black tracking-tight text-[#101c2d]">Package snapshot</h2>
+            <dl className="mt-5 space-y-4 text-sm">
+              {routeSummary ? (
+                <div>
+                  <dt className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Route</dt>
+                  <dd className="mt-1 text-[#4d5562]">{routeSummary}</dd>
+                </div>
+              ) : null}
+              {pkg.destination ? (
+                <div>
+                  <dt className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Destination</dt>
+                  <dd className="mt-1 text-[#4d5562]">{pkg.destination}</dd>
+                </div>
+              ) : null}
+              {pkg.duration ? (
+                <div>
+                  <dt className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Duration</dt>
+                  <dd className="mt-1 text-[#4d5562]">{pkg.duration}</dd>
+                </div>
+              ) : null}
+              {typeLabel ? (
+                <div>
+                  <dt className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Package type</dt>
+                  <dd className="mt-1 text-[#4d5562]">{typeLabel}</dd>
+                </div>
+              ) : null}
+            </dl>
+          </section>
+
+          <section className="rounded-[1.6rem] bg-[#0B1C3E] p-6 text-white shadow-sm">
+            <h2 className="text-xl font-black tracking-tight">What happens next</h2>
+            <ol className="mt-5 space-y-4 text-sm leading-7 text-slate-200">
+              {REQUEST_STEPS.map((step, index) => (
+                <li key={step} className="flex gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/12 text-xs font-black text-white">
+                    {index + 1}
+                  </span>
+                  <span>{step}</span>
+                </li>
+              ))}
+            </ol>
+            <p className="mt-5 text-sm leading-7 text-slate-300">
+              No online payment is required on the website. The team first reviews the request and then continues with you directly.
+            </p>
+          </section>
+        </aside>
       </div>
 
-      {relatedPackages.length > 0 && (
-        <div className="mt-12 border-t border-gray-200 pt-8">
-          <h2 className="mb-6 text-2xl font-bold text-[#0B1C3E]">More Packages to Explore</h2>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+      {relatedPackages.length > 0 ? (
+        <section className="mt-10 rounded-[1.6rem] border border-[#e5dece] bg-white p-6 shadow-sm sm:p-8">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-2xl font-black tracking-tight text-[#101c2d]">More packages to explore</h2>
+              <p className="mt-2 text-sm leading-7 text-[#5f6774]">
+                Similar journeys you may want to compare before making your request.
+              </p>
+            </div>
+            <Link to="/packages" className="no-print text-sm font-black uppercase tracking-[0.14em] text-[#0B1C3E] transition-colors hover:text-[#1a2f55]">
+              View all packages
+            </Link>
+          </div>
+          <div className="mt-6 grid gap-6 md:grid-cols-3">
             {relatedPackages.map((related) => (
-              <div key={related._id || related.id} className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md">
-                {related.images && related.images.length > 0 && (
-                  <div className="h-40 overflow-hidden">
+              <article key={related._id || related.id} className="overflow-hidden rounded-[1.35rem] border border-[#ece4d6] bg-[#faf8f3]">
+                {related.images && related.images.length > 0 ? (
+                  <div className="h-44 overflow-hidden">
                     <img
                       src={getImageUrl(related.images[0])}
                       alt={related.title}
@@ -505,24 +616,28 @@ const PackageDetails = () => {
                       onError={(e) => { e.target.style.display = 'none'; }}
                     />
                   </div>
-                )}
-                <div className="p-4">
-                  <h3 className="mb-2 truncate font-bold text-[#0B1C3E]">{related.title}</h3>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-[#D4AF37]">
-                      {typeof related.price === 'number' ? `From $${related.price.toLocaleString()}` : related.price}
+                ) : null}
+                <div className="p-5">
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a7240]">
+                    {getPackageTypeLabel(related.type)}
+                  </p>
+                  <h3 className="mt-2 text-lg font-black tracking-tight text-[#101c2d]">{related.title}</h3>
+                  <p className="mt-2 text-sm font-semibold text-[#2d5f50]">{getPackageJourneyLabel(related)}</p>
+                  <div className="mt-4 flex items-center justify-between">
+                    <span className="text-lg font-black text-[#006837]">
+                      {typeof related.price === 'number' ? `$${related.price.toLocaleString()}` : related.price}
                     </span>
-                    <Link to={`/packages/${related._id || related.id}`} className="text-sm font-medium text-[#0B1C3E] transition-colors hover:text-[#D4AF37]">
-                      View Package
+                    <Link to={`/packages/${related._id || related.id}`} className="text-sm font-black uppercase tracking-[0.12em] text-[#0B1C3E] transition-colors hover:text-[#1a2f55]">
+                      View
                     </Link>
                   </div>
                 </div>
-              </div>
+              </article>
             ))}
           </div>
-        </div>
-      )}
-    </div>
+        </section>
+      ) : null}
+    </PublicPageShell>
   );
 };
 

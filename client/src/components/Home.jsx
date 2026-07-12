@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { resolveBackendUrl } from '../lib/api';
+import {
+  getPackageHighlights,
+  getPackageJourneyLabel,
+  getPackageShortDescription,
+} from '../lib/packagePresentation.js';
 import { usePublicContent } from '../contexts/PublicContentContext.jsx';
 import GlobalSupport from './GlobalSupport';
 import BookingForm from './BookingForm';
@@ -66,6 +71,9 @@ const Home = () => {
   const upcomingTrips = prioritizedTrips.slice(0, 5).map((pkg) => ({
     id: pkg._id || pkg.id,
     title: pkg.title,
+    description: getPackageShortDescription(pkg.description, 132),
+    highlights: getPackageHighlights(pkg),
+    journeyLabel: getPackageJourneyLabel(pkg),
     image: (pkg.images && pkg.images.length > 0)
       ? getImageUrl(pkg.images[0])
       : 'https://placehold.co/1200x600/0B1C3E/D4AF37?text=NuurPath+Travels',
@@ -295,7 +303,7 @@ const Home = () => {
       <PublicPageShell background="soft" contentClassName="py-14 sm:py-16 lg:py-20">
         <PublicSectionHeading
           eyebrow="Start Here"
-          title="Featured packages customers should see first"
+          title="Featured packages"
           description="Start with the journeys NuurPath wants to highlight, then ask for availability, guidance, and the next step."
           actions={<Link to="/packages" className="rounded-full bg-[#0B1C3E] px-6 py-3 text-sm font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-[#1a2f55]">View All Packages</Link>}
         />
@@ -303,7 +311,7 @@ const Home = () => {
           <div className="mb-8 mt-10 text-center text-red-500">{packagesError}</div>
         )}
         <div
-          className="group relative mx-auto mt-10 aspect-video max-w-5xl overflow-hidden rounded-[2rem] border border-white/60 bg-gray-200 shadow-[0_30px_90px_rgba(16,28,45,0.16)]"
+          className="group relative mx-auto mt-10 aspect-[16/9] max-w-5xl overflow-hidden rounded-[1.8rem] border border-[#e6dfd2] bg-gray-200 shadow-[0_20px_55px_rgba(16,28,45,0.1)]"
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
           onTouchStart={onTouchStart}
@@ -330,19 +338,38 @@ const Home = () => {
                     fetchPriority={index === currentSlide ? 'high' : 'low'}
                     decoding="async"
                   />
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 p-4 text-white">
-                    <h3 className="mb-4 text-center text-3xl font-black uppercase tracking-tighter md:text-5xl">{trip.title}</h3>
-                    <div className="flex flex-col gap-4 md:flex-row">
-                      <Link to={trip.link} className="rounded-full bg-[#D4AF37] px-8 py-3 font-bold uppercase tracking-widest text-[#0B1C3E] transition-colors hover:bg-white">
-                        View Package
-                      </Link>
-                      <button
-                        onClick={() => handleBookNow(trip.id)}
-                        className="rounded-full border-2 border-white px-8 py-3 font-bold uppercase tracking-widest text-white transition-colors hover:bg-white hover:text-[#0B1C3E]"
-                        type="button"
-                      >
-                        Request Package
-                      </button>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/72 via-black/30 to-black/5"></div>
+                  <div className="absolute inset-x-0 bottom-0 p-5 text-white sm:p-7">
+                    <div className="max-w-2xl rounded-[1.35rem] bg-black/28 p-5 backdrop-blur-[2px]">
+                      <p className="text-xs font-black uppercase tracking-[0.22em] text-[#D4AF37]">
+                        Featured package
+                      </p>
+                      <h3 className="mt-3 text-2xl font-black tracking-tight sm:text-4xl">{trip.title}</h3>
+                      <p className="mt-3 text-sm leading-7 text-slate-100 sm:text-base">
+                        {trip.description}
+                      </p>
+                      <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-white/90">
+                        {trip.highlights.map((item) => (
+                          <span key={item} className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5">
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="mt-4 text-sm font-medium text-slate-100">
+                        {trip.journeyLabel}
+                      </p>
+                      <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                        <Link to={trip.link} className="rounded-full bg-[#D4AF37] px-7 py-3 text-center text-sm font-black uppercase tracking-[0.16em] text-[#0B1C3E] transition-colors hover:bg-white">
+                          View Package
+                        </Link>
+                        <button
+                          onClick={() => handleBookNow(trip.id)}
+                          className="rounded-full border border-white/30 px-7 py-3 text-sm font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-white hover:text-[#0B1C3E]"
+                          type="button"
+                        >
+                          Request Package
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

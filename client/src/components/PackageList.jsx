@@ -5,19 +5,28 @@ import { PublicPageHeader, PublicPageShell } from './PublicPageShell.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { usePublicContent } from '../contexts/PublicContentContext.jsx';
 import axios, { resolveBackendUrl } from '../lib/api';
+import {
+  getPackageHighlights,
+  getPackageJourneyLabel,
+  getPackageShortDescription,
+  getPackageSupportLine,
+  getPackageTypeLabel,
+} from '../lib/packagePresentation.js';
 
 const ICONS = {
   wishlistFilled: '\u2665',
   wishlistEmpty: '\u2661',
-  destination: '\u{1F4CD}',
-  duration: '\u23F1\uFE0F',
 };
 
 const PackageCard = ({ pkg, wishlist, toggleWishlist, compareList, toggleCompare }) => {
-  const [showFullDescription, setShowFullDescription] = useState(false);
   const packageId = pkg._id || pkg.id;
   const isSaved = wishlist.has(packageId);
   const isInCompare = compareList.some((item) => (item._id || item.id) === packageId);
+  const highlights = getPackageHighlights(pkg);
+  const summary = getPackageShortDescription(pkg.description, 138);
+  const journeyLabel = getPackageJourneyLabel(pkg);
+  const supportLine = getPackageSupportLine(pkg);
+  const typeLabel = getPackageTypeLabel(pkg.type);
 
   const getImageUrl = (imagePath) => {
     if (!imagePath) {
@@ -28,23 +37,27 @@ const PackageCard = ({ pkg, wishlist, toggleWishlist, compareList, toggleCompare
   };
 
   return (
-    <div className="group relative flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
-      <div className="relative h-48 overflow-hidden">
+    <article className="group relative flex h-full flex-col overflow-hidden rounded-[1.6rem] border border-[#e5dece] bg-white shadow-[0_14px_34px_rgba(16,28,45,0.05)] transition-shadow hover:shadow-[0_18px_48px_rgba(16,28,45,0.09)]">
+      <Link to={`/packages/${packageId}`} className="relative block h-56 overflow-hidden">
         <img
           src={pkg.images && pkg.images.length > 0 ? getImageUrl(pkg.images[0]) : 'https://placehold.co/600x400?text=No+Image'}
           alt={pkg.title}
-          className="h-full w-full object-cover transition-transform duration-500 hover:scale-110"
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
           loading="lazy"
           decoding="async"
         />
-        {pkg.isFeatured && (
-          <span className="absolute left-2 top-2 z-10 rounded-full bg-[#D4AF37] px-2 py-1 text-xs text-white">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent"></div>
+        {pkg.isFeatured ? (
+          <span className="absolute left-4 top-4 rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-[#0B1C3E]">
             Featured
           </span>
-        )}
+        ) : null}
         <button
-          onClick={() => toggleWishlist(packageId)}
-          className="absolute right-2 top-2 z-10 rounded-full bg-white/80 p-2 shadow-sm transition-all hover:bg-white"
+          onClick={(event) => {
+            event.preventDefault();
+            toggleWishlist(packageId);
+          }}
+          className="absolute right-4 top-4 rounded-full bg-white/92 p-2 shadow-sm transition-colors hover:bg-white"
           title={isSaved ? 'Remove from Wishlist' : 'Add to Wishlist'}
           type="button"
         >
@@ -52,71 +65,62 @@ const PackageCard = ({ pkg, wishlist, toggleWishlist, compareList, toggleCompare
             {isSaved ? ICONS.wishlistFilled : ICONS.wishlistEmpty}
           </span>
         </button>
-      </div>
+      </Link>
 
       <div className="flex grow flex-col p-6">
-        <div className="mb-2 flex items-start justify-between">
-          <h3 className="text-xl font-bold text-[#0B1C3E]">{pkg.title}</h3>
-          <div className="text-right">
-            <span className="block text-xs font-bold uppercase tracking-[2px] text-gray-500">Starting from</span>
-            <span className="text-lg font-bold text-[#006837]">
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7240]">
+          {typeLabel}
+        </p>
+        <h3 className="mt-3 text-2xl font-black tracking-tight text-[#101c2d]">
+          <Link to={`/packages/${packageId}`} className="transition-colors hover:text-[#0B1C3E]">
+            {pkg.title}
+          </Link>
+        </h3>
+        <p className="mt-3 text-sm font-semibold text-[#2d5f50]">
+          {journeyLabel}
+        </p>
+        <p className="mt-3 text-sm leading-7 text-[#5f6774]">
+          {summary}
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {highlights.map((item) => (
+            <span key={item} className="rounded-full border border-[#e5dece] bg-[#faf8f3] px-3 py-1.5 text-xs font-semibold text-[#4d5562]">
+              {item}
+            </span>
+          ))}
+        </div>
+        <div className="mt-5 flex items-end justify-between gap-4 border-t border-[#ede6d8] pt-5">
+          <div>
+            <span className="block text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Starting from</span>
+            <span className="mt-1 block text-2xl font-black text-[#006837]">
               {typeof pkg.price === 'number' ? `$${pkg.price.toLocaleString()}` : pkg.price}
             </span>
           </div>
+          <p className="max-w-[190px] text-right text-xs leading-6 text-[#6a7280]">
+            {supportLine}
+          </p>
         </div>
-
-        <div className="mb-3 flex items-center gap-3 text-sm text-gray-500">
-          {pkg.destination && <span>{ICONS.destination} {pkg.destination}</span>}
-          {pkg.duration && <span>{ICONS.duration} {pkg.duration}</span>}
-        </div>
-
-        <div className="mb-4 grow text-sm text-gray-600">
-          {showFullDescription ? (
-            <p>{pkg.description}</p>
-          ) : (
-            <p>
-              {pkg.description && pkg.description.length > 100
-                ? `${pkg.description.substring(0, 100)}...`
-                : pkg.description}
-            </p>
-          )}
-
-          {pkg.description && pkg.description.length > 100 && (
-            <button
-              onClick={() => setShowFullDescription((current) => !current)}
-              className="mt-1 font-semibold text-[#006837] hover:underline focus:outline-none"
-              type="button"
-            >
-              {showFullDescription ? 'Show Less' : 'Show More Details'}
-            </button>
-          )}
-        </div>
-
-        <p className="mb-4 text-xs text-gray-500">
-          Availability, requirements, and next steps are confirmed by our team after you submit your request.
-        </p>
-
-        <div className="mt-auto space-y-2">
+        <div className="mt-5 flex items-center gap-3">
           <Link
             to={`/packages/${packageId}`}
-            className="block w-full rounded-lg bg-[#0B1C3E] py-2 text-center text-white transition-colors hover:bg-[#1a2f55]"
+            className="flex-1 rounded-full bg-[#0B1C3E] px-5 py-3 text-center text-sm font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-[#1a2f55]"
           >
-            Ask About This Package
+            View Package
           </Link>
           <button
             onClick={() => toggleCompare(pkg)}
-            className={`w-full rounded-lg border py-2 text-sm font-bold transition-colors ${
+            className={`rounded-full px-5 py-3 text-sm font-black uppercase tracking-[0.12em] transition-colors ${
               isInCompare
-                ? 'border-gray-300 bg-gray-100 text-gray-600'
-                : 'border-[#0B1C3E] bg-white text-[#0B1C3E] hover:bg-gray-50'
+                ? 'bg-[#efeae0] text-[#4d5562]'
+                : 'border border-[#d8cfbf] bg-white text-[#101c2d] hover:bg-[#faf8f3]'
             }`}
             type="button"
           >
-            {isInCompare ? 'Remove from Compare' : '+ Add to Compare'}
+            {isInCompare ? 'Compared' : 'Compare'}
           </button>
         </div>
       </div>
-    </div>
+    </article>
   );
 };
 
@@ -270,10 +274,10 @@ const PackageList = () => {
         <div className="w-full md:w-1/3">
           <input
             type="text"
-            placeholder="Search package or destination..."
+            placeholder="Search by package or destination"
             value={destinationFilter}
             onChange={(e) => setDestinationFilter(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 p-2 focus:border-[#0B1C3E] focus:outline-none"
+            className="w-full rounded-xl border border-gray-300 p-3 focus:border-[#0B1C3E] focus:outline-none"
           />
         </div>
         <div className="flex w-full gap-2 md:w-1/3">
@@ -282,18 +286,18 @@ const PackageList = () => {
             placeholder="Min Price"
             value={minPrice}
             onChange={(e) => setMinPrice(e.target.value)}
-            className="w-1/2 rounded-lg border border-gray-300 p-2 focus:border-[#0B1C3E] focus:outline-none"
+            className="w-1/2 rounded-xl border border-gray-300 p-3 focus:border-[#0B1C3E] focus:outline-none"
           />
           <input
             type="number"
             placeholder="Max Price"
             value={maxPrice}
             onChange={(e) => setMaxPrice(e.target.value)}
-            className="w-1/2 rounded-lg border border-gray-300 p-2 focus:border-[#0B1C3E] focus:outline-none"
+            className="w-1/2 rounded-xl border border-gray-300 p-3 focus:border-[#0B1C3E] focus:outline-none"
           />
         </div>
         <div className="text-sm text-gray-500">
-          Showing {visiblePackages.length} of {totalPackages} package options
+          {totalPackages} package options
         </div>
       </div>
 
@@ -304,7 +308,7 @@ const PackageList = () => {
         />
       )}
 
-      <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-2 xl:grid-cols-3">
         {visiblePackages.length > 0 ? (
           visiblePackages.map((pkg) => (
             <PackageCard
