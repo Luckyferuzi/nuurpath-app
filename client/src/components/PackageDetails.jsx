@@ -34,9 +34,10 @@ const PackageDetails = () => {
   const [pkg, setPkg] = useState(cachedPackage);
   const [loading, setLoading] = useState(!cachedPackage);
   const [reviews, setReviews] = useState([]);
-  const [error, setError] = useState(null);
+  const [pageError, setPageError] = useState(null);
   const [isWishlisted, setIsWishlisted] = useState(false);
-  const [shareFeedback, setShareFeedback] = useState('');
+  const [actionFeedback, setActionFeedback] = useState('');
+  const [actionFeedbackTone, setActionFeedbackTone] = useState('neutral');
   const [currency, setCurrency] = useState('USD');
   const rates = useExchangeRates();
 
@@ -44,9 +45,14 @@ const PackageDetails = () => {
     if (!pkg && cachedPackage) {
       setPkg(cachedPackage);
       setLoading(false);
-      setError(null);
+      setPageError(null);
     }
   }, [cachedPackage, pkg]);
+
+  useEffect(() => {
+    setActionFeedback('');
+    setActionFeedbackTone('neutral');
+  }, [id]);
 
   useEffect(() => {
     let isActive = true;
@@ -63,7 +69,7 @@ const PackageDetails = () => {
         }
 
         setPkg(response.data);
-        setError(null);
+        setPageError(null);
       } catch (err) {
         console.error('Failed to load package details:', err);
 
@@ -73,9 +79,9 @@ const PackageDetails = () => {
 
         if (err?.response?.status === 404) {
           setPkg(null);
-          setError('This package is not available right now.');
+          setPageError('This package is not available right now.');
         } else {
-          setError('Something went wrong while loading this package. Please try again or contact us on WhatsApp.');
+          setPageError('Something went wrong while loading this package. Please try again or contact us on WhatsApp.');
         }
       } finally {
         if (isActive) {
@@ -153,16 +159,23 @@ const PackageDetails = () => {
 
   const toggleWishlist = async () => {
     if (!isAuthenticated) {
-      alert('Create an account to save packages and track your future requests.');
+      setActionFeedback('Sign in if you want to save this package for later. You can still continue without logging in.');
+      setActionFeedbackTone('neutral');
       return;
     }
 
     try {
       await axios.post(`/wishlist/${id}`);
-      setIsWishlisted((prev) => !prev);
+      setIsWishlisted((prev) => {
+        const next = !prev;
+        setActionFeedback(next ? 'Package saved for later.' : 'Package removed from your saved list.');
+        setActionFeedbackTone('success');
+        return next;
+      });
     } catch (err) {
       console.error('Wishlist error:', err);
-      setError('Unable to update your saved packages right now. Please try again.');
+      setActionFeedback('Unable to update your saved packages right now. Please try again.');
+      setActionFeedbackTone('error');
     }
   };
 
@@ -176,9 +189,12 @@ const PackageDetails = () => {
       document.body.appendChild(link);
       link.click();
       link.remove();
+      setActionFeedback('Itinerary download started.');
+      setActionFeedbackTone('success');
     } catch (err) {
       console.error('Error downloading itinerary:', err);
-      alert('Unable to download the itinerary right now. Please try again later.');
+      setActionFeedback('Unable to download the itinerary right now. Please try again later.');
+      setActionFeedbackTone('error');
     }
   };
 
@@ -198,11 +214,12 @@ const PackageDetails = () => {
     } else {
       try {
         await navigator.clipboard.writeText(window.location.href);
-        setShareFeedback('Package link copied.');
-        setTimeout(() => setShareFeedback(''), 2000);
+        setActionFeedback('Package link copied.');
+        setActionFeedbackTone('success');
       } catch (err) {
         console.error('Failed to copy:', err);
-        setShareFeedback('Unable to copy the package link.');
+        setActionFeedback('Unable to copy the package link.');
+        setActionFeedbackTone('error');
       }
     }
   };
@@ -232,8 +249,8 @@ const PackageDetails = () => {
     return <div className="p-10 text-center">Loading package details...</div>;
   }
 
-  if (error) {
-    return <div className="p-10 text-center text-red-500">{error}</div>;
+  if (pageError) {
+    return <div className="p-10 text-center text-red-500">{pageError}</div>;
   }
 
   if (!pkg) {
@@ -353,45 +370,34 @@ const PackageDetails = () => {
               </div>
             ) : null}
 
-            <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_240px]">
-              <div className="rounded-[1.35rem] border border-[#ece4d6] bg-[#faf8f3] p-5">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <span className="block text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Starting from</span>
-                    <span className="mt-1 block text-3xl font-black text-[#006837]">
-                      {formattedPrice}
-                    </span>
-                  </div>
-                  {typeof pkg.price === 'number' ? (
-                    <label className="block">
-                      <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Currency</span>
-                      <select
-                        value={currency}
-                        onChange={(e) => setCurrency(e.target.value)}
-                        className="rounded-xl border border-[#d8cfbf] bg-white px-3 py-2 text-sm text-[#4d5562] focus:border-[#0B1C3E] focus:outline-none"
-                      >
-                        <option value="USD">USD</option>
-                        <option value="EUR">EUR</option>
-                        <option value="GBP">GBP</option>
-                        <option value="SAR">SAR</option>
-                        <option value="AED">AED</option>
-                      </select>
-                    </label>
-                  ) : null}
+            <div className="mt-6 rounded-[1.35rem] border border-[#ece4d6] bg-[#faf8f3] p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <span className="block text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Starting from</span>
+                  <span className="mt-1 block text-3xl font-black text-[#006837]">
+                    {formattedPrice}
+                  </span>
                 </div>
-                <p className="mt-4 text-sm leading-7 text-[#5f6774]">
-                  {supportLine}
-                </p>
+                {typeof pkg.price === 'number' ? (
+                  <label className="block">
+                    <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Currency</span>
+                    <select
+                      value={currency}
+                      onChange={(e) => setCurrency(e.target.value)}
+                      className="rounded-xl border border-[#d8cfbf] bg-white px-3 py-2 text-sm text-[#4d5562] focus:border-[#0B1C3E] focus:outline-none"
+                    >
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                      <option value="SAR">SAR</option>
+                      <option value="AED">AED</option>
+                    </select>
+                  </label>
+                ) : null}
               </div>
-
-              <div className="rounded-[1.35rem] border border-[#11325c] bg-[#0B1C3E] p-5 text-white">
-                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#D4AF37]">
-                  Request Flow
-                </p>
-                <p className="mt-3 text-sm leading-7 text-slate-200">
-                  Submit the request here first. NuurPath reviews the details, confirms the next step, and continues with you directly. No online payment is required on the website.
-                </p>
-              </div>
+              <p className="mt-4 text-sm leading-7 text-[#5f6774]">
+                {supportLine}
+              </p>
             </div>
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
@@ -441,8 +447,16 @@ const PackageDetails = () => {
               </button>
             </div>
 
-            {shareFeedback ? (
-              <p className="mt-3 text-sm font-medium text-[#2d5f50]">{shareFeedback}</p>
+            {actionFeedback ? (
+              <p className={`mt-3 text-sm font-medium ${
+                actionFeedbackTone === 'error'
+                  ? 'text-[#b84f4f]'
+                  : actionFeedbackTone === 'success'
+                    ? 'text-[#2d5f50]'
+                    : 'text-[#5f6774]'
+              }`}>
+                {actionFeedback}
+              </p>
             ) : null}
           </div>
         </div>
@@ -576,36 +590,6 @@ const PackageDetails = () => {
         </div>
 
         <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
-          <section className="rounded-[1.6rem] border border-[#e5dece] bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-black tracking-tight text-[#101c2d]">Package snapshot</h2>
-            <dl className="mt-5 space-y-4 text-sm">
-              {routeSummary ? (
-                <div>
-                  <dt className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Route</dt>
-                  <dd className="mt-1 text-[#4d5562]">{routeSummary}</dd>
-                </div>
-              ) : null}
-              {pkg.destination ? (
-                <div>
-                  <dt className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Destination</dt>
-                  <dd className="mt-1 text-[#4d5562]">{pkg.destination}</dd>
-                </div>
-              ) : null}
-              {pkg.duration ? (
-                <div>
-                  <dt className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Duration</dt>
-                  <dd className="mt-1 text-[#4d5562]">{pkg.duration}</dd>
-                </div>
-              ) : null}
-              {typeLabel ? (
-                <div>
-                  <dt className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Package type</dt>
-                  <dd className="mt-1 text-[#4d5562]">{typeLabel}</dd>
-                </div>
-              ) : null}
-            </dl>
-          </section>
-
           <section className="rounded-[1.6rem] bg-[#0B1C3E] p-6 text-white shadow-sm">
             <h2 className="text-xl font-black tracking-tight">What happens next</h2>
             <ol className="mt-5 space-y-4 text-sm leading-7 text-slate-200">

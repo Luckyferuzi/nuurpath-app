@@ -321,8 +321,8 @@ const Home = () => {
           {showTripSkeleton ? (
             <div className="grid min-h-[320px] lg:grid-cols-[0.92fr_1.08fr]">
               <div className="bg-[#ede7db] p-4 sm:p-5">
-                <div className="flex h-full min-h-[240px] items-center justify-center rounded-[1.3rem] border border-[#e3dac7] bg-[#f6f1e7] p-4 shadow-[0_14px_34px_rgba(16,28,45,0.08)]">
-                  <div className="h-full w-full rounded-[1rem] bg-gray-300"></div>
+                <div className="flex h-full min-h-[240px] items-center justify-center rounded-[1.3rem] border border-[#e3dac7] bg-[#f6f1e7] p-5 shadow-[0_14px_34px_rgba(16,28,45,0.08)]">
+                  <div className="h-[220px] w-full rounded-[1rem] bg-gray-300 sm:h-[250px] lg:h-[300px]"></div>
                 </div>
               </div>
               <div className="flex flex-col justify-center gap-4 bg-white p-6 sm:p-7">
@@ -345,11 +345,11 @@ const Home = () => {
                 >
                   <div className="grid h-full min-h-[320px] lg:grid-cols-[0.92fr_1.08fr]">
                     <div className="bg-[#efe7da] p-4 sm:p-5">
-                      <div className="flex h-[240px] items-center justify-center overflow-hidden rounded-[1.35rem] border border-[#e3dac7] bg-[#f6f1e7] p-4 shadow-[0_14px_34px_rgba(16,28,45,0.08)] sm:h-[270px] lg:h-full">
+                      <div className="flex h-[240px] items-center justify-center rounded-[1.35rem] border border-[#e3dac7] bg-[#f6f1e7] p-5 shadow-[0_14px_34px_rgba(16,28,45,0.08)] sm:h-[270px] lg:h-full">
                         <img
                           src={trip.image}
                           alt={trip.title}
-                          className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-[1.02]"
+                          className="block max-h-full max-w-full transition-transform duration-500 group-hover:scale-[1.02]"
                           loading={index === currentSlide ? 'eager' : 'lazy'}
                           fetchPriority={index === currentSlide ? 'high' : 'low'}
                           decoding="async"

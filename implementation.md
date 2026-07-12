@@ -1307,6 +1307,10 @@ Frontend:
 - Refined package image framing after review so it now follows a clearer rule:
   - homepage featured packages preserve the full image inside a proper framed area
   - package-list and package-details images use moderate filled frames so they look balanced instead of floating inside oversized containers
+- Cleaned the package-details experience further after review by:
+  - removing repeated summary information between the hero and sidebar
+  - removing the duplicated request explanation
+  - replacing browser-style save/login alerts with quieter inline feedback inside the page
 
 ### Implementation Notes
 
