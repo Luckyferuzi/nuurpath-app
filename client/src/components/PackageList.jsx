@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import PackageComparison from './PackageComparison';
+import { PublicPageHeader, PublicPageShell } from './PublicPageShell.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { usePublicContent } from '../contexts/PublicContentContext.jsx';
 import axios, { resolveBackendUrl } from '../lib/api';
@@ -241,6 +242,23 @@ const PackageList = () => {
   };
 
   const blockingError = error || (packages.length === 0 ? packagesError : null);
+  const overviewCards = [
+    {
+      label: 'Request first',
+      value: 'Website start',
+      description: 'Choose the package and send the key details online before follow-up continues.',
+    },
+    {
+      label: 'Support style',
+      value: 'Human review',
+      description: 'Availability, requirements, and next steps are confirmed by the NuurPath team.',
+    },
+    {
+      label: 'Payment',
+      value: 'Offline later',
+      description: 'No online payment is required on the website while you are exploring options.',
+    },
+  ];
 
   if (packagesLoading && packages.length === 0) {
     return <div className="p-10 text-center">Loading packages and request options...</div>;
@@ -251,21 +269,37 @@ const PackageList = () => {
   }
 
   return (
-    <div className="container mx-auto p-6">
-      <div className="mb-8 text-center">
-        <h2 className="text-3xl font-bold text-[#0B1C3E]">Explore Travel Packages</h2>
-        <p className="mx-auto mt-3 max-w-2xl text-gray-600">
-          Browse Umrah and travel package options, then start your request online. Our team confirms availability, guidance, and next steps on WhatsApp.
-        </p>
-      </div>
+    <PublicPageShell background="soft" contentClassName="py-10 sm:py-12 lg:py-16">
+      <PublicPageHeader
+        eyebrow="Curated Journeys"
+        title="Explore travel packages with a clearer starting point"
+        description="Browse Umrah and travel package options, then start your request online. NuurPath confirms availability, guidance, and next steps with human follow-up on WhatsApp."
+        actions={(
+          <>
+            <Link to="/contact" className="rounded-full bg-[#101c2d] px-6 py-3 text-sm font-black uppercase tracking-[0.18em] text-white transition-colors hover:bg-[#16263b]">
+              Talk To NuurPath
+            </Link>
+            <Link to="/" className="rounded-full border border-[#cfbf9b] px-6 py-3 text-sm font-black uppercase tracking-[0.18em] text-[#101c2d] transition-colors hover:bg-white">
+              Back To Home
+            </Link>
+          </>
+        )}
+        aside={overviewCards.map((card) => (
+          <div key={card.label} className="rounded-[1.4rem] border border-[#ece3d2] bg-[#fcfbf8] p-4">
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-[#8a7240]">{card.label}</p>
+            <h3 className="mt-2 text-lg font-black text-[#101c2d]">{card.value}</h3>
+            <p className="mt-2 text-sm leading-6 text-[#5f6774]">{card.description}</p>
+          </div>
+        ))}
+      />
 
       {packagesError && packages.length > 0 && (
-        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="mb-6 mt-8 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           Live updates are temporarily delayed, but the current package list is still available.
         </div>
       )}
 
-      <div className="mb-8 flex flex-col items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:flex-row">
+      <div className="mb-8 mt-8 flex flex-col items-center justify-between gap-4 rounded-[1.8rem] border border-[#e4dbc9] bg-white/92 p-4 shadow-[0_20px_50px_rgba(16,28,45,0.08)] md:flex-row">
         <div className="w-full md:w-1/3">
           <input
             type="text"
@@ -345,7 +379,7 @@ const PackageList = () => {
           </button>
         </div>
       )}
-    </div>
+    </PublicPageShell>
   );
 };
 

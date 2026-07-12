@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, matchPath } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider } from './contexts/AuthContext.jsx';
 import { PublicContentProvider } from './contexts/PublicContentContext.jsx';
@@ -45,79 +45,118 @@ import VerifyEmail from './components/VerifyEmail.jsx';
 import StaffPortalHeader from './components/StaffPortalHeader.jsx';
 import StaffWorkspaceLayout from './components/StaffWorkspaceLayout.jsx';
 import NotFoundPage from './components/NotFoundPage.jsx';
+import ScrollToTopOnRouteChange from './components/ScrollToTopOnRouteChange.jsx';
 import './App.css';
 
 const GOOGLE_CLIENT_ID = (process.env.REACT_APP_GOOGLE_CLIENT_ID || '').trim();
+const FOOTER_HIDDEN_PATTERNS = [
+  '/book/:packageId',
+  '/book-flight',
+  '/book-consultation',
+];
+const FOOTER_COMPACT_PATTERNS = [
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password/:token',
+  '/verify-email/:token',
+  '/terms',
+  '/privacy',
+  '/dashboard',
+  '/wishlist',
+  '/profile',
+];
+
+const matchesPattern = (patterns, pathname) => patterns.some((pattern) => matchPath({ path: pattern, end: true }, pathname));
+
+const getPublicFooterVariant = (pathname) => {
+  if (matchesPattern(FOOTER_HIDDEN_PATTERNS, pathname)) {
+    return 'none';
+  }
+
+  if (matchesPattern(FOOTER_COMPACT_PATTERNS, pathname)) {
+    return 'compact';
+  }
+
+  return 'full';
+};
 
 function AppFrame() {
   const location = useLocation();
   const isAdminWorkspaceRoute = location.pathname.startsWith('/admin');
   const isStaffPortalRoute = location.pathname.startsWith('/staff') || isAdminWorkspaceRoute;
   const showStandaloneStaffHeader = location.pathname.startsWith('/staff');
+  const footerVariant = !isStaffPortalRoute ? getPublicFooterVariant(location.pathname) : 'none';
+  const publicMainClassName = footerVariant === 'none'
+    ? 'flex-1 bg-[#fcfbf8]'
+    : 'flex-1 bg-[linear-gradient(180deg,_#f5f1e8_0%,_#f7f8fb_52%,_#f6f2ea_100%)]';
 
   return (
     <div className="App">
+      <ScrollToTopOnRouteChange />
       {showStandaloneStaffHeader ? <StaffPortalHeader /> : !isAdminWorkspaceRoute ? <Navbar /> : null}
-      <PublicContentProvider enabled={!isStaffPortalRoute}>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/packages" element={<PackageList />} />
-          <Route path="/packages/:id" element={<PackageDetails />} />
-          <Route path="/book/:packageId" element={<BookingForm />} />
-          <Route path="/book-consultation" element={<PrivateConsultationBooking />} />
-          <Route path="/book-flight" element={<FlightBookingForm />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password/:token" element={<ResetPassword />} />
-          <Route path="/contact" element={<ContactUs />} />
-          <Route path="/terms" element={<TermsAndConditions />} />
-          <Route path="/privacy" element={<PrivacyPolicy />} />
-          <Route path="/team" element={<Team />} />
-          <Route path="/verify-email/:token" element={<VerifyEmail />} />
-          <Route path="/staff/login" element={<StaffLogin />} />
-          <Route path="/staff/setup" element={<AdminSetup />} />
+      <main className={isStaffPortalRoute ? 'flex-1' : publicMainClassName}>
+        <PublicContentProvider enabled={!isStaffPortalRoute}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/packages" element={<PackageList />} />
+            <Route path="/packages/:id" element={<PackageDetails />} />
+            <Route path="/book/:packageId" element={<BookingForm />} />
+            <Route path="/book-consultation" element={<PrivateConsultationBooking />} />
+            <Route path="/book-flight" element={<FlightBookingForm />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password/:token" element={<ResetPassword />} />
+            <Route path="/contact" element={<ContactUs />} />
+            <Route path="/terms" element={<TermsAndConditions />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/team" element={<Team />} />
+            <Route path="/verify-email/:token" element={<VerifyEmail />} />
+            <Route path="/staff/login" element={<StaffLogin />} />
+            <Route path="/staff/setup" element={<AdminSetup />} />
 
-          <Route element={<PrivateRoute />}>
-            <Route path="/dashboard" element={<UserDashboard />} />
-            <Route path="/wishlist" element={<WishlistPage />} />
-            <Route path="/profile" element={<UserProfile />} />
-          </Route>
+            <Route element={<PrivateRoute />}>
+              <Route path="/dashboard" element={<UserDashboard />} />
+              <Route path="/wishlist" element={<WishlistPage />} />
+              <Route path="/profile" element={<UserProfile />} />
+            </Route>
 
-          {/* Admin Routes */}
-          <Route element={<AdminRoute allowedRoles={['admin', 'manager']} />}>
-            <Route path="/admin" element={<StaffWorkspaceLayout />}>
-              <Route index element={<AdminDashboard />} />
-              <Route path="consultations" element={<PrivateConsultationsAdmin />} />
-              <Route path="package-bookings" element={<PackageBookingsAdmin />} />
-              <Route path="flight-bookings" element={<FlightBookingsAdmin />} />
-              <Route path="service-inquiries" element={<ServiceInquiriesAdmin />} />
-              <Route path="reviews" element={<ManageReviews />} />
-              <Route path="chat" element={<ChatComponent />} />
-              <Route
-                element={(
-                  <AdminRoute
-                    allowedRoles={['admin']}
-                    permissionTitle="Admin Access Required"
-                    permissionMessage="Only admin accounts can manage users, services, package content, media posts, and newsletter operations."
-                    fallbackPath="/admin"
-                  />
-                )}
-              >
-                <Route path="users" element={<ManageUsers />} />
-                <Route path="services" element={<ManageServices />} />
-                <Route path="packages" element={<ManagePackages />} />
-                <Route path="media-posts" element={<ManageMediaPosts />} />
-                <Route path="newsletter" element={<ManageNewsletter />} />
+            {/* Admin Routes */}
+            <Route element={<AdminRoute allowedRoles={['admin', 'manager']} />}>
+              <Route path="/admin" element={<StaffWorkspaceLayout />}>
+                <Route index element={<AdminDashboard />} />
+                <Route path="consultations" element={<PrivateConsultationsAdmin />} />
+                <Route path="package-bookings" element={<PackageBookingsAdmin />} />
+                <Route path="flight-bookings" element={<FlightBookingsAdmin />} />
+                <Route path="service-inquiries" element={<ServiceInquiriesAdmin />} />
+                <Route path="reviews" element={<ManageReviews />} />
+                <Route path="chat" element={<ChatComponent />} />
+                <Route
+                  element={(
+                    <AdminRoute
+                      allowedRoles={['admin']}
+                      permissionTitle="Admin Access Required"
+                      permissionMessage="Only admin accounts can manage users, services, package content, media posts, and newsletter operations."
+                      fallbackPath="/admin"
+                    />
+                  )}
+                >
+                  <Route path="users" element={<ManageUsers />} />
+                  <Route path="services" element={<ManageServices />} />
+                  <Route path="packages" element={<ManagePackages />} />
+                  <Route path="media-posts" element={<ManageMediaPosts />} />
+                  <Route path="newsletter" element={<ManageNewsletter />} />
+                </Route>
               </Route>
             </Route>
-          </Route>
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
-      </PublicContentProvider>
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </PublicContentProvider>
+      </main>
       {!isStaffPortalRoute && (
         <>
-          <Footer />
+          {footerVariant !== 'none' ? <Footer variant={footerVariant} /> : null}
           <WhatsAppButton />
           <ChatWidget />
           <BackToTopButton />

@@ -12,6 +12,11 @@ Current status:
 - Phase 5 is completed.
 - Phase 6 is completed.
 - Phase 7 is completed.
+- Phase 8 is completed.
+- Phase 9 is planned.
+- Phase 10 is planned.
+- Phase 11 is planned.
+- Phase 12 is planned.
 - When resuming work later, read this file first and then continue from the next approved phase.
 
 ## How To Use This Document
@@ -115,6 +120,11 @@ Recommended implementation order:
 5. Phase 5: Admin and manager workspace redesign
 6. Phase 6: Media posts, travel evidence, and newsletter operations
 7. Phase 7: Manager workflow intelligence and operational maturity
+8. Phase 8: Public shell refinement and browsing polish
+9. Phase 9: Package experience redesign
+10. Phase 10: Guided digital request flows and service deepening
+11. Phase 11: Contact, footer, and public trust-page refinement
+12. Phase 12: Admin decluttering and workspace cleanup
 
 Why this order:
 - Phase 1 removes visible friction immediately.
@@ -124,6 +134,11 @@ Why this order:
 - Phase 5 improves the main working environment for the team.
 - Phase 6 adds growth and trust-building content operations.
 - Phase 7 adds smarter management features after the core workflow becomes stable.
+- Phase 8 improves public page behavior and design consistency first.
+- Phase 9 then strengthens the package sales journey, which is the main conversion surface.
+- Phase 10 deepens the request experience so customers complete more serious steps on the website before WhatsApp continuation.
+- Phase 11 improves supporting public trust pages and footer strategy.
+- Phase 12 then simplifies the staff experience after the public-side refinements are better defined.
 
 ---
 
@@ -1058,6 +1073,476 @@ Frontend:
 
 ---
 
+## Phase 8: Public Shell Refinement and Browsing Polish
+
+Status:
+- Completed
+
+### Objective
+
+Fix shared public-site behavior and layout polish so the website feels calmer, more intentional, and more reliable before deeper sales-flow redesign work begins.
+
+### Why This Phase Comes Next
+
+This is the lowest-risk entry point into the larger redesign work. It improves page behavior and shared layout consistency without forcing a full rewrite of package sales screens or request journeys on day one.
+
+### Main Deliverables
+
+#### 1. Fix cross-page scroll behavior
+
+Current issue:
+- when a user scrolls deep into one page and opens another page, the next page can appear at the previous scroll position instead of starting from the top
+
+Required outcome:
+- route changes between public pages should start at the top by default
+- intentional in-page anchor scrolling should still work where needed
+
+Expected implementation:
+- add route-level scroll restoration or scroll reset for the public site
+- verify behavior on:
+  - homepage to packages
+  - packages to package details
+  - homepage to flight request
+  - homepage to contact
+
+#### 2. Create a cleaner shared public page shell
+
+Current issue:
+- page transitions and section rhythm feel disconnected from one route to another
+- some pages look like isolated screens rather than parts of one brand experience
+
+Required outcome:
+- shared spacing, page headers, section framing, and CTA patterns should feel more consistent
+- the public experience should feel refined without losing the existing NuurPath identity
+
+#### 3. Refresh the homepage structure without reinventing it
+
+Important constraint:
+- this should not become a full homepage replacement
+- it should become cleaner, smarter, and more professional while staying recognizably NuurPath
+
+Expected improvements:
+- reduced repetition
+- better section pacing
+- clearer trust flow
+- improved service and package positioning
+- stronger mobile readability
+
+#### 4. Decide footer behavior per page type
+
+Current issue:
+- the current footer appears on every public page whether it helps or not
+
+Required outcome:
+- define when to use:
+  - full footer
+  - compact footer
+  - no footer
+- focused request flows should not lose momentum because of unnecessary footer weight
+
+### Likely Files To Touch
+
+Frontend:
+- `client/src/App.jsx`
+- new scroll-restoration utility or route wrapper
+- `client/src/components/Navbar.jsx`
+- `client/src/components/Footer.jsx`
+- `client/src/components/Home.jsx`
+
+### Acceptance Criteria
+
+- public page navigation starts from the correct top position by default
+- homepage sections feel more intentional and less repetitive
+- shared public layouts feel more visually consistent
+- footer visibility is intentional instead of universal
+
+### Completed Work
+
+- Added route-level public scroll restoration so moving between customer-facing pages now resets to the top by default while still allowing hash-based section jumps where needed.
+- Introduced route-aware public footer behavior:
+  - no footer on focused request-entry pages
+  - compact footer on legal, auth, and customer-account utility pages
+  - full footer on main browse and trust-building pages
+- Added shared public-page shell primitives to support more consistent section framing and page headers across the public site.
+- Refined the public navbar so it feels more deliberate and easier to scan on desktop and mobile, with clearer active states and a calmer presentation.
+- Refreshed the homepage structure without replacing the brand direction:
+  - stronger hero framing
+  - reduced repetition
+  - cleaner section pacing
+  - more intentional featured-package presentation
+  - clearer service and consultation positioning
+- Upgraded the packages listing page with a cleaner introductory shell so it now feels more aligned with the homepage framing before the deeper package redesign planned for Phase 9.
+
+### Implementation Notes
+
+- Keep this phase focused on shared structure and route behavior, not deep page-by-page redesign.
+- Preserve the existing visual identity while cleaning up layout rhythm and responsiveness.
+
+---
+
+## Phase 9: Package Experience Redesign
+
+Status:
+- Planned
+
+### Objective
+
+Redesign the package browsing and package-details journey so it feels premium, persuasive, and easier to trust across both desktop and mobile.
+
+### Why This Phase Comes After Phase 8
+
+Once the shared shell, scroll behavior, and basic page rhythm are stable, the most important conversion surface can be redesigned without fighting inconsistent layout rules underneath it.
+
+### Main Deliverables
+
+#### 1. Redesign the homepage package showcase
+
+Current issue:
+- packages on the homepage do not feel premium or emotionally convincing
+
+Required outcome:
+- featured packages should feel curated and valuable, not like generic listings
+- the section should help a customer quickly understand why a package is worth opening
+
+#### 2. Redesign the full packages page
+
+Current issue:
+- the packages listing works functionally but does not feel refined or persuasive enough
+
+Required outcome:
+- the packages page should feel like a curated browsing experience, not only a utility listing
+
+Expected improvements:
+- cleaner search and filter presentation
+- better card design
+- stronger summary copy
+- better visual distinction for featured, destination, duration, and price
+- clearer relationship between browsing and requesting
+
+#### 3. Redesign the package details page
+
+Current issue:
+- the details page contains useful information, but the experience does not strongly sell or reassure
+
+Required outcome:
+- the page should feel like a serious travel product page with trust and clarity
+
+Expected improvements:
+- stronger hero presentation
+- clearer itinerary and route storytelling
+- better breakdown of:
+  - package summary
+  - journey stops
+  - travel details
+  - request CTA
+  - trust and no-payment messaging
+- better related-package presentation
+- better structure for customer scanning on mobile
+
+#### 4. Improve package wording and storytelling
+
+Current issue:
+- some package language is flat, operational, or too generic
+
+Required outcome:
+- copy should help the customer understand:
+  - who the package is for
+  - what is included
+  - how the journey flows
+  - what support NuurPath gives
+  - what the next step is
+
+### Likely Files To Touch
+
+Frontend:
+- `client/src/components/Home.jsx`
+- `client/src/components/PackageList.jsx`
+- `client/src/components/PackageDetails.jsx`
+- any shared package card, badge, or CTA components used across the public site
+
+### Acceptance Criteria
+
+- homepage package presentation feels more premium and curated
+- the packages page feels cleaner, easier to scan, and more persuasive
+- package details feel trustworthy and professionally structured
+- package wording is clearer and more helpful across the journey
+
+### Implementation Notes
+
+- Do not throw away the whole package structure unnecessarily.
+- Evolve the current journey into something stronger rather than creating a disconnected visual system.
+
+---
+
+## Phase 10: Guided Digital Request Flows and Service Deepening
+
+Status:
+- Planned
+
+### Objective
+
+Make the website capable of handling the first serious customer step before WhatsApp continuation, especially for flights, packages, visa guidance, and service requests.
+
+### Why This Phase Comes After Phase 9
+
+After the package sales surfaces are strong, the next priority is helping customers complete meaningful requests on-site so WhatsApp becomes a continuation channel rather than the first real step.
+
+### Main Deliverables
+
+#### 1. Redesign the flight request experience
+
+Current issue:
+- the current form works, but it looks too basic and does not create enough trust before the customer is sent to WhatsApp
+
+Required outcome:
+- customers should submit a clear flight request directly on the website
+- the success state should show a proper summary and reference
+- staff should later contact the customer using the number already submitted
+
+Expected improvements:
+- better visual form layout
+- stronger explanation of how the process works
+- clear request summary before or after submit
+- stronger confirmation state:
+  - route
+  - dates
+  - trip type
+  - request reference
+  - what happens next
+
+#### 2. Refine package request presentation
+
+Current issue:
+- request entry points from packages may still feel too abrupt or too light compared with the importance of the booking inquiry
+
+Required outcome:
+- package-request flows should reassure the customer that their details are captured clearly and will be followed up professionally
+
+#### 3. Upgrade visa guidance and service-request flows into fuller website experiences
+
+Current issue:
+- visa and service guidance are still too shallow and generic
+- they do not yet feel like destination-specific or service-specific journeys
+
+Desired future behavior:
+- if admin defines a service such as China visa support, the public side should present it clearly as a real service path
+- the customer should be able to complete important first steps on the website, including document submission where appropriate
+- the website should explain:
+  - what the service is
+  - what the customer needs
+  - what documents are expected
+  - how payment works
+  - what happens before WhatsApp
+
+#### 4. Communicate payment expectations clearly without payment integration
+
+Required business rule:
+- no payment gateway integration is required in this phase
+- the website should instead present payment instructions clearly, using the specified payment number or method
+
+### Likely Files To Touch
+
+Frontend:
+- `client/src/components/BookingForm.jsx`
+- `client/src/components/FlightBookingForm.jsx`
+- `client/src/components/ServiceInquiryForm.jsx`
+- any public confirmation, request-summary, or success-state components
+
+Possible backend work:
+- `server/prisma/schema.prisma`
+- request routes if richer service metadata or document steps are needed
+- stored-file handling if some service flows need stronger document submission support
+
+### Acceptance Criteria
+
+- flight requests feel like a serious on-site workflow before WhatsApp continuation
+- package requests feel clearer and more reassuring
+- visa and service journeys feel deeper, more specific, and more trustworthy
+- customers understand that payment is handled outside the website through defined instructions
+
+### Implementation Notes
+
+- WhatsApp remains a continuation channel, not the first serious part of the customer experience.
+- Success states should confirm what the customer submitted and what happens next.
+
+---
+
+## Phase 11: Contact, Footer, and Public Trust-Page Refinement
+
+Status:
+- Planned
+
+### Objective
+
+Turn the supporting public pages into clearer trust-building surfaces so customers always know how to reach NuurPath and what to expect next.
+
+### Why This Phase Comes After Phase 10
+
+Once the core request flows are improved, the supporting trust pages can be redesigned to reinforce those journeys instead of feeling like disconnected utility pages.
+
+### Main Deliverables
+
+#### 1. Redesign the contact page into a customer help hub
+
+Current issue:
+- the contact page is too form-heavy and does not match the desired role of a clear customer contact area
+
+Required outcome:
+- the contact page should primarily help customers know how to reach NuurPath
+
+Expected improvements:
+- contact channels first:
+  - phone
+  - WhatsApp
+  - office location
+  - opening hours
+- cleaner location presentation
+- simple and relevant FAQs
+- lighter or secondary form usage instead of making the form the main identity of the page
+
+#### 2. Redesign the footer
+
+Current issue:
+- the visual design can be stronger and cleaner
+
+Required outcome:
+- the footer should feel more intentional, better organized, and more aligned with the refined public brand
+
+#### 3. Refine supporting trust content across public pages
+
+Examples:
+- reassurance copy
+- FAQs
+- support CTAs
+- page-end trust messaging
+
+Required outcome:
+- support content should help customers move forward instead of adding noise
+
+### Likely Files To Touch
+
+Frontend:
+- `client/src/components/Footer.jsx`
+- `client/src/components/ContactUs.jsx`
+- `client/src/components/GlobalSupport.jsx`
+- any FAQ, CTA, or public trust-section components reused across pages
+
+### Acceptance Criteria
+
+- contact page emphasizes how customers can reach NuurPath rather than mainly collecting form input
+- the footer feels cleaner and more professional
+- trust messaging is more helpful and less noisy across supporting public pages
+
+### Implementation Notes
+
+- This phase should support the main request journeys, not compete with them.
+- Keep contact information visible and practical across both mobile and desktop views.
+
+---
+
+## Phase 12: Admin Decluttering and Workspace Cleanup
+
+Status:
+- Planned
+
+### Objective
+
+Reduce admin overload and make the staff workspace cleaner, more segmented, and easier to operate on both desktop and mobile.
+
+### Why This Phase Comes Last In This Group
+
+The public experience is the highest customer-facing priority. Admin decluttering should follow after the public-side direction is clearer, so the staff workspace can be simplified around the real operational flows the product now supports.
+
+### Main Deliverables
+
+#### 1. Simplify the sidebar and staff navigation language
+
+Current issue:
+- the side panel carries too much information and feels heavy to scan
+
+Required outcome:
+- reduce descriptive noise
+- make labels easier to understand quickly
+- keep important destinations obvious without crowding the screen
+
+#### 2. Improve admin layout behavior and reduce long-page fatigue
+
+Current issue:
+- some staff screens feel too long because too much is stacked in one vertical flow
+
+Required outcome:
+- keep the sidebar fixed where appropriate
+- let the main content area scroll more independently
+- reduce the feeling that everything is happening on one endless page
+
+#### 3. Split heavy admin pages into smarter structures
+
+Current issue:
+- some pages are still carrying too many responsibilities in one place
+
+Recommended direction:
+- tabs
+- sub-sections
+- segmented cards
+- clearer create versus browse versus reorder areas
+- dedicated mobile-friendly views where appropriate
+
+Examples:
+- packages
+- users and staff
+- services and content operations
+
+#### 4. Improve mobile staff usability
+
+Current issue:
+- the mobile version of the admin side is still overwhelming
+
+Required outcome:
+- better navigation density
+- cleaner stacking behavior
+- clearer task grouping on smaller screens
+
+#### 5. Keep package-management workflows aligned with real travel complexity
+
+Important note:
+- package management should continue to support journeys with multiple stops or cities rather than assuming every package is a simple single-location product
+
+### Likely Files To Touch
+
+Frontend:
+- `client/src/components/StaffWorkspaceLayout.jsx`
+- `client/src/lib/staffWorkspace.js`
+- `client/src/components/ManagePackages.jsx`
+- `client/src/components/ManageServices.jsx`
+- `client/src/components/ManageUsers.jsx`
+- related admin workspace components affected by navigation or layout restructuring
+
+### Acceptance Criteria
+
+- admin navigation feels lighter and cleaner
+- heavy admin pages feel more segmented and easier to follow
+- long-page fatigue is reduced through better layout behavior
+- staff mobile behavior improves noticeably
+
+### Implementation Notes
+
+- Admin decluttering should prefer separation by task and intention rather than only visual restyling.
+- Keep admin powerful, but make the workspace easier to scan and less mentally heavy.
+
+---
+
+## Shared Notes For Phases 8 To 12
+
+- The redesign should preserve the NuurPath identity and current business model rather than introducing unnecessary novelty.
+- The package experience should be treated as the strongest public conversion surface in the whole product.
+- Public request flows should communicate clearly that:
+  - requests are reviewed by the team
+  - payment is not completed online through the site
+  - the next operational step comes through staff follow-up
+- Focus first on helping the customer complete their intended step on the website, then use WhatsApp for continuation where needed.
+
+---
+
 ## Cross-Phase Technical Notes
 
 These notes should be kept in mind while implementing any phase:
@@ -1105,6 +1590,11 @@ If implementation starts now, this is the recommended working order:
 5. Phase 5
 6. Phase 6
 7. Phase 7
+8. Phase 8
+9. Phase 9
+10. Phase 10
+11. Phase 11
+12. Phase 12
 
 ### Why this sequence is safe
 
@@ -1112,7 +1602,13 @@ If implementation starts now, this is the recommended working order:
 - Phase 3 introduces the package structure and ordering foundation.
 - Phase 4 makes customer-submitted data truly useful to staff.
 - Phase 5 redesigns the staff experience around improved data and workflows.
-- Phase 6 and Phase 7 then extend growth and operational intelligence on top of a stronger base.
+- Phase 6 adds media and newsletter operations after the core workspace is in better shape.
+- Phase 7 adds smarter operational oversight once the request workflow is mature enough to support it.
+- Phase 8 improves shared public behavior and page-shell consistency before deeper redesign work.
+- Phase 9 then focuses the strongest conversion surface: package discovery and package details.
+- Phase 10 makes digital request journeys more complete before WhatsApp continuation.
+- Phase 11 refines the trust and support pages that surround those journeys.
+- Phase 12 finishes this block by simplifying the staff workspace around the now clearer product structure.
 
 ## Definition Of Success
 
