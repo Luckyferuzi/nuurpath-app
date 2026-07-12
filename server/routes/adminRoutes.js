@@ -42,7 +42,7 @@ router.get('/stats', auth, requireAdminOrManager, async (req, res) => {
         sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
         sixMonthsAgo.setHours(0, 0, 0, 0);
 
-        const [packageBookings, flightBookings, consultations, serviceInquiries] = await prisma.$transaction([
+        const [packageBookings, flightBookings, consultations, serviceInquiries, publishedMediaPosts, activeNewsletterSubscribers] = await prisma.$transaction([
             prisma.packageBooking.findMany({
                 include: {
                     package: {
@@ -72,6 +72,16 @@ router.get('/stats', auth, requireAdminOrManager, async (req, res) => {
                     id: true,
                     status: true,
                     createdAt: true,
+                },
+            }),
+            prisma.mediaPost.count({
+                where: {
+                    isPublished: true,
+                },
+            }),
+            prisma.newsletterSubscriber.count({
+                where: {
+                    isActive: true,
                 },
             }),
         ]);
@@ -154,6 +164,8 @@ router.get('/stats', auth, requireAdminOrManager, async (req, res) => {
             totalFlightRequests: flightBookings.length,
             totalConsultations: consultations.length,
             totalServiceInquiries: serviceInquiries.length,
+            publishedMediaPosts,
+            activeNewsletterSubscribers,
             trends,
             requestDistribution: [
                 { name: 'Package Requests', value: packageBookings.length },

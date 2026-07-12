@@ -20,6 +20,8 @@ import ManageServices from './components/ManageServices.jsx';
 import ServiceInquiriesAdmin from './components/ServiceInquiriesAdmin.jsx';
 import ManagePackages from './components/ManagePackages.jsx';
 import ManageReviews from './components/ManageReviews.jsx';
+import ManageMediaPosts from './components/ManageMediaPosts.jsx';
+import ManageNewsletter from './components/ManageNewsletter.jsx';
 import Login from './components/Login.jsx';
 import StaffLogin from './components/StaffLogin.jsx';
 import AdminSetup from './components/AdminSetup.jsx';
@@ -97,7 +99,7 @@ function AppFrame() {
                   <AdminRoute
                     allowedRoles={['admin']}
                     permissionTitle="Admin Access Required"
-                    permissionMessage="Only admin accounts can manage users, services, and package content."
+                    permissionMessage="Only admin accounts can manage users, services, package content, media posts, and newsletter operations."
                     fallbackPath="/admin"
                   />
                 )}
@@ -105,6 +107,8 @@ function AppFrame() {
                 <Route path="users" element={<ManageUsers />} />
                 <Route path="services" element={<ManageServices />} />
                 <Route path="packages" element={<ManagePackages />} />
+                <Route path="media-posts" element={<ManageMediaPosts />} />
+                <Route path="newsletter" element={<ManageNewsletter />} />
               </Route>
             </Route>
           </Route>

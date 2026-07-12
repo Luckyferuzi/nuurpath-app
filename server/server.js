@@ -358,6 +358,7 @@ async function startServer() {
     app.use('/api/packages', require('./routes/packageRoutes'));
     app.use('/api/bookings', require('./routes/bookingRoutes'));
     app.use('/api/flights', require('./routes/flightRoutes'));
+    app.use('/api/media-posts', require('./routes/mediaPostRoutes'));
     app.use('/api/reviews', require('./routes/reviewRoutes'));
     app.use('/api/appointments', require('./routes/appointmentRoutes'));
     app.use('/api/consultations', require('./routes/consultationRoutes'));

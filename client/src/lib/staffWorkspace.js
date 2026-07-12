@@ -69,6 +69,18 @@ export const STAFF_WORKSPACE_SECTIONS = [
         description: 'Approve social proof and testimonials.',
         roles: ['admin', 'manager'],
       },
+      {
+        to: '/admin/media-posts',
+        label: 'Travel Evidence',
+        description: 'Publish trusted journey proof and story posts.',
+        roles: ['admin'],
+      },
+      {
+        to: '/admin/newsletter',
+        label: 'Newsletter',
+        description: 'Review subscribers and export active contacts.',
+        roles: ['admin'],
+      },
     ],
   },
   {
@@ -121,6 +133,14 @@ export const STAFF_PAGE_META = {
   '/admin/reviews': {
     title: 'Reviews',
     description: 'Moderate testimonials and trust content that customers see publicly.',
+  },
+  '/admin/media-posts': {
+    title: 'Travel Evidence',
+    description: 'Manage public proof posts, journey stories, and destination evidence in one place.',
+  },
+  '/admin/newsletter': {
+    title: 'Newsletter',
+    description: 'Track subscribers, export contacts, and keep newsletter collection operationally simple.',
   },
   '/admin/users': {
     title: 'Users and Staff',

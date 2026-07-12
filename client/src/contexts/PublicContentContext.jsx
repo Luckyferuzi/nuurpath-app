@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import axios from '../lib/api';
 
-const PUBLIC_CONTENT_CACHE_KEY = 'nuurpath.public-content.v1';
+const PUBLIC_CONTENT_CACHE_KEY = 'nuurpath.public-content.v2';
 const REFRESH_INTERVAL_MS = 45000;
 
 const PublicContentContext = createContext(null);
@@ -33,10 +33,13 @@ function readPublicContentCache() {
   if (!canUseSessionStorage()) {
     return {
       packages: [],
+      mediaPosts: [],
       services: [],
       hasPackagesCache: false,
+      hasMediaPostsCache: false,
       hasServicesCache: false,
       lastPackagesSyncAt: null,
+      lastMediaPostsSyncAt: null,
       lastServicesSyncAt: null,
     };
   }
@@ -47,24 +50,31 @@ function readPublicContentCache() {
     if (!rawValue) {
       return {
         packages: [],
+        mediaPosts: [],
         services: [],
         hasPackagesCache: false,
+        hasMediaPostsCache: false,
         hasServicesCache: false,
         lastPackagesSyncAt: null,
+        lastMediaPostsSyncAt: null,
         lastServicesSyncAt: null,
       };
     }
 
     const parsedValue = JSON.parse(rawValue);
     const packages = Array.isArray(parsedValue?.packages) ? parsedValue.packages : [];
+    const mediaPosts = Array.isArray(parsedValue?.mediaPosts) ? parsedValue.mediaPosts : [];
     const services = Array.isArray(parsedValue?.services) ? parsedValue.services : [];
 
     return {
       packages,
+      mediaPosts,
       services,
       hasPackagesCache: Array.isArray(parsedValue?.packages),
+      hasMediaPostsCache: Array.isArray(parsedValue?.mediaPosts),
       hasServicesCache: Array.isArray(parsedValue?.services),
       lastPackagesSyncAt: Number.isFinite(parsedValue?.lastPackagesSyncAt) ? parsedValue.lastPackagesSyncAt : null,
+      lastMediaPostsSyncAt: Number.isFinite(parsedValue?.lastMediaPostsSyncAt) ? parsedValue.lastMediaPostsSyncAt : null,
       lastServicesSyncAt: Number.isFinite(parsedValue?.lastServicesSyncAt) ? parsedValue.lastServicesSyncAt : null,
     };
   } catch (error) {
@@ -72,10 +82,13 @@ function readPublicContentCache() {
 
     return {
       packages: [],
+      mediaPosts: [],
       services: [],
       hasPackagesCache: false,
+      hasMediaPostsCache: false,
       hasServicesCache: false,
       lastPackagesSyncAt: null,
+      lastMediaPostsSyncAt: null,
       lastServicesSyncAt: null,
     };
   }
@@ -117,26 +130,49 @@ function normalizeServicesResponse(data) {
   return [];
 }
 
+function normalizeMediaPostsResponse(data) {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (Array.isArray(data?.mediaPosts)) {
+    return data.mediaPosts;
+  }
+
+  return [];
+}
+
 export const PublicContentProvider = ({ children, enabled = true }) => {
   const initialCacheRef = useRef(readPublicContentCache());
   const [packages, setPackages] = useState(initialCacheRef.current.packages);
+  const [mediaPosts, setMediaPosts] = useState(initialCacheRef.current.mediaPosts);
   const [services, setServices] = useState(initialCacheRef.current.services);
   const [hasPackagesCache, setHasPackagesCache] = useState(initialCacheRef.current.hasPackagesCache);
+  const [hasMediaPostsCache, setHasMediaPostsCache] = useState(initialCacheRef.current.hasMediaPostsCache);
   const [hasServicesCache, setHasServicesCache] = useState(initialCacheRef.current.hasServicesCache);
   const [packagesLoading, setPackagesLoading] = useState(!initialCacheRef.current.hasPackagesCache);
+  const [mediaPostsLoading, setMediaPostsLoading] = useState(!initialCacheRef.current.hasMediaPostsCache);
   const [servicesLoading, setServicesLoading] = useState(!initialCacheRef.current.hasServicesCache);
   const [packagesRefreshing, setPackagesRefreshing] = useState(false);
+  const [mediaPostsRefreshing, setMediaPostsRefreshing] = useState(false);
   const [servicesRefreshing, setServicesRefreshing] = useState(false);
   const [packagesError, setPackagesError] = useState(null);
+  const [mediaPostsError, setMediaPostsError] = useState(null);
   const [servicesError, setServicesError] = useState(null);
   const [lastPackagesSyncAt, setLastPackagesSyncAt] = useState(initialCacheRef.current.lastPackagesSyncAt);
+  const [lastMediaPostsSyncAt, setLastMediaPostsSyncAt] = useState(initialCacheRef.current.lastMediaPostsSyncAt);
   const [lastServicesSyncAt, setLastServicesSyncAt] = useState(initialCacheRef.current.lastServicesSyncAt);
   const packagesRef = useRef(packages);
+  const mediaPostsRef = useRef(mediaPosts);
   const servicesRef = useRef(services);
 
   useEffect(() => {
     packagesRef.current = packages;
   }, [packages]);
+
+  useEffect(() => {
+    mediaPostsRef.current = mediaPosts;
+  }, [mediaPosts]);
 
   useEffect(() => {
     servicesRef.current = services;
@@ -145,11 +181,13 @@ export const PublicContentProvider = ({ children, enabled = true }) => {
   useEffect(() => {
     writePublicContentCache({
       packages,
+      mediaPosts,
       services,
       lastPackagesSyncAt,
+      lastMediaPostsSyncAt,
       lastServicesSyncAt,
     });
-  }, [packages, services, lastPackagesSyncAt, lastServicesSyncAt]);
+  }, [packages, mediaPosts, services, lastPackagesSyncAt, lastMediaPostsSyncAt, lastServicesSyncAt]);
 
   const refreshPackages = useCallback(async () => {
     const canRenderCachedPackages = hasPackagesCache;
@@ -177,6 +215,33 @@ export const PublicContentProvider = ({ children, enabled = true }) => {
       setPackagesRefreshing(false);
     }
   }, [hasPackagesCache]);
+
+  const refreshMediaPosts = useCallback(async () => {
+    const canRenderCachedMediaPosts = hasMediaPostsCache;
+
+    if (canRenderCachedMediaPosts) {
+      setMediaPostsRefreshing(true);
+    } else {
+      setMediaPostsLoading(true);
+    }
+
+    try {
+      const response = await axios.get('/media-posts');
+      const nextMediaPosts = normalizeMediaPostsResponse(response.data);
+      setMediaPosts(nextMediaPosts);
+      setHasMediaPostsCache(true);
+      setMediaPostsError(null);
+      setLastMediaPostsSyncAt(Date.now());
+      return nextMediaPosts;
+    } catch (error) {
+      console.error('Failed to refresh public media posts:', error);
+      setMediaPostsError('Travel evidence updates are temporarily delayed. Please try again shortly.');
+      return mediaPostsRef.current;
+    } finally {
+      setMediaPostsLoading(false);
+      setMediaPostsRefreshing(false);
+    }
+  }, [hasMediaPostsCache]);
 
   const refreshServices = useCallback(async () => {
     const canRenderCachedServices = hasServicesCache;
@@ -206,8 +271,8 @@ export const PublicContentProvider = ({ children, enabled = true }) => {
   }, [hasServicesCache]);
 
   const refreshAllPublicContent = useCallback(async () => {
-    await Promise.allSettled([refreshPackages(), refreshServices()]);
-  }, [refreshPackages, refreshServices]);
+    await Promise.allSettled([refreshPackages(), refreshMediaPosts(), refreshServices()]);
+  }, [refreshPackages, refreshMediaPosts, refreshServices]);
 
   useEffect(() => {
     if (!enabled) {
@@ -246,31 +311,43 @@ export const PublicContentProvider = ({ children, enabled = true }) => {
   const value = useMemo(() => ({
     packages,
     featuredPackages,
+    mediaPosts,
     services,
     packagesLoading,
+    mediaPostsLoading,
     servicesLoading,
     packagesRefreshing,
+    mediaPostsRefreshing,
     servicesRefreshing,
     packagesError,
+    mediaPostsError,
     servicesError,
     lastPackagesSyncAt,
+    lastMediaPostsSyncAt,
     lastServicesSyncAt,
     refreshPackages,
+    refreshMediaPosts,
     refreshServices,
     refreshAllPublicContent,
   }), [
     packages,
     featuredPackages,
+    mediaPosts,
     services,
     packagesLoading,
+    mediaPostsLoading,
     servicesLoading,
     packagesRefreshing,
+    mediaPostsRefreshing,
     servicesRefreshing,
     packagesError,
+    mediaPostsError,
     servicesError,
     lastPackagesSyncAt,
+    lastMediaPostsSyncAt,
     lastServicesSyncAt,
     refreshPackages,
+    refreshMediaPosts,
     refreshServices,
     refreshAllPublicContent,
   ]);

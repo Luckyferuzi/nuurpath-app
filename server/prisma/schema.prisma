@@ -90,6 +90,7 @@ model Package {
   updatedAt     DateTime @updatedAt
 
   bookings PackageBooking[]
+  mediaPosts MediaPost[]
   reviews  Review[]
   wishlist Wishlist[]
 
@@ -203,9 +204,31 @@ model Notification {
 }
 
 model NewsletterSubscriber {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  createdAt DateTime @default(now())
+  id             Int       @id @default(autoincrement())
+  email          String    @unique
+  isActive       Boolean   @default(true)
+  unsubscribedAt DateTime?
+  createdAt      DateTime  @default(now())
+}
+
+model MediaPost {
+  id               Int       @id @default(autoincrement())
+  title            String
+  caption          String
+  destination      String?
+  eventDate        DateTime?
+  videoUrl         String?
+  images           String[]
+  isPublished      Boolean   @default(false)
+  displayOrder     Int       @default(0)
+  relatedPackageId Int?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  relatedPackage Package? @relation(fields: [relatedPackageId], references: [id], onDelete: SetNull)
+
+  @@index([displayOrder])
+  @@index([isPublished, displayOrder])
 }
 
 model Wishlist {

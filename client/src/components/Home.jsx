@@ -5,7 +5,9 @@ import { usePublicContent } from '../contexts/PublicContentContext.jsx';
 import GlobalSupport from './GlobalSupport';
 import BookingForm from './BookingForm';
 import MemoriesGallery from './MemoriesGallery';
+import NewsletterForm from './NewsletterForm';
 import ServiceInquiryForm from './ServiceInquiryForm';
+import TravelEvidenceSection from './TravelEvidenceSection.jsx';
 
 const Home = () => {
   const {
@@ -496,7 +498,43 @@ const Home = () => {
         </div>
       </div>
 
+      <TravelEvidenceSection />
+
       <MemoriesGallery />
+
+      <section id="newsletter" className="bg-[#f7f2e8] py-20">
+        <div className="container mx-auto px-4">
+          <div className="mx-auto max-w-5xl overflow-hidden rounded-[2.5rem] border border-[#e8dfcf] bg-white shadow-[0_24px_80px_rgba(16,28,45,0.08)]">
+            <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_380px]">
+              <div className="bg-[linear-gradient(135deg,_#0B1C3E_0%,_#10264f_60%,_#1d3d76_100%)] px-8 py-10 text-white sm:px-10">
+                <p className="text-xs font-black uppercase tracking-[0.35em] text-[#D4AF37]">Stay Connected</p>
+                <h2 className="mt-4 text-3xl font-black uppercase tracking-tight sm:text-4xl">
+                  Get future travel updates from NuurPath
+                </h2>
+                <p className="mt-5 max-w-2xl text-base leading-7 text-blue-100">
+                  Join the newsletter for selected package highlights, travel guidance updates, and important announcements from the NuurPath team.
+                </p>
+                <div className="mt-8 flex flex-wrap gap-3">
+                  {['Package highlights', 'Travel guidance', 'Important updates'].map((item) => (
+                    <span key={item} className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-white">
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-[#fcfbf8] px-8 py-10 sm:px-10">
+                <h3 className="text-lg font-black text-[#101c2d]">Newsletter Sign-Up</h3>
+                <p className="mt-3 text-sm leading-7 text-[#67707e]">
+                  Simple collection only for now. Campaign sending is not handled inside the website yet.
+                </p>
+                <div className="mt-6">
+                  <NewsletterForm variant="panel" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <GlobalSupport />
 

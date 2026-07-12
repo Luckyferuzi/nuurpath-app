@@ -4,6 +4,7 @@ const prisma = require('../db');
 const STORED_FILE_CATEGORIES = Object.freeze({
     BOOKING_DOCUMENT: 'booking_document',
     CHAT_IMAGE: 'chat_image',
+    MEDIA_POST_IMAGE: 'media_post_image',
     PACKAGE_IMAGE: 'package_image',
     PROFILE_IMAGE: 'profile_image',
     REVIEW_IMAGE: 'review_image',
@@ -17,6 +18,7 @@ const STORED_FILE_ROUTE_PREFIXES = Object.freeze({
 });
 
 const PUBLIC_STORED_FILE_CATEGORIES = new Set([
+    STORED_FILE_CATEGORIES.MEDIA_POST_IMAGE,
     STORED_FILE_CATEGORIES.PACKAGE_IMAGE,
     STORED_FILE_CATEGORIES.PROFILE_IMAGE,
     STORED_FILE_CATEGORIES.REVIEW_IMAGE,

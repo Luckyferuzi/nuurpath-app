@@ -10,7 +10,8 @@ Current status:
 - Phase 3 is completed.
 - Phase 4 is completed.
 - Phase 5 is completed.
-- Phases 6 through 7 are still planned.
+- Phase 6 is completed.
+- Phase 7 is still planned.
 - When resuming work later, read this file first and then continue from the next approved phase.
 
 ## How To Use This Document
@@ -788,7 +789,7 @@ Frontend:
 ## Phase 6: Media Posts, Travel Evidence, and Newsletter Operations
 
 Status:
-- Planned
+- Completed
 
 ### Objective
 
@@ -871,6 +872,64 @@ Backend:
 - full social scheduler
 - large video hosting strategy
 - enterprise marketing automation
+
+### Completed Work
+
+- Added a dedicated admin-managed travel evidence feature with a new media-post data model that supports:
+  - title
+  - caption
+  - destination label
+  - event date
+  - related package
+  - publish status
+  - manual display order
+  - image gallery
+  - optional external video link
+- Added backend media-post routes for:
+  - public published-post listing
+  - admin and manager read access to the full media-post list
+  - admin create, update, delete, and reorder operations
+- Added stored-file support for media-post images using the same Neon-backed file approach already used elsewhere in the project.
+- Added a new admin workspace page for travel evidence so admins can:
+  - create proof posts
+  - edit captions and dates
+  - upload and remove images
+  - attach optional external video links
+  - publish or move posts back to draft
+  - reorder homepage storytelling with move-up and move-down controls
+- Added a new customer-facing travel evidence section on the homepage that reads from the shared public content layer and updates quietly in the background like packages and services do.
+- Extended the shared public content cache so media posts now benefit from the same fast render and silent refresh behavior already added in Phase 2.
+- Improved newsletter operations by upgrading the subscriber backend to support:
+  - active and unsubscribed status
+  - unsubscribe timestamp
+  - admin filtering
+  - admin export
+  - admin status updates
+  - public resubscribe behavior when an old email joins again
+- Added a dedicated admin newsletter workspace page with:
+  - subscriber counts
+  - active and unsubscribed filters
+  - search
+  - CSV export
+  - simple reactivate and unsubscribe controls
+- Added a homepage newsletter callout section so subscription collection is now visible and active in the public customer experience instead of living only in the footer.
+- Kept the existing memories and testimonials flow for customer reviews, while separating it clearly from the new admin-managed travel evidence system.
+- Added dashboard visibility for:
+  - published travel evidence count
+  - active newsletter subscriber count
+
+### Implementation Notes
+
+- Phase 6 intentionally stopped short of becoming a full content-management system. The new travel evidence feature is meant to support trust and freshness, not complex editorial workflows.
+- Images for travel evidence are stored through the Neon-backed stored-file flow already used by the project.
+- Larger videos are not uploaded into PostgreSQL in this phase. Instead, the admin evidence flow uses optional external video links so storage stays controlled and predictable.
+- The public site now treats travel evidence as first-class cached content alongside packages and services, which means new published evidence can appear without forcing a hard refresh pattern.
+- Newsletter scope for this phase remains intentionally narrow:
+  - collect subscribers
+  - review subscribers in admin
+  - export subscriber data
+  - manage active versus unsubscribed status
+  Sending campaigns directly from the website is still deferred.
 
 ---
 

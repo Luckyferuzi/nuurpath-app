@@ -21,6 +21,8 @@ const AdminDashboard = () => {
     totalFlightRequests: 0,
     totalConsultations: 0,
     totalServiceInquiries: 0,
+    publishedMediaPosts: 0,
+    activeNewsletterSubscribers: 0,
     trends: [],
     requestDistribution: [],
   });
@@ -87,6 +89,10 @@ const AdminDashboard = () => {
     { label: 'Service Requests', value: loading ? '...' : stats.totalServiceInquiries, hint: 'Visa and passport support requests.', tone: 'default' },
     { label: 'Customers', value: loading ? '...' : stats.totalUsers, hint: 'Customer accounts in the platform.', tone: 'default' },
     { label: 'Closed Requests', value: loading ? '...' : stats.lostOrCancelled, hint: 'Cancelled or lost requests for review.', tone: 'danger' },
+    ...(isAdmin ? [
+      { label: 'Published Stories', value: loading ? '...' : stats.publishedMediaPosts, hint: 'Travel evidence posts already live on the homepage.', tone: 'accent' },
+      { label: 'Active Subscribers', value: loading ? '...' : stats.activeNewsletterSubscribers, hint: 'Newsletter contacts still subscribed to future updates.', tone: 'warm' },
+    ] : []),
   ];
 
   const quickQueues = [
