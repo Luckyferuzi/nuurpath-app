@@ -72,7 +72,7 @@ const Home = () => {
     id: pkg._id || pkg.id,
     title: pkg.title,
     description: getPackageShortDescription(pkg.description, 132),
-    highlights: getPackageHighlights(pkg),
+    highlights: getPackageHighlights(pkg).slice(0, 2),
     journeyLabel: getPackageJourneyLabel(pkg),
     image: (pkg.images && pkg.images.length > 0)
       ? getImageUrl(pkg.images[0])
@@ -311,7 +311,7 @@ const Home = () => {
           <div className="mb-8 mt-10 text-center text-red-500">{packagesError}</div>
         )}
         <div
-          className="group relative mx-auto mt-10 aspect-[16/9] max-w-5xl overflow-hidden rounded-[1.8rem] border border-[#e6dfd2] bg-gray-200 shadow-[0_20px_55px_rgba(16,28,45,0.1)]"
+          className="group relative mx-auto mt-10 min-h-[320px] max-w-[58rem] overflow-hidden rounded-[1.6rem] border border-[#e6dfd2] bg-white shadow-[0_18px_44px_rgba(16,28,45,0.08)] lg:min-h-[340px]"
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
           onTouchStart={onTouchStart}
@@ -319,52 +319,68 @@ const Home = () => {
           onTouchEnd={onTouchEnd}
         >
           {showTripSkeleton ? (
-            <div className="flex h-full w-full animate-pulse flex-col items-center justify-center bg-gray-300">
-              <div className="mb-6 h-12 w-2/3 rounded bg-gray-400"></div>
-              <div className="h-12 w-40 rounded-full bg-gray-400"></div>
+            <div className="grid min-h-[320px] lg:grid-cols-[0.92fr_1.08fr]">
+              <div className="bg-[#ede7db] p-4 sm:p-5">
+                <div className="h-full min-h-[220px] rounded-[1.3rem] bg-gray-300"></div>
+              </div>
+              <div className="flex flex-col justify-center gap-4 bg-white p-6 sm:p-7">
+                <div className="h-5 w-28 rounded bg-gray-200"></div>
+                <div className="h-8 w-3/4 rounded bg-gray-200"></div>
+                <div className="h-4 w-full rounded bg-gray-200"></div>
+                <div className="h-4 w-5/6 rounded bg-gray-200"></div>
+                <div className="flex gap-3">
+                  <div className="h-11 w-36 rounded-full bg-gray-200"></div>
+                  <div className="h-11 w-36 rounded-full bg-gray-200"></div>
+                </div>
+              </div>
             </div>
           ) : upcomingTrips.length > 0 ? (
             <>
               {upcomingTrips.map((trip, index) => (
                 <div
                   key={trip.id}
-                  className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentSlide ? 'opacity-100' : 'opacity-0'}`}
+                  className={`absolute inset-0 transition-all duration-700 ease-out ${index === currentSlide ? 'translate-x-0 opacity-100' : 'pointer-events-none translate-x-4 opacity-0'}`}
                 >
-                  <img
-                    src={trip.image}
-                    alt={trip.title}
-                    className="h-full w-full object-cover"
-                    loading={index === currentSlide ? 'eager' : 'lazy'}
-                    fetchPriority={index === currentSlide ? 'high' : 'low'}
-                    decoding="async"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/72 via-black/30 to-black/5"></div>
-                  <div className="absolute inset-x-0 bottom-0 p-5 text-white sm:p-7">
-                    <div className="max-w-2xl rounded-[1.35rem] bg-black/28 p-5 backdrop-blur-[2px]">
-                      <p className="text-xs font-black uppercase tracking-[0.22em] text-[#D4AF37]">
+                  <div className="grid h-full min-h-[320px] lg:grid-cols-[0.92fr_1.08fr]">
+                    <div className="bg-[#efe7da] p-4 sm:p-5">
+                      <div className="h-[220px] overflow-hidden rounded-[1.35rem] bg-[#dfd4c0] shadow-[0_14px_34px_rgba(16,28,45,0.08)] sm:h-[250px] lg:h-full">
+                        <img
+                          src={trip.image}
+                          alt={trip.title}
+                          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                          loading={index === currentSlide ? 'eager' : 'lazy'}
+                          fetchPriority={index === currentSlide ? 'high' : 'low'}
+                          decoding="async"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-col justify-center bg-white p-6 sm:p-7">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7240]">
                         Featured package
                       </p>
-                      <h3 className="mt-3 text-2xl font-black tracking-tight sm:text-4xl">{trip.title}</h3>
-                      <p className="mt-3 text-sm leading-7 text-slate-100 sm:text-base">
+                      <h3 className="mt-3 text-2xl font-black tracking-tight text-[#101c2d] sm:text-[2rem]">
+                        {trip.title}
+                      </h3>
+                      <p className="mt-3 text-sm font-semibold text-[#2d5f50]">
+                        {trip.journeyLabel}
+                      </p>
+                      <p className="mt-3 max-w-xl text-sm leading-7 text-[#5f6774] sm:text-base">
                         {trip.description}
                       </p>
-                      <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-white/90">
+                      <div className="mt-4 flex flex-wrap gap-2">
                         {trip.highlights.map((item) => (
-                          <span key={item} className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5">
+                          <span key={item} className="rounded-full border border-[#e5dece] bg-[#faf8f3] px-3 py-1.5 text-xs font-semibold text-[#4d5562]">
                             {item}
                           </span>
                         ))}
                       </div>
-                      <p className="mt-4 text-sm font-medium text-slate-100">
-                        {trip.journeyLabel}
-                      </p>
-                      <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                        <Link to={trip.link} className="rounded-full bg-[#D4AF37] px-7 py-3 text-center text-sm font-black uppercase tracking-[0.16em] text-[#0B1C3E] transition-colors hover:bg-white">
+                      <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                        <Link to={trip.link} className="rounded-full bg-[#0B1C3E] px-7 py-3 text-center text-sm font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#1a2f55]">
                           View Package
                         </Link>
                         <button
                           onClick={() => handleBookNow(trip.id)}
-                          className="rounded-full border border-white/30 px-7 py-3 text-sm font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-white hover:text-[#0B1C3E]"
+                          className="rounded-full border border-[#d8cfbf] bg-white px-7 py-3 text-sm font-black uppercase tracking-[0.14em] text-[#101c2d] transition-colors hover:bg-[#faf8f3]"
                           type="button"
                         >
                           Request Package
@@ -377,14 +393,14 @@ const Home = () => {
 
               <button
                 onClick={prevSlide}
-                className="absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/20 p-3 text-white backdrop-blur-sm transition-colors hover:bg-white/40"
+                className="absolute left-3 top-1/2 z-10 -translate-y-1/2 rounded-full border border-[#e7decd] bg-white p-2.5 text-[#101c2d] shadow-sm transition-colors hover:bg-[#faf8f3] sm:left-4"
                 type="button"
               >
                 &#10094;
               </button>
               <button
                 onClick={nextSlide}
-                className="absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/20 p-3 text-white backdrop-blur-sm transition-colors hover:bg-white/40"
+                className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full border border-[#e7decd] bg-white p-2.5 text-[#101c2d] shadow-sm transition-colors hover:bg-[#faf8f3] sm:right-4"
                 type="button"
               >
                 &#10095;
@@ -395,7 +411,7 @@ const Home = () => {
                   <button
                     key={idx}
                     onClick={() => setCurrentSlide(idx)}
-                    className={`h-3 w-3 rounded-full transition-colors ${idx === currentSlide ? 'bg-[#D4AF37]' : 'bg-white/50'}`}
+                    className={`h-3 w-3 rounded-full transition-colors ${idx === currentSlide ? 'bg-[#D4AF37]' : 'bg-[#d7cfbe]'}`}
                     type="button"
                   />
                 ))}

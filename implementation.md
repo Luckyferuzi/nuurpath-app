@@ -1274,12 +1274,22 @@ Frontend:
   - a shorter and more useful summary
   - cleaner package highlights
   - a calmer request path that feels more curated than generic
+- Tightened the homepage featured-package card further so it now uses a smaller split layout:
+  - image on the left
+  - information on the right
+  - gentler slide motion
+  - less visual weight overall
 - Redesigned the packages listing cards to feel more premium without becoming noisy:
   - clearer package type and journey labeling
   - better summary wording
   - stronger price presentation
   - cleaner request and compare actions
   - less clutter inside each card
+- Refined the packages listing experience again to keep it cleaner and more controlled:
+  - removed compare from the public package cards
+  - removed the extra "Talk To NuurPath" package-page header action
+  - hid filters by default behind a cleaner reveal
+  - switched package-card media to a contained, medium-size presentation instead of oversized image treatment
 - Refined the packages page header and filter presentation so the browsing surface feels more focused and less utility-heavy.
 - Rebuilt the package details page into a more trustworthy product-style layout with:
   - stronger hero framing
@@ -1290,6 +1300,10 @@ Frontend:
   - clearer related-package presentation
 - Removed detail-page elements that were adding visual noise without improving trust, including the previous weather-first emphasis and map-heavy itinerary presentation.
 - Added shared package presentation helpers so homepage, listing, and detail views now use more consistent wording and package summaries across the public experience.
+- Reduced the package-details visual weight further by:
+  - shrinking the main package image treatment
+  - keeping the information hierarchy calmer
+  - making related packages smaller, split-summary cards instead of heavier preview blocks
 
 ### Implementation Notes
 

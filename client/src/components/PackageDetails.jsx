@@ -226,7 +226,7 @@ const PackageDetails = () => {
   const highlights = getPackageHighlights(pkg);
   const journeyLabel = getPackageJourneyLabel(pkg);
   const supportLine = getPackageSupportLine(pkg);
-  const heroSummary = getPackageShortDescription(pkg?.description, 200);
+  const heroSummary = getPackageShortDescription(pkg?.description, 160);
 
   if (loading) {
     return <div className="p-10 text-center">Loading package details...</div>;
@@ -259,6 +259,11 @@ const PackageDetails = () => {
     currency,
     rates[currency] || 1
   );
+  const packageFacts = [
+    routeSummary ? { label: 'Route', value: routeSummary } : null,
+    pkg.duration ? { label: 'Duration', value: pkg.duration } : null,
+    typeLabel ? { label: 'Package type', value: typeLabel } : null,
+  ].filter(Boolean);
 
   return (
     <PublicPageShell background="soft" contentClassName="py-10 sm:py-12 lg:py-16">
@@ -272,31 +277,35 @@ const PackageDetails = () => {
         &larr; Back to Packages
       </Link>
 
-      <section className="overflow-hidden rounded-[1.8rem] border border-[#e5dece] bg-white shadow-[0_16px_44px_rgba(16,28,45,0.06)]">
-        <div className="grid lg:grid-cols-[1.08fr_0.92fr]">
-          <div className="relative min-h-[320px] bg-[#ebe6da] lg:min-h-[100%]">
-            {pkg.images && pkg.images.length > 0 ? (
-              <img
-                src={getImageUrl(pkg.images[0])}
-                alt={pkg.title}
-                className="h-full w-full object-cover"
-                fetchPriority="high"
-                decoding="async"
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-            ) : (
-              <div className="flex h-full min-h-[320px] items-center justify-center bg-[#d9d1c2] text-sm font-semibold text-[#4d5562]">
-                Package image coming soon
+      <section className="overflow-hidden rounded-[1.8rem] border border-[#e5dece] bg-white p-4 shadow-[0_16px_44px_rgba(16,28,45,0.06)] sm:p-6">
+        <div className="grid gap-6 lg:grid-cols-[380px_minmax(0,1fr)] lg:items-start">
+          <div>
+            <div className="relative overflow-hidden rounded-[1.55rem] border border-[#ece4d6] bg-[#f5f0e6] shadow-sm">
+              <div className="flex aspect-[5/4] items-center justify-center p-4 sm:p-5">
+                {pkg.images && pkg.images.length > 0 ? (
+                  <img
+                    src={getImageUrl(pkg.images[0])}
+                    alt={pkg.title}
+                    className="h-full w-full object-contain"
+                    fetchPriority="high"
+                    decoding="async"
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                  />
+                ) : (
+                  <div className="flex h-full min-h-[260px] w-full items-center justify-center rounded-[1.1rem] bg-[#d9d1c2] text-sm font-semibold text-[#4d5562]">
+                    Package image coming soon
+                  </div>
+                )}
               </div>
-            )}
-            {pkg.isFeatured ? (
-              <span className="absolute left-5 top-5 rounded-full bg-white px-4 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-[#0B1C3E]">
-                Featured package
-              </span>
-            ) : null}
+              {pkg.isFeatured ? (
+                <span className="absolute left-4 top-4 rounded-full bg-white px-4 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-[#0B1C3E] shadow-sm">
+                  Featured package
+                </span>
+              ) : null}
+            </div>
           </div>
 
-          <div className="p-6 sm:p-8 lg:p-10">
+          <div className="lg:py-2">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7240]">
               {typeLabel}
             </p>
@@ -305,57 +314,84 @@ const PackageDetails = () => {
             </h1>
 
             {averageRating ? (
-              <div className="mt-4 flex items-center gap-2 text-sm text-[#4d5562]">
+              <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-[#4d5562]">
                 <span className="text-yellow-500">&#9733;</span>
                 <span className="font-bold text-[#101c2d]">{averageRating}</span>
                 <span>from {reviews.length} traveler reviews</span>
               </div>
             ) : null}
 
-            <p className="mt-5 text-base leading-8 text-[#5f6774]">
+            <p className="mt-4 text-sm font-semibold text-[#2d5f50]">
+              {journeyLabel}
+            </p>
+            <p className="mt-4 max-w-3xl text-base leading-8 text-[#5f6774]">
               {heroSummary}
             </p>
 
-            <div className="mt-5 flex flex-wrap gap-2">
-              {highlights.map((item) => (
-                <span key={item} className="rounded-full border border-[#e5dece] bg-[#faf8f3] px-3 py-1.5 text-xs font-semibold text-[#4d5562]">
-                  {item}
-                </span>
-              ))}
-            </div>
-
-            <div className="mt-6 rounded-[1.35rem] border border-[#ece4d6] bg-[#faf8f3] p-5">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <span className="block text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Starting from</span>
-                  <span className="mt-1 block text-3xl font-black text-[#006837]">
-                    {formattedPrice}
-                  </span>
-                  <p className="mt-2 text-sm font-semibold text-[#2d5f50]">
-                    {journeyLabel}
-                  </p>
-                </div>
-                {typeof pkg.price === 'number' ? (
-                  <label className="block">
-                    <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Currency</span>
-                    <select
-                      value={currency}
-                      onChange={(e) => setCurrency(e.target.value)}
-                      className="rounded-xl border border-[#d8cfbf] bg-white px-3 py-2 text-sm text-[#4d5562] focus:border-[#0B1C3E] focus:outline-none"
-                    >
-                      <option value="USD">USD</option>
-                      <option value="EUR">EUR</option>
-                      <option value="GBP">GBP</option>
-                      <option value="SAR">SAR</option>
-                      <option value="AED">AED</option>
-                    </select>
-                  </label>
-                ) : null}
+            {packageFacts.length > 0 ? (
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                {packageFacts.map((fact) => (
+                  <div key={fact.label} className="rounded-[1.15rem] border border-[#ece4d6] bg-[#fcfbf8] p-4">
+                    <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">
+                      {fact.label}
+                    </p>
+                    <p className="mt-2 text-sm font-semibold leading-6 text-[#101c2d]">
+                      {fact.value}
+                    </p>
+                  </div>
+                ))}
               </div>
-            </div>
+            ) : null}
 
-            <div className="mt-5 rounded-[1.25rem] border border-[#ece4d6] bg-white p-4 text-sm leading-7 text-[#5f6774]">
-              {supportLine}
+            {highlights.length > 0 ? (
+              <div className="mt-5 flex flex-wrap gap-2">
+                {highlights.map((item) => (
+                  <span key={item} className="rounded-full border border-[#e5dece] bg-[#faf8f3] px-3 py-1.5 text-xs font-semibold text-[#4d5562]">
+                    {item}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_240px]">
+              <div className="rounded-[1.35rem] border border-[#ece4d6] bg-[#faf8f3] p-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <span className="block text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Starting from</span>
+                    <span className="mt-1 block text-3xl font-black text-[#006837]">
+                      {formattedPrice}
+                    </span>
+                  </div>
+                  {typeof pkg.price === 'number' ? (
+                    <label className="block">
+                      <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Currency</span>
+                      <select
+                        value={currency}
+                        onChange={(e) => setCurrency(e.target.value)}
+                        className="rounded-xl border border-[#d8cfbf] bg-white px-3 py-2 text-sm text-[#4d5562] focus:border-[#0B1C3E] focus:outline-none"
+                      >
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="GBP">GBP</option>
+                        <option value="SAR">SAR</option>
+                        <option value="AED">AED</option>
+                      </select>
+                    </label>
+                  ) : null}
+                </div>
+                <p className="mt-4 text-sm leading-7 text-[#5f6774]">
+                  {supportLine}
+                </p>
+              </div>
+
+              <div className="rounded-[1.35rem] border border-[#11325c] bg-[#0B1C3E] p-5 text-white">
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#D4AF37]">
+                  Request Flow
+                </p>
+                <p className="mt-3 text-sm leading-7 text-slate-200">
+                  Submit the request here first. NuurPath reviews the details, confirms the next step, and continues with you directly. No online payment is required on the website.
+                </p>
+              </div>
             </div>
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
@@ -491,7 +527,7 @@ const PackageDetails = () => {
                         <img
                           src={getImageUrl(day.image)}
                           alt={day.title}
-                          className="mt-4 h-64 w-full rounded-[1.1rem] object-cover"
+                          className="mt-4 h-44 w-full rounded-[1.1rem] object-cover sm:h-48"
                           loading="lazy"
                           decoding="async"
                         />
@@ -539,7 +575,7 @@ const PackageDetails = () => {
           </section>
         </div>
 
-        <aside className="space-y-6">
+        <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
           <section className="rounded-[1.6rem] border border-[#e5dece] bg-white p-6 shadow-sm">
             <h2 className="text-xl font-black tracking-tight text-[#101c2d]">Package snapshot</h2>
             <dl className="mt-5 space-y-4 text-sm">
@@ -602,36 +638,47 @@ const PackageDetails = () => {
               View all packages
             </Link>
           </div>
-          <div className="mt-6 grid gap-6 md:grid-cols-3">
+          <div className="mt-6 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
             {relatedPackages.map((related) => (
-              <article key={related._id || related.id} className="overflow-hidden rounded-[1.35rem] border border-[#ece4d6] bg-[#faf8f3]">
-                {related.images && related.images.length > 0 ? (
-                  <div className="h-44 overflow-hidden">
-                    <img
-                      src={getImageUrl(related.images[0])}
-                      alt={related.title}
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                      decoding="async"
-                      onError={(e) => { e.target.style.display = 'none'; }}
-                    />
+              <article key={related._id || related.id} className="group overflow-hidden rounded-[1.35rem] border border-[#ece4d6] bg-[#faf8f3] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_14px_28px_rgba(16,28,45,0.08)]">
+                <Link to={`/packages/${related._id || related.id}`} className="flex h-full gap-4 p-3">
+                  <div className="flex w-28 shrink-0 items-center justify-center overflow-hidden rounded-[1rem] bg-[#eee5d6]">
+                    {related.images && related.images.length > 0 ? (
+                      <img
+                        src={getImageUrl(related.images[0])}
+                        alt={related.title}
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                        loading="lazy"
+                        decoding="async"
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                    ) : (
+                      <span className="px-3 text-center text-xs font-semibold text-[#6a7280]">Image coming soon</span>
+                    )}
                   </div>
-                ) : null}
-                <div className="p-5">
-                  <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a7240]">
-                    {getPackageTypeLabel(related.type)}
-                  </p>
-                  <h3 className="mt-2 text-lg font-black tracking-tight text-[#101c2d]">{related.title}</h3>
-                  <p className="mt-2 text-sm font-semibold text-[#2d5f50]">{getPackageJourneyLabel(related)}</p>
-                  <div className="mt-4 flex items-center justify-between">
-                    <span className="text-lg font-black text-[#006837]">
-                      {typeof related.price === 'number' ? `$${related.price.toLocaleString()}` : related.price}
-                    </span>
-                    <Link to={`/packages/${related._id || related.id}`} className="text-sm font-black uppercase tracking-[0.12em] text-[#0B1C3E] transition-colors hover:text-[#1a2f55]">
-                      View
-                    </Link>
+                  <div className="flex min-w-0 flex-1 flex-col justify-center transition-transform duration-300 group-hover:translate-x-1">
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a7240]">
+                      {getPackageTypeLabel(related.type)}
+                    </p>
+                    <h3 className="mt-2 text-base font-black tracking-tight text-[#101c2d]">
+                      {related.title}
+                    </h3>
+                    <p className="mt-2 text-sm font-semibold text-[#2d5f50]">
+                      {getPackageJourneyLabel(related)}
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-[#5f6774]">
+                      {getPackageShortDescription(related.description, 76)}
+                    </p>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <span className="text-base font-black text-[#006837]">
+                        {typeof related.price === 'number' ? `$${related.price.toLocaleString()}` : related.price}
+                      </span>
+                      <span className="text-xs font-black uppercase tracking-[0.12em] text-[#0B1C3E]">
+                        View
+                      </span>
+                    </div>
                   </div>
-                </div>
+                </Link>
               </article>
             ))}
           </div>

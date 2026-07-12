@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import PackageComparison from './PackageComparison';
 import { PublicPageHeader, PublicPageShell } from './PublicPageShell.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { usePublicContent } from '../contexts/PublicContentContext.jsx';
 import axios, { resolveBackendUrl } from '../lib/api';
 import {
+  formatPackagePrice,
   getPackageHighlights,
   getPackageJourneyLabel,
   getPackageShortDescription,
@@ -18,15 +18,15 @@ const ICONS = {
   wishlistEmpty: '\u2661',
 };
 
-const PackageCard = ({ pkg, wishlist, toggleWishlist, compareList, toggleCompare }) => {
+const PackageCard = ({ pkg, wishlist, toggleWishlist }) => {
   const packageId = pkg._id || pkg.id;
   const isSaved = wishlist.has(packageId);
-  const isInCompare = compareList.some((item) => (item._id || item.id) === packageId);
-  const highlights = getPackageHighlights(pkg);
-  const summary = getPackageShortDescription(pkg.description, 138);
+  const highlights = getPackageHighlights(pkg).slice(0, 2);
+  const summary = getPackageShortDescription(pkg.description, 118);
   const journeyLabel = getPackageJourneyLabel(pkg);
   const supportLine = getPackageSupportLine(pkg);
   const typeLabel = getPackageTypeLabel(pkg.type);
+  const priceLabel = formatPackagePrice(pkg?.price);
 
   const getImageUrl = (imagePath) => {
     if (!imagePath) {
@@ -37,87 +37,87 @@ const PackageCard = ({ pkg, wishlist, toggleWishlist, compareList, toggleCompare
   };
 
   return (
-    <article className="group relative flex h-full flex-col overflow-hidden rounded-[1.6rem] border border-[#e5dece] bg-white shadow-[0_14px_34px_rgba(16,28,45,0.05)] transition-shadow hover:shadow-[0_18px_48px_rgba(16,28,45,0.09)]">
-      <Link to={`/packages/${packageId}`} className="relative block h-56 overflow-hidden">
-        <img
-          src={pkg.images && pkg.images.length > 0 ? getImageUrl(pkg.images[0]) : 'https://placehold.co/600x400?text=No+Image'}
-          alt={pkg.title}
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-          loading="lazy"
-          decoding="async"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent"></div>
-        {pkg.isFeatured ? (
-          <span className="absolute left-4 top-4 rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-[#0B1C3E]">
-            Featured
-          </span>
-        ) : null}
-        <button
-          onClick={(event) => {
-            event.preventDefault();
-            toggleWishlist(packageId);
-          }}
-          className="absolute right-4 top-4 rounded-full bg-white/92 p-2 shadow-sm transition-colors hover:bg-white"
-          title={isSaved ? 'Remove from Wishlist' : 'Add to Wishlist'}
-          type="button"
-        >
-          <span className={`text-xl ${isSaved ? 'text-red-500' : 'text-gray-400'}`}>
-            {isSaved ? ICONS.wishlistFilled : ICONS.wishlistEmpty}
-          </span>
-        </button>
+    <article className="group flex h-full flex-col overflow-hidden rounded-[1.55rem] border border-[#e5dece] bg-white shadow-[0_14px_34px_rgba(16,28,45,0.05)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_18px_44px_rgba(16,28,45,0.08)]">
+      <Link to={`/packages/${packageId}`} className="relative block border-b border-[#efe7da]">
+        <div className="relative flex h-48 items-center justify-center bg-[#f5f1e8] p-4">
+          {pkg.isFeatured ? (
+            <span className="absolute left-4 top-4 rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-[#0B1C3E] shadow-sm">
+              Featured
+            </span>
+          ) : null}
+          <button
+            onClick={(event) => {
+              event.preventDefault();
+              toggleWishlist(packageId);
+            }}
+            className="absolute right-4 top-4 rounded-full border border-[#e4dbc9] bg-white p-2 shadow-sm transition-colors hover:bg-[#faf8f3]"
+            title={isSaved ? 'Remove from Wishlist' : 'Add to Wishlist'}
+            type="button"
+          >
+            <span className={`text-xl ${isSaved ? 'text-red-500' : 'text-gray-400'}`}>
+              {isSaved ? ICONS.wishlistFilled : ICONS.wishlistEmpty}
+            </span>
+          </button>
+          <img
+            src={pkg.images && pkg.images.length > 0 ? getImageUrl(pkg.images[0]) : 'https://placehold.co/600x400?text=No+Image'}
+            alt={pkg.title}
+            className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-[1.02]"
+            loading="lazy"
+            decoding="async"
+          />
+        </div>
       </Link>
 
-      <div className="flex grow flex-col p-6">
-        <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7240]">
-          {typeLabel}
-        </p>
-        <h3 className="mt-3 text-2xl font-black tracking-tight text-[#101c2d]">
-          <Link to={`/packages/${packageId}`} className="transition-colors hover:text-[#0B1C3E]">
-            {pkg.title}
-          </Link>
-        </h3>
+      <div className="flex grow flex-col p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7240]">
+              {typeLabel}
+            </p>
+            <h3 className="mt-3 text-xl font-black tracking-tight text-[#101c2d] sm:text-[1.6rem]">
+              <Link to={`/packages/${packageId}`} className="transition-colors hover:text-[#0B1C3E]">
+                {pkg.title}
+              </Link>
+            </h3>
+          </div>
+        </div>
+
         <p className="mt-3 text-sm font-semibold text-[#2d5f50]">
           {journeyLabel}
         </p>
         <p className="mt-3 text-sm leading-7 text-[#5f6774]">
           {summary}
         </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {highlights.map((item) => (
-            <span key={item} className="rounded-full border border-[#e5dece] bg-[#faf8f3] px-3 py-1.5 text-xs font-semibold text-[#4d5562]">
-              {item}
-            </span>
-          ))}
-        </div>
-        <div className="mt-5 flex items-end justify-between gap-4 border-t border-[#ede6d8] pt-5">
+
+        {highlights.length > 0 ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {highlights.map((item) => (
+              <span key={item} className="rounded-full border border-[#e5dece] bg-[#faf8f3] px-3 py-1.5 text-xs font-semibold text-[#4d5562]">
+                {item}
+              </span>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="mt-6 flex items-end justify-between gap-4 border-t border-[#ede6d8] pt-4">
           <div>
             <span className="block text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Starting from</span>
             <span className="mt-1 block text-2xl font-black text-[#006837]">
-              {typeof pkg.price === 'number' ? `$${pkg.price.toLocaleString()}` : pkg.price}
+              {priceLabel}
             </span>
           </div>
-          <p className="max-w-[190px] text-right text-xs leading-6 text-[#6a7280]">
+          <p className="max-w-[180px] text-right text-xs leading-6 text-[#6a7280]">
             {supportLine}
           </p>
         </div>
-        <div className="mt-5 flex items-center gap-3">
+
+        <div className="mt-5">
           <Link
             to={`/packages/${packageId}`}
-            className="flex-1 rounded-full bg-[#0B1C3E] px-5 py-3 text-center text-sm font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-[#1a2f55]"
+            className="block rounded-full bg-[#0B1C3E] px-5 py-3 text-center text-sm font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-[#1a2f55]"
           >
             View Package
           </Link>
-          <button
-            onClick={() => toggleCompare(pkg)}
-            className={`rounded-full px-5 py-3 text-sm font-black uppercase tracking-[0.12em] transition-colors ${
-              isInCompare
-                ? 'bg-[#efeae0] text-[#4d5562]'
-                : 'border border-[#d8cfbf] bg-white text-[#101c2d] hover:bg-[#faf8f3]'
-            }`}
-            type="button"
-          >
-            {isInCompare ? 'Compared' : 'Compare'}
-          </button>
         </div>
       </div>
     </article>
@@ -136,7 +136,7 @@ const PackageList = () => {
   const [destinationFilter, setDestinationFilter] = useState('');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
-  const [compareList, setCompareList] = useState([]);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
@@ -204,6 +204,13 @@ const PackageList = () => {
     }
   }, [currentPage, totalPages]);
 
+  const hasActiveFilters = Boolean(destinationFilter || minPrice || maxPrice);
+  const activeFilterLabels = [
+    destinationFilter ? `Search: ${destinationFilter}` : null,
+    minPrice ? `Min price: ${minPrice}` : null,
+    maxPrice ? `Max price: ${maxPrice}` : null,
+  ].filter(Boolean);
+
   const toggleWishlist = async (pkgId) => {
     if (!isAuthenticated) {
       setError('Create an account to save favorites and track future requests.');
@@ -227,22 +234,10 @@ const PackageList = () => {
     }
   };
 
-  const toggleCompare = (pkg) => {
-    setCompareList((prev) => {
-      const packageId = pkg._id || pkg.id;
-      const exists = prev.find((item) => (item._id || item.id) === packageId);
-
-      if (exists) {
-        return prev.filter((item) => (item._id || item.id) !== packageId);
-      }
-
-      if (prev.length >= 3) {
-        setError('You can compare up to 3 packages at a time.');
-        return prev;
-      }
-
-      return [...prev, pkg];
-    });
+  const clearFilters = () => {
+    setDestinationFilter('');
+    setMinPrice('');
+    setMaxPrice('');
   };
 
   const blockingError = error || (packages.length === 0 ? packagesError : null);
@@ -260,8 +255,7 @@ const PackageList = () => {
       <PublicPageHeader
         eyebrow="Curated Journeys"
         title="Explore travel packages"
-        description="Browse package options, compare routes, and send your request online when you are ready."
-        actions={<Link to="/contact" className="rounded-full bg-[#0B1C3E] px-6 py-3 text-sm font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-[#1a2f55]">Talk To NuurPath</Link>}
+        description="Browse calm, well-organized package options and open the journey that fits your travel plan."
       />
 
       {packagesError && packages.length > 0 && (
@@ -270,45 +264,96 @@ const PackageList = () => {
         </div>
       )}
 
-      <div className="mb-8 mt-8 flex flex-col items-center justify-between gap-4 rounded-[1.4rem] border border-[#e4dbc9] bg-white p-4 shadow-sm md:flex-row">
-        <div className="w-full md:w-1/3">
-          <input
-            type="text"
-            placeholder="Search by package or destination"
-            value={destinationFilter}
-            onChange={(e) => setDestinationFilter(e.target.value)}
-            className="w-full rounded-xl border border-gray-300 p-3 focus:border-[#0B1C3E] focus:outline-none"
-          />
+      <section className="mt-8 rounded-[1.5rem] border border-[#e4dbc9] bg-white p-5 shadow-[0_14px_34px_rgba(16,28,45,0.04)] sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7240]">
+              Browse With Ease
+            </p>
+            <h2 className="mt-2 text-xl font-black tracking-tight text-[#101c2d]">
+              {totalPackages} package options
+            </h2>
+            <p className="mt-2 text-sm leading-7 text-[#5f6774]">
+              Open the filters only when you want to narrow the list by route or budget.
+            </p>
+          </div>
+          <button
+            onClick={() => setFiltersOpen((prev) => !prev)}
+            className="inline-flex items-center justify-center rounded-full border border-[#d8cfbf] bg-[#faf8f3] px-5 py-3 text-sm font-black uppercase tracking-[0.14em] text-[#101c2d] transition-colors hover:bg-white"
+            type="button"
+          >
+            {filtersOpen ? 'Hide Filters' : 'Show Filters'}
+          </button>
         </div>
-        <div className="flex w-full gap-2 md:w-1/3">
-          <input
-            type="number"
-            placeholder="Min Price"
-            value={minPrice}
-            onChange={(e) => setMinPrice(e.target.value)}
-            className="w-1/2 rounded-xl border border-gray-300 p-3 focus:border-[#0B1C3E] focus:outline-none"
-          />
-          <input
-            type="number"
-            placeholder="Max Price"
-            value={maxPrice}
-            onChange={(e) => setMaxPrice(e.target.value)}
-            className="w-1/2 rounded-xl border border-gray-300 p-3 focus:border-[#0B1C3E] focus:outline-none"
-          />
-        </div>
-        <div className="text-sm text-gray-500">
-          {totalPackages} package options
-        </div>
-      </div>
 
-      {compareList.length > 0 && (
-        <PackageComparison
-          packages={compareList}
-          onRemove={(id) => setCompareList((prev) => prev.filter((pkg) => (pkg._id || pkg.id) !== id))}
-        />
-      )}
+        {filtersOpen ? (
+          <div className="mt-6 grid gap-4 border-t border-[#ede6d8] pt-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_auto] lg:items-end">
+            <label className="block">
+              <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">
+                Search by package or destination
+              </span>
+              <input
+                type="text"
+                placeholder="Example: Umrah or Dubai"
+                value={destinationFilter}
+                onChange={(e) => setDestinationFilter(e.target.value)}
+                className="w-full rounded-[1rem] border border-[#d8cfbf] bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] focus:border-[#0B1C3E] focus:bg-white focus:outline-none"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">
+                Minimum price
+              </span>
+              <input
+                type="number"
+                placeholder="0"
+                value={minPrice}
+                onChange={(e) => setMinPrice(e.target.value)}
+                className="w-full rounded-[1rem] border border-[#d8cfbf] bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] focus:border-[#0B1C3E] focus:bg-white focus:outline-none"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">
+                Maximum price
+              </span>
+              <input
+                type="number"
+                placeholder="Any"
+                value={maxPrice}
+                onChange={(e) => setMaxPrice(e.target.value)}
+                className="w-full rounded-[1rem] border border-[#d8cfbf] bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] focus:border-[#0B1C3E] focus:bg-white focus:outline-none"
+              />
+            </label>
+            <button
+              onClick={clearFilters}
+              disabled={!hasActiveFilters}
+              className="rounded-full border border-[#d8cfbf] bg-white px-5 py-3 text-sm font-black uppercase tracking-[0.14em] text-[#101c2d] transition-colors hover:bg-[#faf8f3] disabled:cursor-not-allowed disabled:opacity-50"
+              type="button"
+            >
+              Clear
+            </button>
+          </div>
+        ) : null}
 
-      <div className="grid grid-cols-1 gap-8 md:grid-cols-2 xl:grid-cols-3">
+        {!filtersOpen && hasActiveFilters ? (
+          <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-[#ede6d8] pt-5">
+            {activeFilterLabels.map((label) => (
+              <span key={label} className="rounded-full border border-[#e5dece] bg-[#faf8f3] px-3 py-1.5 text-xs font-semibold text-[#4d5562]">
+                {label}
+              </span>
+            ))}
+            <button
+              onClick={clearFilters}
+              className="text-xs font-black uppercase tracking-[0.14em] text-[#0B1C3E] transition-colors hover:text-[#1a2f55]"
+              type="button"
+            >
+              Clear all
+            </button>
+          </div>
+        ) : null}
+      </section>
+
+      <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
         {visiblePackages.length > 0 ? (
           visiblePackages.map((pkg) => (
             <PackageCard
@@ -316,13 +361,13 @@ const PackageList = () => {
               pkg={pkg}
               wishlist={wishlist}
               toggleWishlist={toggleWishlist}
-              compareList={compareList}
-              toggleCompare={toggleCompare}
             />
           ))
         ) : (
           <div className="col-span-full text-center text-gray-500">
-            No packages match this search right now. Try a different destination or price range.
+            {hasActiveFilters
+              ? 'No packages match the current filters. Try a different route or price range.'
+              : 'Packages are being prepared right now. Please check again soon.'}
           </div>
         )}
       </div>
