@@ -29,7 +29,7 @@ const Navbar = () => {
     };
 
     return (
-        <nav className="sticky top-0 z-50 border-b border-white/10 bg-[#06294d]/95 text-white shadow-[0_20px_45px_rgba(6,21,40,0.22)] backdrop-blur-md transition-all duration-300">
+        <nav className="sticky top-0 z-50 border-b border-[#0b5a31] bg-[#006837] text-white shadow-lg transition-all duration-300">
             <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
                 <div className="flex cursor-pointer items-center space-x-3" onClick={() => navigate('/')} role="button" tabIndex={0} onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
@@ -45,26 +45,21 @@ const Navbar = () => {
                     </div>
                 </div>
 
-                <div className="hidden items-center gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[11px] font-semibold text-white/80 lg:flex">
-                    <span className="h-2 w-2 rounded-full bg-[#D4AF37]"></span>
-                    Start on the website, then continue with our team on WhatsApp.
-                </div>
-
-                <button onClick={() => setIsMenuOpen((current) => !current)} className="rounded-full border border-white/10 bg-white/5 p-2 text-white lg:hidden" aria-label="Toggle navigation" type="button">
+                <button onClick={() => setIsMenuOpen((current) => !current)} className="rounded-full border border-white/20 bg-white/10 p-2 text-white lg:hidden" aria-label="Toggle navigation" type="button">
                     <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isMenuOpen ? 'M6 18L18 6M6 6l12 12' : 'M4 6h16M4 12h16m-7 6h7'} />
                     </svg>
                 </button>
 
-                <ul className="m-0 hidden list-none items-center space-x-3 text-[11px] font-bold uppercase tracking-[0.2em] lg:flex">
+                <ul className="m-0 hidden list-none items-center space-x-3 text-[11px] font-bold uppercase tracking-[0.16em] lg:flex">
                     {customerLinks.map((link) => (
                         <li key={link.to}>
                             <NavLink
                                 to={link.to}
                                 className={({ isActive }) => `rounded-full px-4 py-2 transition-colors ${
                                     isActive
-                                        ? 'bg-white/10 text-[#f5d885]'
-                                        : 'text-white/80 hover:bg-white/5 hover:text-white'
+                                        ? 'bg-white text-[#006837]'
+                                        : 'text-white/90 hover:bg-white/10 hover:text-white'
                                 }`}
                             >
                                 {link.label}
@@ -73,19 +68,19 @@ const Navbar = () => {
                     ))}
                     {isAuthenticated ? (
                         <>
-                            <li><NavLink to="/dashboard" className={({ isActive }) => `rounded-full px-4 py-2 ${isActive ? 'bg-[#D4AF37] text-[#06294d]' : 'text-[#f5d885] hover:bg-white/5'}`}>My Account</NavLink></li>
-                            <li><NavLink to="/wishlist" className={({ isActive }) => `rounded-full px-4 py-2 ${isActive ? 'bg-[#D4AF37] text-[#06294d]' : 'text-[#f5d885] hover:bg-white/5'}`}>Wishlist</NavLink></li>
+                            <li><NavLink to="/dashboard" className={({ isActive }) => `rounded-full px-4 py-2 ${isActive ? 'bg-[#D4AF37] text-[#0B1C3E]' : 'text-[#f5d885] hover:bg-white/10'}`}>My Account</NavLink></li>
+                            <li><NavLink to="/wishlist" className={({ isActive }) => `rounded-full px-4 py-2 ${isActive ? 'bg-[#D4AF37] text-[#0B1C3E]' : 'text-[#f5d885] hover:bg-white/10'}`}>Wishlist</NavLink></li>
                             <li><NotificationBell /></li>
-                            {isStaffUser && <li><NavLink to="/admin" className={({ isActive }) => `rounded-full px-4 py-2 ${isActive ? 'bg-[#D4AF37] text-[#06294d]' : 'text-[#f5d885] hover:bg-white/5'}`}>Staff Portal</NavLink></li>}
+                            {isStaffUser && <li><NavLink to="/admin" className={({ isActive }) => `rounded-full px-4 py-2 ${isActive ? 'bg-[#D4AF37] text-[#0B1C3E]' : 'text-[#f5d885] hover:bg-white/10'}`}>Staff Portal</NavLink></li>}
                             <li>
-                                <button onClick={handleLogout} className="rounded-full border border-[#D4AF37] px-5 py-2 text-[#D4AF37] transition-all hover:bg-[#D4AF37] hover:text-[#06294d]" type="button">
+                                <button onClick={handleLogout} className="rounded-full border border-[#D4AF37] px-5 py-2 text-[#D4AF37] transition-all hover:bg-[#D4AF37] hover:text-[#0B1C3E]" type="button">
                                     Sign Out
                                 </button>
                             </li>
                         </>
                     ) : (
                         <li>
-                            <Link to="/login" className="rounded-full bg-[#D4AF37] px-6 py-2 font-bold text-[#06294d] shadow-lg transition-transform hover:-translate-y-0.5">
+                            <Link to="/login" className="rounded-full bg-[#D4AF37] px-6 py-2 font-bold text-[#0B1C3E] shadow-lg transition-colors hover:bg-white">
                                 Account Login
                             </Link>
                         </li>
@@ -93,17 +88,14 @@ const Navbar = () => {
                 </ul>
             </div>
 
-            <div className={`overflow-hidden border-t border-white/10 bg-[#082c54]/95 backdrop-blur-md transition-all duration-300 lg:hidden ${isMenuOpen ? 'max-h-screen opacity-100' : 'max-h-0 opacity-0'}`}>
-                <div className="px-4 pt-4 text-xs font-semibold uppercase tracking-[0.25em] text-white/60">
-                    Guided travel support
-                </div>
-                <ul className="space-y-3 px-4 py-5 text-sm font-bold uppercase tracking-[0.18em]">
+            <div className={`overflow-hidden border-t border-white/10 bg-[#006837] transition-all duration-300 lg:hidden ${isMenuOpen ? 'max-h-screen opacity-100' : 'max-h-0 opacity-0'}`}>
+                <ul className="space-y-3 px-4 py-5 text-sm font-bold uppercase tracking-[0.14em]">
                     {customerLinks.map((link) => (
                         <li key={link.to}>
                             <NavLink
                                 to={link.to}
                                 onClick={() => setIsMenuOpen(false)}
-                                className={({ isActive }) => `block rounded-2xl px-4 py-3 ${isActive ? 'bg-white/10 text-[#f5d885]' : 'text-white/85'}`}
+                                className={({ isActive }) => `block rounded-2xl px-4 py-3 ${isActive ? 'bg-white text-[#006837]' : 'text-white/90'}`}
                             >
                                 {link.label}
                             </NavLink>
@@ -111,10 +103,10 @@ const Navbar = () => {
                     ))}
                     {isAuthenticated ? (
                         <>
-                            <li><NavLink to="/dashboard" onClick={() => setIsMenuOpen(false)} className={({ isActive }) => `block rounded-2xl px-4 py-3 ${isActive ? 'bg-[#D4AF37] text-[#06294d]' : 'text-[#f5d885]'}`}>My Account</NavLink></li>
+                            <li><NavLink to="/dashboard" onClick={() => setIsMenuOpen(false)} className={({ isActive }) => `block rounded-2xl px-4 py-3 ${isActive ? 'bg-[#D4AF37] text-[#0B1C3E]' : 'text-[#f5d885]'}`}>My Account</NavLink></li>
                             <li><Link to="/dashboard?tab=notifications" onClick={() => setIsMenuOpen(false)} className="block rounded-2xl px-4 py-3 text-[#f5d885]">Notifications</Link></li>
-                            <li><NavLink to="/wishlist" onClick={() => setIsMenuOpen(false)} className={({ isActive }) => `block rounded-2xl px-4 py-3 ${isActive ? 'bg-[#D4AF37] text-[#06294d]' : 'text-[#f5d885]'}`}>Wishlist</NavLink></li>
-                            {isStaffUser && <li><NavLink to="/admin" onClick={() => setIsMenuOpen(false)} className={({ isActive }) => `block rounded-2xl px-4 py-3 ${isActive ? 'bg-[#D4AF37] text-[#06294d]' : 'text-[#f5d885]'}`}>Staff Portal</NavLink></li>}
+                            <li><NavLink to="/wishlist" onClick={() => setIsMenuOpen(false)} className={({ isActive }) => `block rounded-2xl px-4 py-3 ${isActive ? 'bg-[#D4AF37] text-[#0B1C3E]' : 'text-[#f5d885]'}`}>Wishlist</NavLink></li>
+                            {isStaffUser && <li><NavLink to="/admin" onClick={() => setIsMenuOpen(false)} className={({ isActive }) => `block rounded-2xl px-4 py-3 ${isActive ? 'bg-[#D4AF37] text-[#0B1C3E]' : 'text-[#f5d885]'}`}>Staff Portal</NavLink></li>}
                             <li>
                                 <button onClick={handleLogout} className="block w-full rounded-2xl px-4 py-3 text-left text-[#f5d885]" type="button">
                                     Sign Out

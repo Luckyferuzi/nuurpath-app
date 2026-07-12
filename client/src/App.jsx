@@ -87,9 +87,7 @@ function AppFrame() {
   const isStaffPortalRoute = location.pathname.startsWith('/staff') || isAdminWorkspaceRoute;
   const showStandaloneStaffHeader = location.pathname.startsWith('/staff');
   const footerVariant = !isStaffPortalRoute ? getPublicFooterVariant(location.pathname) : 'none';
-  const publicMainClassName = footerVariant === 'none'
-    ? 'flex-1 bg-[#fcfbf8]'
-    : 'flex-1 bg-[linear-gradient(180deg,_#f5f1e8_0%,_#f7f8fb_52%,_#f6f2ea_100%)]';
+  const publicMainClassName = 'flex-1 bg-[#f7f6f2]';
 
   return (
     <div className="App">

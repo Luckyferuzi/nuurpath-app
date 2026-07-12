@@ -50,29 +50,8 @@ const Home = () => {
   const trustBadges = [
     'Human Support',
     'WhatsApp Follow-up',
-    'Umrah & Travel Packages',
-    'Visa & Passport Guidance',
     'No Online Payment Required',
     'Tanzania-Based Support',
-  ];
-  const journeyHighlights = [
-    {
-      title: 'Start online with clarity',
-      description: 'Choose a package or service, send the important details, and let our team take over the follow-up.',
-    },
-    {
-      title: 'Talk to a real team',
-      description: 'Availability, guidance, and travel requirements are confirmed by people who continue with you on WhatsApp.',
-    },
-    {
-      title: 'Plan before payment',
-      description: 'The website helps you move forward confidently before any payment step is discussed offline.',
-    },
-  ];
-  const servicePromises = [
-    'Request support online first',
-    'Receive human review and next steps',
-    'Use WhatsApp for continuation only',
   ];
 
   const getImageUrl = (imagePath) => {
@@ -275,62 +254,40 @@ const Home = () => {
         }
       `}</style>
 
-      <section className="relative overflow-hidden bg-[linear-gradient(135deg,_#081a38_0%,_#0B1C3E_42%,_#123869_100%)] text-white">
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/arabesque.png')] opacity-10"></div>
-        <div className="absolute -left-24 top-12 h-64 w-64 rounded-full bg-[#D4AF37]/10 blur-3xl"></div>
-        <div className="absolute -right-16 bottom-0 h-72 w-72 rounded-full bg-white/10 blur-3xl"></div>
-        <div className="relative z-10 mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[minmax(0,1.15fr)_420px] lg:px-8 lg:py-20">
+      <section className="bg-[#0B1C3E] text-white">
+        <div className="mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-8 lg:py-20">
           <div className="text-left">
-            <p className="text-xs font-black uppercase tracking-[0.38em] text-[#D4AF37]">Guided Travel Support</p>
-            <h1 className="mt-5 text-4xl font-black uppercase leading-[0.95] tracking-tight sm:text-5xl lg:text-6xl">
-              Start your journey with a clear first step.
+            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#D4AF37]">Guided Travel Support</p>
+            <h1 className="mt-4 text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">
+              Start your travel plan with a clear first step.
             </h1>
-            <p className="mt-6 max-w-2xl text-base leading-8 text-slate-200 sm:text-lg">
-              Browse Umrah packages, request flights, and ask for visa or passport guidance. Start the important part on the website, then continue with the NuurPath team on WhatsApp.
+            <p className="mt-5 max-w-2xl text-base leading-8 text-slate-200 sm:text-lg">
+              Browse packages, request flights, and ask for visa or passport guidance. Start on the website, then continue with the NuurPath team on WhatsApp.
             </p>
-            <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:flex-wrap">
-              <Link to="/packages" className="rounded-full bg-[#D4AF37] px-8 py-3 text-center font-black uppercase tracking-[0.22em] text-[#0B1C3E] transition-colors hover:bg-white">
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <Link to="/packages" className="rounded-full bg-[#D4AF37] px-8 py-3 text-center font-black uppercase tracking-[0.16em] text-[#0B1C3E] transition-colors hover:bg-white">
                 Explore Packages
               </Link>
-              <Link to="/book-flight" className="rounded-full border border-[#D4AF37] px-8 py-3 text-center font-black uppercase tracking-[0.22em] text-[#D4AF37] transition-colors hover:bg-[#D4AF37] hover:text-[#0B1C3E]">
-                Ask About Flights
+              <Link to="/book-flight" className="rounded-full border border-white/30 px-8 py-3 text-center font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-white hover:text-[#0B1C3E]">
+                Request Flight
               </Link>
               <a
                 href="#how-it-works"
                 onClick={scrollToSection('how-it-works')}
-                className="cursor-pointer rounded-full border border-white/30 px-8 py-3 text-center font-black uppercase tracking-[0.22em] text-white transition-colors hover:bg-white hover:text-[#0B1C3E]"
+                className="cursor-pointer rounded-full border border-white/30 px-8 py-3 text-center font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-white hover:text-[#0B1C3E]"
               >
-                See How It Works
+                How It Works
               </a>
-            </div>
-            <div className="mt-8 flex flex-wrap gap-3">
-              {trustBadges.slice(0, 4).map((badge) => (
-                <span key={badge} className="rounded-full border border-white/15 bg-white/8 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-100">
-                  {badge}
-                </span>
-              ))}
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/10 p-6 shadow-[0_24px_80px_rgba(2,8,24,0.35)] backdrop-blur sm:p-8">
-            <p className="text-xs font-black uppercase tracking-[0.35em] text-[#D4AF37]">How The Journey Starts</p>
-            <h2 className="mt-4 text-2xl font-black leading-tight text-white">
-              Clear requests first. Human follow-up next.
-            </h2>
-            <p className="mt-4 text-sm leading-7 text-slate-200">
-              NuurPath helps customers move beyond browsing. You can send the important travel details online before our team continues personally on WhatsApp.
-            </p>
-            <div className="mt-6 grid gap-4">
-              {journeyHighlights.map((item) => (
-                <div key={item.title} className="rounded-[1.4rem] border border-white/10 bg-[#081935]/55 p-4">
-                  <h3 className="text-base font-black text-white">{item.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-300">{item.description}</p>
-                </div>
-              ))}
-            </div>
-            <div className="mt-6 rounded-[1.4rem] border border-[#D4AF37]/25 bg-[#D4AF37]/10 p-4 text-sm leading-7 text-slate-100">
-              No online payment is required on the website. We review requests first, then guide the next step directly with you.
-            </div>
+          <div className="rounded-[1.5rem] border border-white/10 bg-white/8 p-6">
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-[#D4AF37]">What To Expect</p>
+            <ul className="mt-4 space-y-4 text-sm leading-7 text-slate-200">
+              <li>Start the request online with the important details.</li>
+              <li>Receive human follow-up from the NuurPath team.</li>
+              <li>No online payment is required on the website.</li>
+            </ul>
           </div>
         </div>
       </section>
@@ -340,16 +297,7 @@ const Home = () => {
           eyebrow="Start Here"
           title="Featured packages customers should see first"
           description="Start with the journeys NuurPath wants to highlight, then ask for availability, guidance, and the next step."
-          actions={(
-            <>
-              <Link to="/packages" className="rounded-full bg-[#101c2d] px-6 py-3 text-sm font-black uppercase tracking-[0.18em] text-white transition-colors hover:bg-[#16263b]">
-                View All Packages
-              </Link>
-              <Link to="/contact" className="rounded-full border border-[#cfbf9b] px-6 py-3 text-sm font-black uppercase tracking-[0.18em] text-[#101c2d] transition-colors hover:bg-white">
-                Talk To NuurPath
-              </Link>
-            </>
-          )}
+          actions={<Link to="/packages" className="rounded-full bg-[#0B1C3E] px-6 py-3 text-sm font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-[#1a2f55]">View All Packages</Link>}
         />
         {packagesError && upcomingTrips.length === 0 && (
           <div className="mb-8 mt-10 text-center text-red-500">{packagesError}</div>
@@ -433,15 +381,6 @@ const Home = () => {
           )}
         </div>
 
-        <div className="mt-10 grid gap-4 md:grid-cols-3">
-          {journeyHighlights.map((item) => (
-            <div key={item.title} className="rounded-[1.75rem] border border-[#e8dfcf] bg-white/90 p-6 shadow-[0_16px_40px_rgba(16,28,45,0.06)]">
-              <p className="text-xs font-black uppercase tracking-[0.26em] text-[#8a7240]">NuurPath Promise</p>
-              <h3 className="mt-3 text-xl font-black text-[#101c2d]">{item.title}</h3>
-              <p className="mt-3 text-sm leading-7 text-[#5f6774]">{item.description}</p>
-            </div>
-          ))}
-        </div>
       </PublicPageShell>
 
       <PublicPageShell background="white" contentClassName="py-14 sm:py-16 lg:py-20">
@@ -465,9 +404,9 @@ const Home = () => {
           ))}
         </div>
 
-        <div className="mt-10 flex flex-wrap justify-center gap-3">
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
           {trustBadges.map((badge) => (
-            <span key={badge} className="rounded-full border border-[#e7decd] bg-white px-4 py-2 text-sm font-semibold text-[#0B1C3E] shadow-sm">
+            <span key={badge} className="rounded-full border border-[#e7decd] bg-white px-4 py-2 text-sm font-semibold text-[#0B1C3E]">
               {badge}
             </span>
           ))}
@@ -485,13 +424,6 @@ const Home = () => {
         {servicesError && services.length === 0 && (
           <div className="mb-8 mt-10 text-center text-red-500">{servicesError}</div>
         )}
-        <div className="mt-10 flex flex-wrap justify-center gap-3">
-          {servicePromises.map((promise) => (
-            <span key={promise} className="rounded-full border border-[#d8cfbf] bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-[#101c2d]">
-              {promise}
-            </span>
-          ))}
-        </div>
         <div className="mx-auto mt-10 grid max-w-5xl grid-cols-1 gap-8 md:grid-cols-2">
           {showServicesSkeleton ? (
             [1, 2].map((i) => (
@@ -546,10 +478,10 @@ const Home = () => {
       </PublicPageShell>
 
       <PublicPageShell background="white" contentClassName="pb-6 pt-0 sm:pb-8">
-        <div id="consultation" className="overflow-hidden rounded-[2.5rem] bg-[linear-gradient(135deg,_#006837_0%,_#0b3d2b_100%)] px-6 py-10 text-white shadow-[0_24px_80px_rgba(0,77,46,0.25)] sm:px-10">
+        <div id="consultation" className="overflow-hidden rounded-[1.75rem] bg-[#006837] px-6 py-10 text-white shadow-[0_16px_40px_rgba(0,77,46,0.18)] sm:px-10">
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
             <div className="text-left">
-              <p className="text-xs font-black uppercase tracking-[0.35em] text-[#D4AF37]">Personal Guidance</p>
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-[#D4AF37]">Personal Guidance</p>
               <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">Need help planning a more personal trip?</h2>
               <p className="mt-4 max-w-2xl text-base leading-8 text-green-100">
                 Request a private consultation for personalized travel guidance, planning support, and help understanding your next steps.
@@ -571,25 +503,18 @@ const Home = () => {
 
       <MemoriesGallery />
 
-      <section id="newsletter" className="bg-[#f7f2e8] py-20">
+      <section id="newsletter" className="bg-[#f7f6f2] py-20">
         <div className="container mx-auto px-4">
-          <div className="mx-auto max-w-5xl overflow-hidden rounded-[2.5rem] border border-[#e8dfcf] bg-white shadow-[0_24px_80px_rgba(16,28,45,0.08)]">
+          <div className="mx-auto max-w-5xl overflow-hidden rounded-[1.75rem] border border-[#e8dfcf] bg-white shadow-[0_16px_40px_rgba(16,28,45,0.06)]">
             <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_380px]">
-              <div className="bg-[linear-gradient(135deg,_#0B1C3E_0%,_#10264f_60%,_#1d3d76_100%)] px-8 py-10 text-white sm:px-10">
-                <p className="text-xs font-black uppercase tracking-[0.35em] text-[#D4AF37]">Stay Connected</p>
-                <h2 className="mt-4 text-3xl font-black uppercase tracking-tight sm:text-4xl">
+              <div className="bg-[#0B1C3E] px-8 py-10 text-white sm:px-10">
+                <p className="text-xs font-black uppercase tracking-[0.24em] text-[#D4AF37]">Stay Connected</p>
+                <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
                   Get future travel updates from NuurPath
                 </h2>
                 <p className="mt-5 max-w-2xl text-base leading-7 text-blue-100">
                   Join the newsletter for selected package highlights, travel guidance updates, and important announcements from the NuurPath team.
                 </p>
-                <div className="mt-8 flex flex-wrap gap-3">
-                  {['Package highlights', 'Travel guidance', 'Important updates'].map((item) => (
-                    <span key={item} className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-white">
-                      {item}
-                    </span>
-                  ))}
-                </div>
               </div>
               <div className="bg-[#fcfbf8] px-8 py-10 sm:px-10">
                 <h3 className="text-lg font-black text-[#101c2d]">Newsletter Sign-Up</h3>
