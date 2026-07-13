@@ -128,7 +128,7 @@ const UserDashboard = () => {
                 ...b,
                 type: 'Package',
                 date: b.travelDate ? new Date(b.travelDate) : null,
-                title: b.package?.title || 'Travel Package',
+                title: b.packageTitle || b.package?.title || 'Travel Package',
                 destination: b.package?.destination
             })),
             ...flights.map(f => ({
@@ -271,7 +271,7 @@ const UserDashboard = () => {
         setReviewBooking(booking);
         setReviewData({ 
             rating: 5, 
-            comment: `Review for ${booking.package?.title || 'Trip'}: `,
+            comment: `Review for ${booking.packageTitle || booking.package?.title || 'Trip'}: `,
             images: null,
             videos: null,
             imagePreviews: [],
@@ -555,12 +555,13 @@ const UserDashboard = () => {
                         <div className="space-y-4">
                             {bookings.length > 0 ? (
                                 bookings.map(booking => {
-                                   const hasReviewed = userReviews.some(r => r.comment && r.comment.includes(`Review for ${booking.package?.title}`));
+                                   const packageTitle = booking.packageTitle || booking.package?.title || 'Travel Package';
+                                   const hasReviewed = userReviews.some(r => r.comment && r.comment.includes(`Review for ${packageTitle}`));
                                    
                                    return (
                                    <div key={booking.id || booking._id} className="bg-white border border-gray-200 rounded-lg p-5 flex flex-col md:flex-row justify-between items-start md:items-center hover:shadow-md transition-shadow">
                                         <div>
-                                            <h3 className="font-bold text-lg text-[#0B1C3E]">{booking.package?.title || 'Travel Package'}</h3>
+                                            <h3 className="font-bold text-lg text-[#0B1C3E]">{packageTitle}</h3>
                                             <div className="text-sm text-gray-600 mt-1 space-y-1">
                                                 <p>📅 Preferred Travel Date: {booking.travelDate ? new Date(booking.travelDate).toLocaleDateString() : 'TBD'}</p>
                                                 <p>👥 Travelers: {booking.passengers}</p>

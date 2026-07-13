@@ -9,7 +9,9 @@ const CONFIG = {
     BACKEND_ORIGIN,
     WHATSAPP: (process.env.REACT_APP_WHATSAPP_NUMBER || "255764770939").trim(),
     CONTACT_PHONES: "+255 764 770 939 / +255 782 266 440 / +255 686 770 990",
-    ADDRESS: "P.O. Box, Dar Es Salaam, Tanzania",
+    CONTACT_EMAIL: "info@nuurpath.com",
+    ADDRESS: "GSM PLAZA, 2nd Floor, Dar es Salaam, Tanzania",
+    OFFICE_HOURS: "Monday to Saturday, 9:00 AM to 6:00 PM",
     SOCIAL: {
         facebook: "https://facebook.com/nuurpath",
         instagram: "https://instagram.com/nuurpath",

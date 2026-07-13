@@ -1,74 +1,101 @@
-import React, { useState } from 'react';
-import axios from '../lib/api';
+import React from 'react';
+import { Link } from 'react-router-dom';
 import { CONFIG } from '../config';
 import { buildWhatsAppUrl } from '../lib/whatsapp';
 
-const GlobalSupport = () => {
-  const [formData, setFormData] = useState({ name: '', email: '', message: '' });
-  const [status, setStatus] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const whatsappUrl = buildWhatsAppUrl('Hello NuurPath team, I would like travel guidance and would like to continue on WhatsApp.');
+const supportActions = [
+  {
+    title: 'Speak with the team',
+    description: 'Use WhatsApp for direct follow-up after you have reviewed the information on the website.',
+    href: buildWhatsAppUrl('Hello NuurPath team, I would like travel guidance and would like to continue on WhatsApp.'),
+    label: 'Open WhatsApp',
+    external: true,
+  },
+  {
+    title: 'Call NuurPath',
+    description: 'Reach the office directly if you need a quick human response during working hours.',
+    href: `tel:${String(CONFIG.CONTACT_PHONES || '').split('/')[0].replace(/[^\d+]/g, '')}`,
+    label: 'Call Office',
+    external: false,
+  },
+  {
+    title: 'Use the contact page',
+    description: 'View office details, location guidance, and a lighter message form in one place.',
+    href: '/contact',
+    label: 'View Contact Page',
+    external: false,
+  },
+];
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
+const GlobalSupport = () => (
+  <section className="bg-[#f7f6f2] py-16 sm:py-20">
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="overflow-hidden rounded-[1.85rem] border border-[#e6dece] bg-white shadow-[0_16px_40px_rgba(16,28,45,0.06)]">
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_420px]">
+          <div className="px-6 py-8 sm:px-8 sm:py-10 lg:px-10">
+            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#8a7240]">Need Help?</p>
+            <h2 className="mt-3 text-3xl font-black tracking-tight text-[#101c2d] sm:text-4xl">
+              Reach NuurPath in the way that suits the next step.
+            </h2>
+            <p className="mt-4 max-w-2xl text-base leading-7 text-[#5f6774]">
+              The website helps customers complete the first important step clearly. When direct support is needed, NuurPath continues with practical human follow-up.
+            </p>
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setStatus(null);
+            <div className="mt-8 grid gap-4">
+              {supportActions.map((action) => (
+                <article key={action.title} className="rounded-[1.35rem] border border-[#ece4d6] bg-[#fcfbf8] p-5">
+                  <h3 className="text-lg font-black text-[#101c2d]">{action.title}</h3>
+                  <p className="mt-2 text-sm leading-7 text-[#5f6774]">{action.description}</p>
+                  {action.external ? (
+                    <a
+                      href={action.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-4 inline-flex rounded-full bg-[#0B1C3E] px-5 py-3 text-sm font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#1a2f55]"
+                    >
+                      {action.label}
+                    </a>
+                  ) : action.href.startsWith('tel:') ? (
+                    <a
+                      href={action.href}
+                      className="mt-4 inline-flex rounded-full bg-[#0B1C3E] px-5 py-3 text-sm font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#1a2f55]"
+                    >
+                      {action.label}
+                    </a>
+                  ) : (
+                    <Link
+                      to={action.href}
+                      className="mt-4 inline-flex rounded-full bg-[#0B1C3E] px-5 py-3 text-sm font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#1a2f55]"
+                    >
+                      {action.label}
+                    </Link>
+                  )}
+                </article>
+              ))}
+            </div>
+          </div>
 
-    try {
-      await axios.post(`/contact`, {
-        ...formData,
-        subject: 'Global Support Request'
-      });
-      setStatus({
-        type: 'success',
-        message: 'Your request has been received. Our team will review it and continue with you on WhatsApp.'
-      });
-      setFormData({ name: '', email: '', message: '' });
-    } catch (error) {
-      setStatus({
-        type: 'error',
-        message: 'Something went wrong. Please try again or contact us on WhatsApp.'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+          <aside className="bg-[#0B1C3E] px-6 py-8 text-white sm:px-8 sm:py-10">
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-[#D4AF37]">Trust Notes</p>
+            <div className="mt-5 space-y-5 text-sm leading-7 text-slate-200">
+              <p>Requests are reviewed by the team before any final confirmation step is given.</p>
+              <p>No online payment is collected on the website unless NuurPath clearly states otherwise.</p>
+              <p>Office support remains available during {CONFIG.OFFICE_HOURS.toLowerCase()}.</p>
+            </div>
 
-  return (
-    <div className="container mx-auto px-4 max-w-4xl my-20">
-      <div className="bg-white p-8 md:p-16 rounded-[3rem] shadow-2xl border border-gray-100">
-        <h1 className="text-3xl md:text-4xl font-black uppercase tracking-tighter text-[#006837] mb-4 leading-none">Need Travel Guidance?</h1>
-        <p className="text-gray-600 text-base md:text-lg mb-4 max-w-2xl">
-          Share your package, flight, visa, passport, or general travel question here. You can start online and continue with the NuurPath team on WhatsApp.
-        </p>
-        <p className="text-gray-400 font-bold text-[10px] uppercase mb-2 tracking-[3px]">NuurPath HQ - GSM PLAZA, 2nd Floor</p>
-        <p className="text-gray-400 font-bold text-[10px] uppercase mb-6 tracking-[3px]">Phone: {CONFIG.CONTACT_PHONES}</p>
-        <div className="mb-8">
-          <a
-            href={whatsappUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center rounded-2xl bg-[#25D366] px-6 py-3 font-bold text-white transition-transform hover:scale-[1.02]"
-          >
-            Chat with NuurPath
-          </a>
+            <div className="mt-8 rounded-[1.35rem] border border-white/10 bg-white/6 p-5">
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#D4AF37]">Office details</p>
+              <p className="mt-3 text-sm leading-7 text-slate-100">{CONFIG.ADDRESS}</p>
+              <p className="mt-2 text-sm leading-7 text-slate-200">{CONFIG.CONTACT_PHONES}</p>
+              <a href={`mailto:${CONFIG.CONTACT_EMAIL}`} className="mt-2 block text-sm font-semibold text-white transition-colors hover:text-[#D4AF37]">
+                {CONFIG.CONTACT_EMAIL}
+              </a>
+            </div>
+          </aside>
         </div>
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <input name="name" value={formData.name} onChange={handleChange} type="text" placeholder="Full Name" className="p-4 bg-gray-50 border rounded-2xl outline-none font-bold w-full" required />
-          <input name="email" value={formData.email} onChange={handleChange} type="email" placeholder="Email Address" className="p-4 bg-gray-50 border rounded-2xl outline-none font-bold w-full" required />
-          <textarea name="message" value={formData.message} onChange={handleChange} placeholder="Tell us what kind of travel support you need, your destination, and any preferred dates." className="md:col-span-2 p-4 bg-gray-50 border rounded-2xl outline-none font-bold h-32 w-full" required></textarea>
-          <button type="submit" disabled={loading} className="md:col-span-2 bg-[#006837] text-white p-4 rounded-2xl font-bold uppercase tracking-widest hover:bg-[#00502a] transition-colors disabled:opacity-70">
-            {loading ? 'Sending...' : 'Send Travel Request'}
-          </button>
-          {status && <p className={`md:col-span-2 text-center font-bold ${status.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>{status.message}</p>}
-        </form>
       </div>
     </div>
-  );
-};
+  </section>
+);
 
 export default GlobalSupport;

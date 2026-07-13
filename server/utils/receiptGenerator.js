@@ -33,7 +33,7 @@ const generateReceiptDoc = (booking) => {
     doc.moveDown();
     
     doc.fontSize(14).text('Package Details', { underline: true });
-    doc.fontSize(12).text(`Package: ${booking.package?.title || (booking.packageId ? `Package #${booking.packageId}` : 'Package request')}`);
+    doc.fontSize(12).text(`Package: ${booking.package?.title || booking.packageTitleSnapshot || (booking.packageId ? `Package #${booking.packageId}` : 'Package request')}`);
     doc.text(`Travel Date: ${formatTravelDate(booking.travelDate)}`);
     doc.text(`Passengers: ${booking.passengers}`);
     doc.moveDown();

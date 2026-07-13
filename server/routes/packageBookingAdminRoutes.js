@@ -154,7 +154,7 @@ function serializePackageBookingForStaff(booking) {
     ...booking,
     ...workflowSignals,
     requestId: booking.id,
-    packageTitle: booking.package?.title || null,
+    packageTitle: booking.package?.title || booking.packageTitleSnapshot || null,
     customerNotes: booking.specialRequests || booking.notes || null,
     departureCity: booking.locationFrom || null,
     customerType: booking.userId ? 'Account Holder' : 'Guest',
@@ -284,7 +284,7 @@ router.post('/', auth, requireAdminOrManager, async (req, res) => {
 
     const selectedPackage = await prisma.package.findUnique({
       where: { id: normalizedPackageId },
-      select: { id: true },
+      select: { id: true, title: true },
     });
     if (!selectedPackage) {
       return sendValidationError(res, 'Selected package does not exist.');
@@ -308,6 +308,7 @@ router.post('/', auth, requireAdminOrManager, async (req, res) => {
       data: {
         userId,
         packageId: normalizedPackageId,
+        packageTitleSnapshot: selectedPackage.title,
         contactName: toTrimmedString(contactName),
         contactEmail: toTrimmedString(contactEmail),
         contactPhone: toTrimmedString(contactPhone),
@@ -418,7 +419,7 @@ router.put('/:id', auth, requireAdminOrManager, async (req, res) => {
 
       const selectedPackage = await prisma.package.findUnique({
         where: { id: normalizedPackageId },
-        select: { id: true },
+        select: { id: true, title: true },
       });
 
       if (!selectedPackage) {
@@ -426,6 +427,7 @@ router.put('/:id', auth, requireAdminOrManager, async (req, res) => {
       }
 
       updateData.packageId = normalizedPackageId;
+      updateData.packageTitleSnapshot = selectedPackage.title;
     }
 
     if (travelDate !== undefined) {

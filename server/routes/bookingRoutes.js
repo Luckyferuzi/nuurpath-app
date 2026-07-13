@@ -73,7 +73,7 @@ function serializeCustomerPackageBooking(booking) {
     return {
         ...safeBooking,
         requestId: booking.id,
-        packageTitle: booking.package?.title || null,
+        packageTitle: booking.package?.title || booking.packageTitleSnapshot || null,
         status: normalizeOperationalStatus(booking.status) || 'New',
         passportCopy: undefined,
     };
@@ -192,6 +192,7 @@ router.post('/', packageRequestLimiter, softAuth, async (req, res) => {
             data: {
                 userId,
                 packageId: normalizedPackageId,
+                packageTitleSnapshot: selectedPackage.title,
                 contactName: toTrimmedString(contactName),
                 contactEmail: toTrimmedString(contactEmail),
                 contactPhone: toTrimmedString(contactPhone),

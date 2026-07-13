@@ -31,30 +31,6 @@ function hasOwn(object, key) {
     return Object.prototype.hasOwnProperty.call(object || {}, key);
 }
 
-function isPackageDeleteConflict(error) {
-    return error?.code === 'P2003'
-        || String(error?.message || '').includes('PackageBooking_packageId_fkey')
-        || String(error?.message || '').includes('violates RESTRICT setting of foreign key constraint');
-}
-
-function buildPackageDeleteConflictMessage({ bookingCount = 0, reviewCount = 0 } = {}) {
-    const dependencyLabels = [];
-
-    if (bookingCount > 0) {
-        dependencyLabels.push(`${bookingCount} package request${bookingCount === 1 ? '' : 's'}`);
-    }
-
-    if (reviewCount > 0) {
-        dependencyLabels.push(`${reviewCount} review${reviewCount === 1 ? '' : 's'}`);
-    }
-
-    if (dependencyLabels.length === 0) {
-        return 'This package cannot be deleted because it is already connected to customer records.';
-    }
-
-    return `This package cannot be deleted because it already has ${dependencyLabels.join(' and ')} linked to it. Keep it for records or create a new package instead.`;
-}
-
 function buildPackageOrderBy() {
     return [
         { displayOrder: 'asc' },
@@ -224,6 +200,37 @@ async function getNextFeaturedOrder(transactionClient, excludedPackageId = null)
     });
 
     return (result?._max?.featuredOrder || 0) + 1;
+}
+
+async function compactPackageOrderState(transactionClient) {
+    const packages = await transactionClient.package.findMany({
+        orderBy: buildPackageOrderBy(),
+        select: {
+            id: true,
+            isFeatured: true,
+        },
+    });
+
+    const featuredPackages = packages.filter((pkg) => pkg.isFeatured);
+
+    for (let index = 0; index < packages.length; index += 1) {
+        await transactionClient.package.update({
+            where: { id: packages[index].id },
+            data: {
+                displayOrder: index + 1,
+                featuredOrder: packages[index].isFeatured ? undefined : null,
+            },
+        });
+    }
+
+    for (let index = 0; index < featuredPackages.length; index += 1) {
+        await transactionClient.package.update({
+            where: { id: featuredPackages[index].id },
+            data: {
+                featuredOrder: index + 1,
+            },
+        });
+    }
 }
 
 async function buildPackagePersistenceData(transactionClient, payload, options = {}) {
@@ -551,6 +558,7 @@ router.put('/:id', auth, requireAdmin, async (req, res) => {
             where: { id },
             select: {
                 id: true,
+                title: true,
                 images: true,
                 displayOrder: true,
                 isFeatured: true,
@@ -585,6 +593,15 @@ router.put('/:id', auth, requireAdmin, async (req, res) => {
         });
         createdStoredFileId = null;
 
+        if (updatedPackage.title !== existingPackage.title) {
+            await prisma.packageBooking.updateMany({
+                where: { packageId: id },
+                data: {
+                    packageTitleSnapshot: updatedPackage.title,
+                },
+            });
+        }
+
         if (storedFile) {
             try {
                 await deleteStoredFilesByReferences(existingPackage.images || [], [STORED_FILE_ROUTE_PREFIXES.PUBLIC]);
@@ -615,30 +632,31 @@ router.delete('/:id', auth, requireAdmin, async (req, res) => {
             return sendInvalidId(res);
         }
 
-        const [existingPackage, bookingCount, reviewCount] = await prisma.$transaction([
-            prisma.package.findUnique({
-                where: { id },
-                select: { images: true },
-            }),
-            prisma.packageBooking.count({
-                where: { packageId: id },
-            }),
-            prisma.review.count({
-                where: { packageId: id },
-            }),
-        ]);
+        const existingPackage = await prisma.package.findUnique({
+            where: { id },
+            select: {
+                id: true,
+                title: true,
+                images: true,
+            },
+        });
         if (!existingPackage) {
             return res.status(404).json({ msg: 'Package not found' });
         }
 
-        if (bookingCount > 0 || reviewCount > 0) {
-            return res.status(409).json({
-                msg: buildPackageDeleteConflictMessage({ bookingCount, reviewCount }),
+        await prisma.$transaction(async (transactionClient) => {
+            await transactionClient.packageBooking.updateMany({
+                where: { packageId: id },
+                data: {
+                    packageTitleSnapshot: existingPackage.title,
+                },
             });
-        }
 
-        await prisma.package.delete({
-            where: { id },
+            await transactionClient.package.delete({
+                where: { id },
+            });
+
+            await compactPackageOrderState(transactionClient);
         });
 
         try {
@@ -649,12 +667,6 @@ router.delete('/:id', auth, requireAdmin, async (req, res) => {
 
         return res.json({ msg: 'Package removed' });
     } catch (err) {
-        if (isPackageDeleteConflict(err)) {
-            return res.status(409).json({
-                msg: buildPackageDeleteConflictMessage(),
-            });
-        }
-
         console.error(err.message);
         return res.status(500).send('Server Error');
     }

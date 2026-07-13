@@ -1456,7 +1456,7 @@ Possible backend work:
 ## Phase 11: Contact, Footer, and Public Trust-Page Refinement
 
 Status:
-- Planned
+- Completed
 
 ### Objective
 
@@ -1523,6 +1523,30 @@ Frontend:
 
 - This phase should support the main request journeys, not compete with them.
 - Keep contact information visible and practical across both mobile and desktop views.
+
+### Completed Work
+
+- Rebuilt the public contact page into a clearer customer help hub with:
+  - contact channels first
+  - office location and working-hours visibility
+  - shorter, more practical FAQ content
+  - a lighter secondary message form instead of a heavy form-first experience
+- Reworked the full footer into a cleaner trust surface with:
+  - simpler navigation
+  - clearer contact details
+  - lighter newsletter presentation
+  - less visual and content noise overall
+- Replaced the old home-page support form block with a simpler global support section that:
+  - points customers toward the right next contact path
+  - reinforces trust without competing with the main public journeys
+  - keeps WhatsApp, phone, and contact-page options visible
+- Preserved the existing public visual system while reducing clutter, so the supporting trust surfaces feel calmer, cleaner, and more aligned with the refined package and request journeys.
+- Updated package deletion behavior so operations can remove packages even when historical package requests already exist:
+  - package requests now keep a package-title snapshot for history
+  - the package relationship is allowed to clear safely on delete
+  - remaining packages automatically close display-order gaps after deletion
+  - linked reviews are no longer forced to block package deletion
+- Added the matching Prisma schema and migration work required for the history-safe package deletion flow.
 
 ---
 

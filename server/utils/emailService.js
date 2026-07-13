@@ -158,7 +158,9 @@ async function sendBookingConfirmationEmail(booking, pdfBuffer) {
 
     const recipient = booking.contactEmail || booking.user?.email;
     const contactName = booking.contactName || booking.user?.name || 'Customer';
-    const packageLabel = booking.package?.title || (booking.packageId ? `Package #${booking.packageId}` : 'your package');
+    const packageLabel = booking.package?.title
+        || booking.packageTitleSnapshot
+        || (booking.packageId ? `Package #${booking.packageId}` : 'your package');
     const bookingReference = booking.id ? `#${booking.id}` : 'your booking';
     const travelDate = formatBookingDate(booking.travelDate);
     const status = booking.status || 'Confirmed';

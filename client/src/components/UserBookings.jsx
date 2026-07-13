@@ -71,7 +71,7 @@ const UserBookings = () => {
                   <span className="text-gray-500 text-sm">#{booking.id}</span>
                 </div>
                 <h3 className="text-xl font-bold text-[#0B1C3E] mb-1">
-                  {booking.package?.title || 'Unknown Package'}
+                  {booking.packageTitle || booking.package?.title || 'Unknown Package'}
                 </h3>
                 <p className="text-gray-600">
                   <span className="font-semibold">Preferred Travel Date:</span> {booking.travelDate ? new Date(booking.travelDate).toLocaleDateString() : 'To be confirmed'}
