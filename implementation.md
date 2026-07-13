@@ -1315,6 +1315,7 @@ Frontend:
   - one clean outer frame
   - a clearer half-image, half-summary split
   - fewer nested borders around the image area
+- Simplified the homepage featured-package slider rendering as well so it now shows one active package card at a time instead of stacking slide layers underneath, which keeps the image and summary area more reliable.
 
 ### Implementation Notes
 

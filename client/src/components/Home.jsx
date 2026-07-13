@@ -242,6 +242,7 @@ const Home = () => {
 
   const showTripSkeleton = packagesLoading && upcomingTrips.length === 0;
   const showServicesSkeleton = servicesLoading && services.length === 0;
+  const activeTrip = upcomingTrips[currentSlide] || null;
 
   return (
     <div className="min-h-screen bg-transparent">
@@ -334,60 +335,53 @@ const Home = () => {
                 </div>
               </div>
             </div>
-          ) : upcomingTrips.length > 0 ? (
+          ) : activeTrip ? (
             <>
-              {upcomingTrips.map((trip, index) => (
-                <div
-                  key={trip.id}
-                  className={`absolute inset-0 transition-all duration-700 ease-out ${index === currentSlide ? 'translate-x-0 opacity-100' : 'pointer-events-none translate-x-4 opacity-0'}`}
-                >
-                  <div className="grid h-full min-h-[320px] lg:grid-cols-[1fr_1fr]">
-                    <div className="flex h-[240px] items-center justify-center bg-[#f3eee4] sm:h-[280px] lg:h-full">
-                      <img
-                        src={trip.image}
-                        alt={trip.title}
-                        className="block h-full w-full object-contain transition-transform duration-500 group-hover:scale-[1.02]"
-                        loading={index === currentSlide ? 'eager' : 'lazy'}
-                        fetchPriority={index === currentSlide ? 'high' : 'low'}
-                        decoding="async"
-                      />
-                    </div>
-                    <div className="flex flex-col justify-center bg-white p-6 sm:p-7 lg:p-8">
-                      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7240]">
-                        Featured package
-                      </p>
-                      <h3 className="mt-3 text-2xl font-black tracking-tight text-[#101c2d] sm:text-[2rem]">
-                        {trip.title}
-                      </h3>
-                      <p className="mt-3 text-sm font-semibold text-[#2d5f50]">
-                        {trip.journeyLabel}
-                      </p>
-                      <p className="mt-3 max-w-xl text-sm leading-7 text-[#5f6774] sm:text-base">
-                        {trip.description}
-                      </p>
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {trip.highlights.map((item) => (
-                          <span key={item} className="rounded-full border border-[#e5dece] bg-[#faf8f3] px-3 py-1.5 text-xs font-semibold text-[#4d5562]">
-                            {item}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                        <Link to={trip.link} className="rounded-full bg-[#0B1C3E] px-7 py-3 text-center text-sm font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#1a2f55]">
-                          View Package
-                        </Link>
-                        <button
-                          onClick={() => handleBookNow(trip.id)}
-                          className="rounded-full border border-[#d8cfbf] bg-white px-7 py-3 text-sm font-black uppercase tracking-[0.14em] text-[#101c2d] transition-colors hover:bg-[#faf8f3]"
-                          type="button"
-                        >
-                          Request Package
-                        </button>
-                      </div>
-                    </div>
+              <div className="grid min-h-[320px] lg:grid-cols-[1fr_1fr]">
+                <div className="flex h-[250px] items-center justify-center overflow-hidden bg-[#f3eee4] sm:h-[300px] lg:h-full">
+                  <img
+                    src={activeTrip.image}
+                    alt={activeTrip.title}
+                    className="block max-h-full max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.02]"
+                    loading="eager"
+                    fetchPriority="high"
+                    decoding="async"
+                  />
+                </div>
+                <div className="flex flex-col justify-center bg-white p-6 sm:p-8 lg:p-10">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7240]">
+                    Featured package
+                  </p>
+                  <h3 className="mt-3 text-2xl font-black tracking-tight text-[#101c2d] sm:text-[2rem]">
+                    {activeTrip.title}
+                  </h3>
+                  <p className="mt-3 text-sm font-semibold text-[#2d5f50]">
+                    {activeTrip.journeyLabel}
+                  </p>
+                  <p className="mt-4 text-sm leading-7 text-[#5f6774] sm:text-base">
+                    {activeTrip.description}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {activeTrip.highlights.map((item) => (
+                      <span key={item} className="rounded-full border border-[#e5dece] bg-[#faf8f3] px-3 py-1.5 text-xs font-semibold text-[#4d5562]">
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                    <Link to={activeTrip.link} className="rounded-full bg-[#0B1C3E] px-7 py-3 text-center text-sm font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#1a2f55]">
+                      View Package
+                    </Link>
+                    <button
+                      onClick={() => handleBookNow(activeTrip.id)}
+                      className="rounded-full border border-[#d8cfbf] bg-white px-7 py-3 text-sm font-black uppercase tracking-[0.14em] text-[#101c2d] transition-colors hover:bg-[#faf8f3]"
+                      type="button"
+                    >
+                      Request Package
+                    </button>
                   </div>
                 </div>
-              ))}
+              </div>
 
               <button
                 onClick={prevSlide}
