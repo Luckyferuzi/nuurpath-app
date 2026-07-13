@@ -6,6 +6,7 @@ import {
   getStaffWorkspaceSections,
   isStaffWorkspaceItemActive,
 } from '../lib/staffWorkspace.js';
+import StaffNotificationInbox from './staff/StaffNotificationInbox.jsx';
 
 const StaffWorkspaceLayout = () => {
   const { user, logout } = useAuth();
@@ -48,19 +49,7 @@ const StaffWorkspaceLayout = () => {
           }`}
         >
           <div className="flex h-full flex-col">
-            <div className="border-b border-white/10 px-6 py-6">
-              <Link to="/admin" className="block">
-                <p className="text-xs font-black uppercase tracking-[0.35em] text-[#d8c79a]">NuurPath</p>
-                <h1 className="mt-2 text-2xl font-black tracking-[0.12em] text-white">Staff Workspace</h1>
-              </Link>
-              <div className="mt-6 rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
-                <div className="text-xs font-black uppercase tracking-[0.22em] text-white/60">Signed in as</div>
-                <div className="mt-2 text-lg font-bold text-white">{displayName}</div>
-                <div className="mt-3 inline-flex rounded-full border border-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#d8c79a]">
-                  {role || 'staff'}
-                </div>
-              </div>
-            </div>
+            <StaffNotificationInbox />
 
             <nav className="flex-1 overflow-y-auto px-4 py-5">
               {navigationSections.map((section) => (

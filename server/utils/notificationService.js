@@ -1,5 +1,6 @@
 const prisma = require('../db');
 const { getNotificationRoomForUser } = require('./socketRooms');
+const { sendPushNotificationToUser } = require('./pushNotificationService');
 
 function toPositiveInteger(value) {
     const normalized = Number.parseInt(value, 10);
@@ -68,14 +69,13 @@ async function createNotification({ userId, title, message, type, bookingId }) {
     }
 }
 
-async function sendNotification(app, params) {
-    const notification = await createNotification(params);
+async function deliverNotification(app, notification, targetUserOverride = null) {
+    const targetUser = targetUserOverride || await prisma.user.findUnique({
+        where: { id: notification.userId },
+        select: { id: true, role: true },
+    });
 
     try {
-        const targetUser = await prisma.user.findUnique({
-            where: { id: notification.userId },
-            select: { id: true },
-        });
         const io = app && typeof app.get === 'function' ? app.get('io') : null;
 
         if (io && targetUser) {
@@ -85,10 +85,25 @@ async function sendNotification(app, params) {
         console.error('[NotificationService] Failed to emit notification:', error.message);
     }
 
+    try {
+        if (targetUser) {
+            await sendPushNotificationToUser(targetUser, notification);
+        }
+    } catch (error) {
+        console.error('[NotificationService] Failed to push notification to device:', error.message);
+    }
+}
+
+async function sendNotification(app, params) {
+    const notification = await createNotification(params);
+
+    await deliverNotification(app, notification);
+
     return notification;
 }
 
 module.exports = {
     createNotification,
+    deliverNotification,
     sendNotification,
 };

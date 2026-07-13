@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import axios from '../lib/api';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { useStaffNotifications } from '../contexts/StaffNotificationsContext.jsx';
+import { formatNotificationTime, resolveNotificationDestination } from '../lib/staffNotifications.js';
 import { StaffCardSection, StaffInfoPill, StaffMetricCard, StaffPageShell } from './staff/WorkspacePrimitives.jsx';
 import { getStaffWorkspaceSections } from '../lib/staffWorkspace.js';
 
@@ -10,6 +12,14 @@ const CHART_COLORS = ['#006837', '#D4AF37', '#0B1C3E', '#5c7cfa'];
 
 const AdminDashboard = () => {
   const { user } = useAuth();
+  const {
+    unreadCount,
+    dashboardNotifications,
+    loading: notificationsLoading,
+    pushEnabled,
+    notificationPermission,
+    markNotificationAsRead,
+  } = useStaffNotifications();
   const [stats, setStats] = useState({
     totalUsers: 0,
     pipelineValue: 0,
@@ -146,6 +156,77 @@ const AdminDashboard = () => {
           />
         ))}
       </div>
+
+      <StaffCardSection
+        title="Live Notifications"
+        description="New package, flight, service, and consultation alerts arrive here in real time so staff do not need to refresh the dashboard."
+      >
+        <div className="grid gap-5 xl:grid-cols-[240px_minmax(0,1fr)]">
+          <div className="rounded-[1.5rem] border border-[#efe8d8] bg-[#fbfaf7] p-5">
+            <div className="text-xs font-black uppercase tracking-[0.22em] text-[#8a7443]">Unread alerts</div>
+            <div className="mt-4 text-4xl font-black text-[#101c2d]">{notificationsLoading ? '...' : unreadCount}</div>
+            <p className="mt-3 text-sm leading-6 text-[#67707e]">
+              {pushEnabled
+                ? 'Background browser and phone-ready alerts are active for this device.'
+                : notificationPermission === 'granted'
+                  ? 'Browser popups are enabled. Add server push keys to keep alerts working even after the site closes.'
+                  : 'Enable device alerts from the sidebar so urgent updates are easier to catch.'}
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {dashboardNotifications.length === 0 ? (
+              <div className="rounded-[1.5rem] border border-dashed border-[#d8cdb7] bg-[#fbfaf7] px-5 py-6 text-sm leading-6 text-[#67707e]">
+                Notifications will appear here automatically as soon as new requests or request changes happen.
+              </div>
+            ) : (
+              dashboardNotifications.map((notification) => (
+                <div
+                  key={notification.id}
+                  className={`rounded-[1.35rem] border px-4 py-4 ${
+                    notification.read
+                      ? 'border-[#efe8d8] bg-[#fbfaf7]'
+                      : 'border-[#d8c79a] bg-[#fffaf0]'
+                  }`}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        {!notification.read && <span className="h-2 w-2 rounded-full bg-[#d4af37]" />}
+                        <h3 className="truncate text-sm font-black text-[#101c2d]">{notification.title || 'Staff notification'}</h3>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-[#5b6472]">{notification.message}</p>
+                    </div>
+                    {!notification.read && (
+                      <button
+                        type="button"
+                        onClick={() => markNotificationAsRead(notification.id)}
+                        className="rounded-full border border-[#d8cdb7] px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-[#7f6a3d] transition hover:bg-white"
+                      >
+                        Mark read
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-xs text-[#7a828f]">{formatNotificationTime(notification.createdAt)}</span>
+                    <Link
+                      to={resolveNotificationDestination(notification, role)}
+                      className="text-xs font-black uppercase tracking-[0.18em] text-[#101c2d] transition hover:text-[#8a7443]"
+                      onClick={() => {
+                        if (!notification.read) {
+                          markNotificationAsRead(notification.id);
+                        }
+                      }}
+                    >
+                      Open queue
+                    </Link>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </StaffCardSection>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {queueMetrics.map((metric) => (

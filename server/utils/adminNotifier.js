@@ -1,6 +1,5 @@
 const prisma = require('../db');
-const { createNotification } = require('./notificationService');
-const { getNotificationRoomForUser } = require('./socketRooms');
+const { createNotification, deliverNotification } = require('./notificationService');
 
 function requireNotificationText(value, fieldName) {
     if (typeof value !== 'string' || !value.trim()) {
@@ -19,10 +18,8 @@ async function notifyAdmins(app, data) {
 
         const admins = await prisma.user.findMany({
             where: { role: { in: ['admin', 'manager'] } },
-            select: { id: true, email: true },
+            select: { id: true, email: true, role: true },
         });
-
-        const io = app && typeof app.get === 'function' ? app.get('io') : null;
         const results = await Promise.allSettled(admins.map(async (admin) => {
             const notification = await createNotification({
                 userId: admin.id,
@@ -32,13 +29,7 @@ async function notifyAdmins(app, data) {
                 bookingId,
             });
 
-            if (io) {
-                try {
-                    io.to(getNotificationRoomForUser(admin.id)).emit('receive_notification', notification);
-                } catch (emitError) {
-                    console.error(`[AdminNotifier] Failed to emit notification to ${admin.email}:`, emitError.message);
-                }
-            }
+            await deliverNotification(app, notification, admin);
 
             return notification;
         }));

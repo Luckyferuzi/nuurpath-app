@@ -5,6 +5,12 @@ const auth = require('../middleware/auth');
 const { requireAdminOrManager } = require('../middleware/adminAuth');
 const { sendNotification } = require('../utils/notificationService');
 const {
+    getPushNotificationsPublicKey,
+    isPushNotificationsConfigured,
+    removePushSubscription,
+    upsertPushSubscription,
+} = require('../utils/pushNotificationService');
+const {
     isNonEmptyString,
     sendInvalidId,
     sendValidationError,
@@ -13,13 +19,14 @@ const {
 } = require('../utils/validation');
 
 // @route   GET api/notifications
-// @desc    Get notifications (Admin sees all/filtered, User sees theirs)
+// @desc    Get notifications for the current user inbox, with optional staff-wide scope for admins/managers
 // @access  Private
 router.get('/', auth, async (req, res) => {
     try {
         const page = req.query.page === undefined ? 1 : toPositiveInteger(req.query.page);
         const limit = req.query.limit === undefined ? 20 : toPositiveInteger(req.query.limit);
         const filter = req.query.filter; // 'unread' or 'all'
+        const scope = req.query.scope === 'all' ? 'all' : 'mine';
 
         if (page === null || limit === null) {
             return sendValidationError(res, 'Page and limit must be positive integers.');
@@ -40,7 +47,10 @@ router.get('/', auth, async (req, res) => {
         }
 
         const user = await prisma.user.findUnique({ where: { id: userId } });
-        if (user.role !== 'admin' && user.role !== 'manager') {
+        const normalizedRole = String(user?.role || '').toLowerCase();
+        const isStaffUser = normalizedRole === 'admin' || normalizedRole === 'manager';
+
+        if (!isStaffUser || scope !== 'all') {
             where.userId = userId;
         }
 
@@ -72,8 +82,75 @@ router.get('/', auth, async (req, res) => {
     }
 });
 
+// @route   GET api/notifications/push-settings
+// @desc    Get browser push notification settings for the current user
+// @access  Private
+router.get('/push-settings', auth, async (req, res) => {
+    try {
+        res.json({
+            isConfigured: isPushNotificationsConfigured(),
+            publicKey: getPushNotificationsPublicKey(),
+        });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   POST api/notifications/push-subscriptions
+// @desc    Save or update a browser push subscription
+// @access  Private
+router.post('/push-subscriptions', auth, async (req, res) => {
+    try {
+        if (!isPushNotificationsConfigured()) {
+            return res.status(503).json({ msg: 'Push notifications are not configured on the server yet.' });
+        }
+
+        const userId = toPositiveInteger(req.user.id);
+        if (userId === null) {
+            return sendValidationError(res, 'Invalid user id.');
+        }
+
+        const savedSubscription = await upsertPushSubscription({
+            userId,
+            subscription: req.body?.subscription,
+            userAgent: req.get('user-agent'),
+        });
+
+        res.status(201).json({
+            id: savedSubscription.id,
+            endpoint: savedSubscription.endpoint,
+        });
+    } catch (err) {
+        console.error(err.message);
+        res.status(400).json({ msg: err.message || 'Unable to save push subscription.' });
+    }
+});
+
+// @route   DELETE api/notifications/push-subscriptions
+// @desc    Remove a browser push subscription
+// @access  Private
+router.delete('/push-subscriptions', auth, async (req, res) => {
+    try {
+        const userId = toPositiveInteger(req.user.id);
+        if (userId === null) {
+            return sendValidationError(res, 'Invalid user id.');
+        }
+
+        await removePushSubscription({
+            userId,
+            endpoint: req.body?.endpoint,
+        });
+
+        res.json({ msg: 'Push subscription removed.' });
+    } catch (err) {
+        console.error(err.message);
+        res.status(400).json({ msg: err.message || 'Unable to remove push subscription.' });
+    }
+});
+
 // @route   PUT api/notifications/read-all
-// @desc    Mark notifications as read (user scoped for normal users, global for admins)
+// @desc    Mark notifications as read for the current inbox, with optional staff-wide scope for admins/managers
 // @access  Private
 router.put('/read-all', auth, async (req, res) => {
     try {
@@ -82,10 +159,14 @@ router.put('/read-all', auth, async (req, res) => {
             return sendValidationError(res, 'Invalid user id.');
         }
 
+        const scope = req.query.scope === 'all' ? 'all' : 'mine';
         const user = await prisma.user.findUnique({ where: { id: userId } });
         const where = { read: false };
 
-        if (user.role !== 'admin' && user.role !== 'manager') {
+        const normalizedRole = String(user?.role || '').toLowerCase();
+        const isStaffUser = normalizedRole === 'admin' || normalizedRole === 'manager';
+
+        if (!isStaffUser || scope !== 'all') {
             where.userId = userId;
         }
 

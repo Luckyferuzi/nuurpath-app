@@ -6,6 +6,7 @@ const { requireAdmin, requireAdminOrManager } = require('../middleware/adminAuth
 const { flightRequestLimiter } = require('../middleware/rateLimitMiddleware');
 const softAuth = require('../middleware/softAuth');
 const { notifyAdmins } = require('../utils/adminNotifier');
+const { sendNotification } = require('../utils/notificationService');
 const { isAdminOrManager } = require('../utils/roles');
 const {
     normalizeOperationalStatus,
@@ -386,14 +387,12 @@ router.put('/:id/cancel', auth, async (req, res) => {
             data: { status: 'Cancelled' },
         });
 
-        await prisma.notification.create({
-            data: {
-                userId,
-                title: 'Flight Request Cancelled',
-                message: `Flight request #${updatedBooking.id} (${updatedBooking.from} to ${updatedBooking.to}) was cancelled.`,
-                type: 'FLIGHT_CANCELLED',
-                bookingId: updatedBooking.id,
-            },
+        await sendNotification(req.app, {
+            userId,
+            title: 'Flight Request Cancelled',
+            message: `Flight request #${updatedBooking.id} (${updatedBooking.from} to ${updatedBooking.to}) was cancelled.`,
+            type: 'FLIGHT_CANCELLED',
+            bookingId: updatedBooking.id,
         });
 
         return res.json(serializeFlightRequest(updatedBooking));

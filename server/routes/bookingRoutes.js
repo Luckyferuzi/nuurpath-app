@@ -8,6 +8,7 @@ const { packageRequestLimiter } = require('../middleware/rateLimitMiddleware');
 const softAuth = require('../middleware/softAuth');
 const { sendEmail } = require('../utils/emailService');
 const { notifyAdmins } = require('../utils/adminNotifier');
+const { sendNotification } = require('../utils/notificationService');
 const { normalizeOperationalStatus } = require('../utils/operationalPipeline');
 const { escapeHtml } = require('../utils/security');
 const {
@@ -220,14 +221,12 @@ router.post('/', packageRequestLimiter, softAuth, async (req, res) => {
 
         if (userId !== null) {
             try {
-                await prisma.notification.create({
-                    data: {
-                        userId,
-                        title: 'Package Request Received',
-                        message: `Your request #${booking.id} for ${selectedPackage.title} has been received. Status: Pending.`,
-                        type: 'BOOKING_UPDATE',
-                        bookingId: booking.id,
-                    },
+                await sendNotification(req.app, {
+                    userId,
+                    title: 'Package Request Received',
+                    message: `Your request #${booking.id} for ${selectedPackage.title} has been received. Status: Pending.`,
+                    type: 'BOOKING_UPDATE',
+                    bookingId: booking.id,
                 });
             } catch (notificationError) {
                 console.error('Failed to create package request notification:', notificationError);
@@ -377,14 +376,12 @@ router.put('/:id/cancel', auth, async (req, res) => {
             data: { status: 'Cancelled' }
         });
 
-        await prisma.notification.create({
-            data: {
-                userId,
-                title: 'Package Request Cancelled',
-                message: `Request #${id} has been cancelled.`,
-                type: 'BOOKING_CANCELLED',
-                bookingId: id
-            }
+        await sendNotification(req.app, {
+            userId,
+            title: 'Package Request Cancelled',
+            message: `Request #${id} has been cancelled.`,
+            type: 'BOOKING_CANCELLED',
+            bookingId: id,
         });
 
         res.json(serializeCustomerPackageBooking(updatedBooking));

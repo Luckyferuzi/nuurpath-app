@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, useLocation, matchPath } from '
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider } from './contexts/AuthContext.jsx';
 import { PublicContentProvider } from './contexts/PublicContentContext.jsx';
+import { StaffNotificationsProvider } from './contexts/StaffNotificationsContext.jsx';
 import PackageList from './components/PackageList.jsx';
 import PackageDetails from './components/PackageDetails.jsx';
 import Navbar from './components/Navbar.jsx';
@@ -125,7 +126,7 @@ function AppFrame() {
 
             {/* Admin Routes */}
             <Route element={<AdminRoute allowedRoles={['admin', 'manager']} />}>
-              <Route path="/admin" element={<StaffWorkspaceLayout />}>
+              <Route path="/admin" element={<StaffNotificationsProvider><StaffWorkspaceLayout /></StaffNotificationsProvider>}>
                 <Route index element={<AdminDashboard />} />
                 <Route path="consultations" element={<PrivateConsultationsAdmin />} />
                 <Route path="package-bookings" element={<PackageBookingsAdmin />} />

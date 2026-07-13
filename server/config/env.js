@@ -115,6 +115,9 @@ const env = {
   ADMIN_SETUP_TOKEN: optionalEnv('ADMIN_SETUP_TOKEN', ''),
   GOOGLE_CLIENT_ID: optionalEnv('GOOGLE_CLIENT_ID', ''),
   TRUST_PROXY: parseTrustProxy(process.env.TRUST_PROXY),
+  VAPID_PUBLIC_KEY: optionalEnv('VAPID_PUBLIC_KEY', ''),
+  VAPID_PRIVATE_KEY: optionalEnv('VAPID_PRIVATE_KEY', ''),
+  PUSH_NOTIFICATIONS_CONTACT: optionalEnv('PUSH_NOTIFICATIONS_CONTACT', ''),
 };
 
 if (isProduction) {
