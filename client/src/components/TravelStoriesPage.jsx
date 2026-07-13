@@ -52,20 +52,6 @@ const TravelStoriesPage = () => {
           eyebrow="Story Feed"
           title="Travel stories that feel like updates, not advertisements."
           description="Browse recent posts, open the full story first, then continue to the next step only after the traveler context is clear."
-          aside={(
-            <>
-              <div className="rounded-[1.35rem] border border-[#ece4d6] bg-[#fbfaf7] p-4">
-                <div className="text-xs font-black uppercase tracking-[0.2em] text-[#8a7240]">Published stories</div>
-                <div className="mt-3 text-3xl font-black text-[#101c2d]">{mediaPosts.length}</div>
-              </div>
-              <div className="rounded-[1.35rem] border border-[#ece4d6] bg-[#fbfaf7] p-4">
-                <div className="text-xs font-black uppercase tracking-[0.2em] text-[#8a7240]">Video updates</div>
-                <div className="mt-3 text-3xl font-black text-[#101c2d]">
-                  {mediaPosts.filter((post) => Boolean(post.videoUrl)).length}
-                </div>
-              </div>
-            </>
-          )}
         />
 
         <section className="rounded-[1.75rem] border border-[#e6decc] bg-white p-5 shadow-[0_14px_40px_rgba(16,28,45,0.05)] sm:p-6">
@@ -114,7 +100,7 @@ const TravelStoriesPage = () => {
           <div className="grid gap-6 lg:grid-cols-2">
             {[1, 2, 3, 4].map((item) => (
               <div key={item} className="animate-pulse overflow-hidden rounded-[1.75rem] border border-[#ebe4d3] bg-white">
-                <div className="h-80 bg-[#efe7d9]" />
+                <div className="h-64 bg-[#efe7d9] sm:h-72" />
                 <div className="space-y-4 p-6">
                   <div className="h-3 w-28 rounded bg-[#efe7d9]" />
                   <div className="h-8 w-3/4 rounded bg-[#efe7d9]" />
@@ -151,8 +137,8 @@ const TravelStoriesPage = () => {
                 <MediaPostImageCarousel
                   images={getMediaPostImageUrls(post)}
                   title={post.title}
-                  className="h-80 border-b border-[#eee6d8]"
-                  imageClassName="h-full w-full object-contain"
+                  className="h-64 border-b border-[#eee6d8] bg-[#f7f3ea] sm:h-72"
+                  imageClassName="h-full w-full object-contain p-3 sm:p-4"
                 />
               </Link>
 
@@ -161,9 +147,9 @@ const TravelStoriesPage = () => {
                   <span className="rounded-full bg-[#faf7ef] px-3 py-1 text-[#8a7240]">
                     {formatMediaPostDate(post.eventDate || post.createdAt)}
                   </span>
-                  {post.videoUrl ? (
+                  {post.destination ? (
                     <span className="rounded-full border border-[#d9cfbb] px-3 py-1 text-[#101c2d]">
-                      Video included
+                      {post.destination}
                     </span>
                   ) : null}
                 </div>
@@ -180,10 +166,8 @@ const TravelStoriesPage = () => {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-[#67707e]">
-                  {post.destination ? <span>{post.destination}</span> : null}
                   <span>{post.engagement?.likes || 0} likes</span>
                   <span>{post.engagement?.comments || 0} comments</span>
-                  <span>{post.images?.length || 0} photos</span>
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-4 pt-1">

@@ -18,7 +18,7 @@ const TravelEvidenceSection = () => {
           <div className="grid gap-6 lg:grid-cols-3">
             {[1, 2, 3].map((item) => (
               <div key={item} className="animate-pulse overflow-hidden rounded-[1.75rem] border border-[#eee6d8] bg-[#fcfbf8]">
-                <div className="h-72 bg-[#ece5d8]" />
+                <div className="h-56 bg-[#ece5d8] sm:h-60" />
                 <div className="space-y-4 p-5">
                   <div className="h-3 w-28 rounded bg-[#ece5d8]" />
                   <div className="h-7 w-3/4 rounded bg-[#ece5d8]" />
@@ -80,8 +80,8 @@ const TravelEvidenceSection = () => {
                 <MediaPostImageCarousel
                   images={getMediaPostImageUrls(post)}
                   title={post.title}
-                  className="h-72 border-b border-[#eee6d8]"
-                  imageClassName="h-full w-full object-contain"
+                  className="h-56 border-b border-[#eee6d8] bg-[#f7f3ea] sm:h-60"
+                  imageClassName="h-full w-full object-contain p-3 sm:p-4"
                 />
               </Link>
 
@@ -108,11 +108,9 @@ const TravelEvidenceSection = () => {
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-[#67707e]">
+                <div className="flex flex-wrap items-center gap-4 text-sm font-semibold text-[#67707e]">
                   <span>{post.engagement?.likes || 0} likes</span>
                   <span>{post.engagement?.comments || 0} comments</span>
-                  <span>{post.images?.length || 0} photos</span>
-                  {post.videoUrl ? <span>Video available</span> : null}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3 pt-1">

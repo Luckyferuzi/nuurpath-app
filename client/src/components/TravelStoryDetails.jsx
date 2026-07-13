@@ -21,6 +21,11 @@ const DEFAULT_COMMENT_FORM = {
   message: '',
 };
 
+const ICONS = {
+  heartFilled: '\u2665',
+  heartOutline: '\u2661',
+};
+
 const TravelStoryDetails = () => {
   const { id } = useParams();
   const { user } = useAuth();
@@ -35,6 +40,8 @@ const TravelStoryDetails = () => {
   const [videoSubmitting, setVideoSubmitting] = useState(false);
   const [hasLiked, setHasLiked] = useState(false);
   const [hasTrackedVideo, setHasTrackedVideo] = useState(false);
+  const signedInDisplayName = String(user?.username || user?.name || user?.email || '').trim();
+  const isSignedIn = Boolean(user?.id);
 
   useEffect(() => {
     setHasLiked(hasTrackedMediaPostInteraction(id, 'LIKE'));
@@ -42,15 +49,15 @@ const TravelStoryDetails = () => {
   }, [id]);
 
   useEffect(() => {
-    setCommentForm((currentForm) => (
-      currentForm.authorName
-        ? currentForm
-        : {
-            ...currentForm,
-            authorName: user?.name || '',
-          }
-    ));
-  }, [user?.name]);
+    if (!isSignedIn || !signedInDisplayName) {
+      return;
+    }
+
+    setCommentForm((currentForm) => ({
+      ...currentForm,
+      authorName: signedInDisplayName,
+    }));
+  }, [isSignedIn, signedInDisplayName]);
 
   useEffect(() => {
     const fetchStory = async () => {
@@ -76,6 +83,7 @@ const TravelStoryDetails = () => {
     }
 
     setLikeSubmitting(true);
+    setCommentError(null);
 
     try {
       const response = await axios.post(`/media-posts/${id}/interactions`, {
@@ -104,6 +112,8 @@ const TravelStoryDetails = () => {
     if (!story?.videoUrl) {
       return;
     }
+
+    setCommentError(null);
 
     try {
       if (!hasTrackedVideo && !videoSubmitting) {
@@ -142,7 +152,11 @@ const TravelStoryDetails = () => {
     setCommentMessage(null);
 
     try {
-      const response = await axios.post(`/media-posts/${id}/comments`, commentForm);
+      const payload = {
+        ...commentForm,
+        authorName: isSignedIn ? signedInDisplayName : commentForm.authorName,
+      };
+      const response = await axios.post(`/media-posts/${id}/comments`, payload);
 
       setStory((currentStory) => (
         currentStory
@@ -155,6 +169,7 @@ const TravelStoryDetails = () => {
       ));
       setCommentForm((currentForm) => ({
         ...currentForm,
+        authorName: isSignedIn ? signedInDisplayName : currentForm.authorName,
         message: '',
       }));
       setCommentMessage('Your reply is now part of this story.');
@@ -171,8 +186,8 @@ const TravelStoryDetails = () => {
         <div className="animate-pulse space-y-6">
           <div className="h-56 rounded-[1.75rem] bg-white" />
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_360px]">
-            <div className="h-[32rem] rounded-[1.75rem] bg-white" />
-            <div className="h-[32rem] rounded-[1.75rem] bg-white" />
+            <div className="h-[28rem] rounded-[1.75rem] bg-white" />
+            <div className="h-[28rem] rounded-[1.75rem] bg-white" />
           </div>
         </div>
       </PublicPageShell>
@@ -195,23 +210,7 @@ const TravelStoryDetails = () => {
         <PublicPageHeader
           eyebrow="Travel Story"
           title={story.title}
-          description={story.caption}
-          aside={(
-            <>
-              <div className="rounded-[1.35rem] border border-[#ece4d6] bg-[#fbfaf7] p-4">
-                <div className="text-xs font-black uppercase tracking-[0.2em] text-[#8a7240]">Likes</div>
-                <div className="mt-3 text-3xl font-black text-[#101c2d]">{story.engagement?.likes || 0}</div>
-              </div>
-              <div className="rounded-[1.35rem] border border-[#ece4d6] bg-[#fbfaf7] p-4">
-                <div className="text-xs font-black uppercase tracking-[0.2em] text-[#8a7240]">Comments</div>
-                <div className="mt-3 text-3xl font-black text-[#101c2d]">{story.engagement?.comments || 0}</div>
-              </div>
-              <div className="rounded-[1.35rem] border border-[#ece4d6] bg-[#fbfaf7] p-4">
-                <div className="text-xs font-black uppercase tracking-[0.2em] text-[#8a7240]">Video opens</div>
-                <div className="mt-3 text-3xl font-black text-[#101c2d]">{story.engagement?.videoViews || 0}</div>
-              </div>
-            </>
-          )}
+          description="Read the full update, react to the post, and continue only when you are ready for the next step."
         />
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_380px]">
@@ -219,8 +218,8 @@ const TravelStoryDetails = () => {
             <MediaPostImageCarousel
               images={getMediaPostImageUrls(story)}
               title={story.title}
-              className="h-[24rem] border-b border-[#eee6d8] sm:h-[30rem] lg:h-[34rem]"
-              imageClassName="h-full w-full object-contain"
+              className="h-[21rem] border-b border-[#eee6d8] bg-[#f7f3ea] sm:h-[24rem] lg:h-[28rem]"
+              imageClassName="h-full w-full object-contain p-3 sm:p-4"
             />
 
             <div className="space-y-5 p-6 sm:p-8">
@@ -241,23 +240,30 @@ const TravelStoryDetails = () => {
               </div>
 
               <div className="rounded-[1.4rem] border border-[#ede5d5] bg-[#fbfaf7] p-5">
-                <h2 className="text-lg font-black text-[#101c2d]">Story summary</h2>
+                <h2 className="text-lg font-black text-[#101c2d]">Story update</h2>
                 <p className="mt-3 text-sm leading-7 text-[#5f6774]">{story.caption}</p>
               </div>
 
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap items-center gap-4 text-sm font-semibold text-[#67707e]">
                 <button
                   type="button"
                   onClick={handleLike}
                   disabled={hasLiked || likeSubmitting}
-                  className={`rounded-full px-5 py-3 text-sm font-black uppercase tracking-[0.14em] transition ${
+                  className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 transition ${
                     hasLiked
-                      ? 'bg-[#0B1C3E] text-white'
+                      ? 'bg-[#fff3f5] text-[#b42318]'
                       : 'border border-[#d7cdbb] bg-white text-[#101c2d] hover:bg-[#faf8f3]'
                   } disabled:cursor-not-allowed disabled:opacity-80`}
                 >
-                  {hasLiked ? 'Liked' : likeSubmitting ? 'Saving...' : 'Like story'}
+                  <span className={`text-lg leading-none ${hasLiked ? 'text-[#b42318]' : 'text-[#101c2d]'}`}>
+                    {hasLiked ? ICONS.heartFilled : ICONS.heartOutline}
+                  </span>
+                  <span>{likeSubmitting ? '...' : story.engagement?.likes || 0}</span>
                 </button>
+                <span>{story.engagement?.comments || 0} comments</span>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
                 {story.videoUrl ? (
                   <button
                     type="button"
@@ -302,16 +308,23 @@ const TravelStoryDetails = () => {
 
               <form onSubmit={handleCommentSubmit} className="mt-5 space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="block">
-                    <span className="mb-2 block text-sm font-semibold text-[#5b6472]">Name</span>
-                    <input
-                      type="text"
-                      value={commentForm.authorName}
-                      onChange={(event) => setCommentForm((currentForm) => ({ ...currentForm, authorName: event.target.value }))}
-                      className="w-full rounded-2xl border border-[#d8cfbf] bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#8a7240] focus:bg-white"
-                      required
-                    />
-                  </label>
+                  {isSignedIn ? (
+                    <div className="rounded-[1.2rem] border border-[#e7dfcf] bg-[#fbfaf7] px-4 py-3 sm:col-span-2">
+                      <span className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7240]">Replying as</span>
+                      <div className="mt-2 text-sm font-bold text-[#101c2d]">{signedInDisplayName}</div>
+                    </div>
+                  ) : (
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-semibold text-[#5b6472]">Name</span>
+                      <input
+                        type="text"
+                        value={commentForm.authorName}
+                        onChange={(event) => setCommentForm((currentForm) => ({ ...currentForm, authorName: event.target.value }))}
+                        className="w-full rounded-2xl border border-[#d8cfbf] bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#8a7240] focus:bg-white"
+                        required
+                      />
+                    </label>
+                  )}
                   <label className="block">
                     <span className="mb-2 block text-sm font-semibold text-[#5b6472]">Location</span>
                     <input
@@ -367,7 +380,7 @@ const TravelStoryDetails = () => {
                       <div>
                         <h3 className="text-sm font-black text-[#101c2d]">{comment.authorDisplayName || comment.authorName}</h3>
                         <p className="mt-1 text-xs text-[#7a828f]">
-                          {[comment.authorLocation, formatMediaPostRelativeTime(comment.createdAt)].filter(Boolean).join(' • ')}
+                          {[comment.authorLocation, formatMediaPostRelativeTime(comment.createdAt)].filter(Boolean).join(' - ')}
                         </p>
                       </div>
                     </div>
@@ -402,8 +415,8 @@ const TravelStoryDetails = () => {
                     <MediaPostImageCarousel
                       images={getMediaPostImageUrls(relatedStory)}
                       title={relatedStory.title}
-                      className="h-64 border-b border-[#eee6d8]"
-                      imageClassName="h-full w-full object-contain"
+                      className="h-56 border-b border-[#eee6d8] bg-[#f7f3ea] sm:h-60"
+                      imageClassName="h-full w-full object-contain p-3"
                     />
                   </Link>
                   <div className="space-y-3 p-4">

@@ -474,7 +474,7 @@ router.post('/:id/comments', softAuth, async (req, res) => {
             return sendValidationError(res, 'Comment message must be 800 characters or fewer.');
         }
 
-        const fallbackAuthorName = toTrimmedString(req.user?.name);
+        const fallbackAuthorName = toTrimmedString(req.user?.username || req.user?.name);
         const authorName = toTrimmedString(req.body?.authorName || req.body?.name) || fallbackAuthorName;
         if (!authorName) {
             return sendValidationError(res, 'Your name is required before sending a comment.');

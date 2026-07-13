@@ -160,6 +160,7 @@ router.get('/me', auth, async (req, res) => {
             select: {
                 id: true,
                 name: true,
+                username: true,
                 email: true,
                 role: true,
                 profilePicture: true,

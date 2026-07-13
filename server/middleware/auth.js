@@ -59,15 +59,16 @@ async function getVerifiedUserFromToken(token) {
     throw createAuthError('Token is not valid');
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: normalizedUser.id },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      passwordChangedAt: true,
-    },
+    const user = await prisma.user.findUnique({
+        where: { id: normalizedUser.id },
+        select: {
+            id: true,
+            name: true,
+            username: true,
+            email: true,
+            role: true,
+            passwordChangedAt: true,
+        },
   });
 
   if (!user) {
@@ -83,12 +84,13 @@ async function getVerifiedUserFromToken(token) {
   }
 
   return {
-    id: user.id,
-    userId: user.id,
-    name: user.name,
-    email: user.email,
-    role: String(user.role || 'user').toLowerCase(),
-  };
+        id: user.id,
+        userId: user.id,
+        name: user.name,
+        username: user.username,
+        email: user.email,
+        role: String(user.role || 'user').toLowerCase(),
+    };
 }
 
 async function auth(req, res, next) {
