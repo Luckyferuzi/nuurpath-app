@@ -45,7 +45,7 @@ const PackageCard = ({ pkg, wishlist, toggleWishlist }) => {
 
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-[1.55rem] border border-[#e5dece] bg-white shadow-[0_14px_34px_rgba(16,28,45,0.05)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_18px_44px_rgba(16,28,45,0.08)]">
-      <div className="grid grid-cols-[116px_minmax(0,1fr)] gap-4 p-4 sm:hidden">
+      <div className="grid grid-cols-[148px_minmax(0,1fr)] gap-3 p-4 sm:hidden">
         <Link to={`/packages/${packageId}`} className="relative block overflow-hidden rounded-[1.15rem] border border-[#ece4d6] bg-[#f4efe5]">
           {pkg.isFeatured ? (
             <span className="absolute left-2 top-2 z-10 rounded-full bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-[#0B1C3E] shadow-sm">
@@ -68,7 +68,7 @@ const PackageCard = ({ pkg, wishlist, toggleWishlist }) => {
           <img
             src={pkg.images && pkg.images.length > 0 ? getImageUrl(pkg.images[0]) : 'https://placehold.co/600x400?text=No+Image'}
             alt={pkg.title}
-            className="h-full min-h-[168px] w-full object-cover"
+            className="h-full min-h-[196px] w-full object-cover"
             loading="lazy"
             decoding="async"
           />

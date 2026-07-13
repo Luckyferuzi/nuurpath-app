@@ -298,12 +298,12 @@ const PackageDetails = () => {
         <div className="grid gap-6 lg:grid-cols-[380px_minmax(0,1fr)] lg:items-start">
           <div>
             <div className="relative overflow-hidden rounded-[1.55rem] border border-[#ece4d6] bg-[#f5f0e6] shadow-sm">
-              <div className="h-[280px] overflow-hidden sm:h-[320px] lg:h-[360px]">
+              <div className="flex h-[320px] items-center justify-center overflow-hidden bg-[#f5f0e6] p-3 sm:h-[320px] sm:p-0 lg:h-[360px]">
                 {pkg.images && pkg.images.length > 0 ? (
                   <img
                     src={getImageUrl(pkg.images[0])}
                     alt={pkg.title}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-contain sm:object-cover"
                     fetchPriority="high"
                     decoding="async"
                     onError={(e) => { e.target.style.display = 'none'; }}

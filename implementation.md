@@ -1323,6 +1323,9 @@ Frontend:
 - Refined the mobile package presentation further by:
   - reshaping the homepage featured-package card into a more compact phone-friendly split layout
   - simplifying mobile package-list cards into calmer image-and-summary rows instead of heavier stacked blocks
+- Corrected mobile package image treatment after review by:
+  - widening the image area on mobile package-list cards so the package feels more visible
+  - switching the package-details hero image to full-image mobile presentation instead of cropped mobile framing
 
 ### Implementation Notes
 
