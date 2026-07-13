@@ -8,6 +8,7 @@ import {
   StaffFilterPills,
   StaffMetricCard,
   StaffPageShell,
+  StaffSectionTabs,
 } from './staff/WorkspacePrimitives.jsx';
 
 const ACCOUNT_FILTERS = [
@@ -171,6 +172,7 @@ const ManageUsers = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [activePanel, setActivePanel] = useState('overview');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -268,6 +270,20 @@ const ManageUsers = () => {
     setSaving(false);
   };
 
+  const openCreatePanel = () => {
+    setFormData({
+      name: '',
+      email: '',
+      password: '',
+      role: 'user',
+    });
+    setEditingId(null);
+    setShowForm(true);
+    setActivePanel('access');
+    setMessage(null);
+    setError(null);
+  };
+
   const handleEdit = (account) => {
     setFormData({
       name: account.name || '',
@@ -277,6 +293,7 @@ const ManageUsers = () => {
     });
     setEditingId(account.id);
     setShowForm(true);
+    setActivePanel('access');
     setMessage(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -352,21 +369,16 @@ const ManageUsers = () => {
 
   return (
     <StaffPageShell
-      eyebrow="People and Access"
-      title="Users and Staff"
-      description="Keep customer accounts, managers, and admins clearly separated so access control stays easy to follow."
+      eyebrow="Access"
+      title="Accounts"
+      description="Keep customer accounts, managers, and admins in cleaner work areas so access control stays easier to follow."
       actions={(
         <button
           type="button"
-          onClick={() => {
-            setShowForm((visible) => !visible);
-            if (showForm) {
-              resetForm();
-            }
-          }}
+          onClick={openCreatePanel}
           className="rounded-full bg-[#101c2d] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#16263b]"
         >
-          {showForm ? 'Close Form' : 'Add Customer or Manager'}
+          {editingId ? 'Start New Account' : 'Add Customer or Manager'}
         </button>
       )}
     >
@@ -381,13 +393,85 @@ const ManageUsers = () => {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {metrics.map((metric) => (
-          <StaffMetricCard key={metric.label} label={metric.label} value={metric.value} hint={metric.hint} tone={metric.tone} />
-        ))}
-      </div>
+      <StaffSectionTabs
+        tabs={[
+          { value: 'overview', label: 'Overview' },
+          { value: 'access', label: editingId ? 'Edit Account' : 'Add Account' },
+          { value: 'directory', label: 'Directory', count: users.length },
+        ]}
+        value={activePanel}
+        onChange={setActivePanel}
+      />
 
-      {showForm && (
+      {activePanel === 'overview' && (
+        <>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {metrics.map((metric) => (
+              <StaffMetricCard key={metric.label} label={metric.label} value={metric.value} hint={metric.hint} tone={metric.tone} />
+            ))}
+          </div>
+
+          <StaffCardSection
+            title="Account workspace"
+            description="Separate account creation, access rules, and list browsing so staff management feels more controlled."
+          >
+            <div className="grid gap-4 xl:grid-cols-3">
+              <article className="rounded-[1.5rem] border border-[#ece4d2] bg-[#fbfaf7] p-5">
+                <div className="text-xs font-black uppercase tracking-[0.2em] text-[#8a7443]">Create access</div>
+                <h3 className="mt-3 text-xl font-black text-[#101c2d]">Customer or manager</h3>
+                <p className="mt-3 text-sm leading-6 text-[#5b6472]">
+                  Create customer and manager accounts here without mixing this work into the public website experience.
+                </p>
+                <button
+                  type="button"
+                  onClick={openCreatePanel}
+                  className="mt-5 rounded-full bg-[#101c2d] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#16263b]"
+                >
+                  Open Account Form
+                </button>
+              </article>
+
+              <article className="rounded-[1.5rem] border border-[#ece4d2] bg-[#fbfaf7] p-5">
+                <div className="text-xs font-black uppercase tracking-[0.2em] text-[#8a7443]">Staff roles</div>
+                <h3 className="mt-3 text-xl font-black text-[#101c2d]">Managers and admins</h3>
+                <p className="mt-3 text-sm leading-6 text-[#5b6472]">
+                  Review staff accounts separately so operational access stays visible without customer accounts crowding the view.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRoleFilter('staff');
+                    setActivePanel('directory');
+                  }}
+                  className="mt-5 rounded-full border border-[#101c2d] px-4 py-2 text-sm font-bold text-[#101c2d] transition hover:bg-[#101c2d] hover:text-white"
+                >
+                  Open Staff Directory
+                </button>
+              </article>
+
+              <article className="rounded-[1.5rem] border border-[#ece4d2] bg-[#fbfaf7] p-5">
+                <div className="text-xs font-black uppercase tracking-[0.2em] text-[#8a7443]">Customer accounts</div>
+                <h3 className="mt-3 text-xl font-black text-[#101c2d]">Public users</h3>
+                <p className="mt-3 text-sm leading-6 text-[#5b6472]">
+                  Review customer accounts on their own so support work is not buried under manager and admin access tasks.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRoleFilter('customers');
+                    setActivePanel('directory');
+                  }}
+                  className="mt-5 rounded-full border border-[#101c2d] px-4 py-2 text-sm font-bold text-[#101c2d] transition hover:bg-[#101c2d] hover:text-white"
+                >
+                  Open Customer Directory
+                </button>
+              </article>
+            </div>
+          </StaffCardSection>
+        </>
+      )}
+
+      {activePanel === 'access' && showForm && (
         <StaffCardSection
           title={editingId ? 'Edit Account' : 'Create Customer or Manager'}
           description={editingId
@@ -466,7 +550,10 @@ const ManageUsers = () => {
               </button>
               <button
                 type="button"
-                onClick={resetForm}
+                onClick={() => {
+                  resetForm();
+                  setActivePanel('overview');
+                }}
                 className="rounded-full border border-gray-300 px-6 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
               >
                 Cancel
@@ -476,117 +563,137 @@ const ManageUsers = () => {
         </StaffCardSection>
       )}
 
-      <StaffCardSection
-        title="Filter and Search"
-        description="These filters organize the currently loaded account page so staff and customer records do not feel mixed together."
-      >
-        <div className="space-y-4">
-          <StaffFilterPills
-            options={getAccountFilterOptions(users)}
-            value={roleFilter}
-            onChange={setRoleFilter}
-          />
-          <label className="block">
-            <span className="mb-2 block text-sm font-semibold text-gray-700">Search by name, email, or role</span>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search accounts on this page..."
-              className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
-            />
-          </label>
-        </div>
-      </StaffCardSection>
-
-      <div className="grid gap-6 xl:grid-cols-2">
-        <StaffCardSection
-          title="Staff Accounts"
-          description="Admins and managers are grouped here so operational access is easy to inspect."
-        >
-          {staffAccounts.length === 0 ? (
-            <StaffEmptyState
-              title="No staff accounts in this view"
-              description="Try another filter or move to another page if you are looking for older staff records."
-            />
-          ) : (
-            <div className="space-y-4">
-              {staffAccounts.map((account) => {
-                const accountId = String(account.id);
-                const currentUserId = String(currentUser?._id || currentUser?.id || '');
-
-                return (
-                  <AccountCard
-                    key={account.id}
-                    account={account}
-                    isCurrentUser={accountId === currentUserId}
-                    canDelete={accountId !== currentUserId}
-                    onEdit={handleEdit}
-                    onDelete={handleDelete}
-                  />
-                );
-              })}
-            </div>
+      {activePanel === 'access' && !showForm && (
+        <StaffEmptyState
+          title="No account form open"
+          description="Start a new customer or manager account, or choose an existing account from the directory when you want to edit it."
+          action={(
+            <button
+              type="button"
+              onClick={openCreatePanel}
+              className="rounded-full bg-[#101c2d] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#16263b]"
+            >
+              Add Account
+            </button>
           )}
-        </StaffCardSection>
+        />
+      )}
 
-        <StaffCardSection
-          title="Customer Accounts"
-          description="Public website users are shown separately so customer support does not get buried inside staff management."
-        >
-          {customerAccounts.length === 0 ? (
-            <StaffEmptyState
-              title="No customer accounts in this view"
-              description="Try another filter or move to another page if you are looking for older customer records."
-            />
-          ) : (
+      {activePanel === 'directory' && (
+        <>
+          <StaffCardSection
+            title="Filter and Search"
+            description="These filters organize the currently loaded account page so staff and customer records do not feel mixed together."
+          >
             <div className="space-y-4">
-              {customerAccounts.map((account) => {
-                const accountId = String(account.id);
-                const currentUserId = String(currentUser?._id || currentUser?.id || '');
+              <StaffFilterPills
+                options={getAccountFilterOptions(users)}
+                value={roleFilter}
+                onChange={setRoleFilter}
+              />
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-gray-700">Search by name, email, or role</span>
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Search accounts on this page..."
+                  className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                />
+              </label>
+            </div>
+          </StaffCardSection>
 
-                return (
-                  <AccountCard
-                    key={account.id}
-                    account={account}
-                    isCurrentUser={accountId === currentUserId}
-                    canDelete={accountId !== currentUserId}
-                    onEdit={handleEdit}
-                    onDelete={handleDelete}
-                  />
-                );
-              })}
-            </div>
-          )}
-        </StaffCardSection>
-      </div>
+          <div className="grid gap-6 xl:grid-cols-2">
+            <StaffCardSection
+              title="Staff Accounts"
+              description="Admins and managers are grouped here so operational access is easy to inspect."
+            >
+              {staffAccounts.length === 0 ? (
+                <StaffEmptyState
+                  title="No staff accounts in this view"
+                  description="Try another filter or move to another page if you are looking for older staff records."
+                />
+              ) : (
+                <div className="space-y-4">
+                  {staffAccounts.map((account) => {
+                    const accountId = String(account.id);
+                    const currentUserId = String(currentUser?._id || currentUser?.id || '');
 
-      {totalPages > 1 && (
-        <StaffCardSection title="Browse More Accounts" description="Move between pages to review older records without overloading one screen.">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="text-sm text-[#67707e]">
-              Page <span className="font-bold text-[#101c2d]">{currentPage}</span> of <span className="font-bold text-[#101c2d]">{totalPages}</span>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
-                disabled={currentPage === 1}
-                className="rounded-full border border-gray-300 px-5 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="rounded-full bg-[#101c2d] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#16263b] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
+                    return (
+                      <AccountCard
+                        key={account.id}
+                        account={account}
+                        isCurrentUser={accountId === currentUserId}
+                        canDelete={accountId !== currentUserId}
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </StaffCardSection>
+
+            <StaffCardSection
+              title="Customer Accounts"
+              description="Public website users are shown separately so customer support does not get buried inside staff management."
+            >
+              {customerAccounts.length === 0 ? (
+                <StaffEmptyState
+                  title="No customer accounts in this view"
+                  description="Try another filter or move to another page if you are looking for older customer records."
+                />
+              ) : (
+                <div className="space-y-4">
+                  {customerAccounts.map((account) => {
+                    const accountId = String(account.id);
+                    const currentUserId = String(currentUser?._id || currentUser?.id || '');
+
+                    return (
+                      <AccountCard
+                        key={account.id}
+                        account={account}
+                        isCurrentUser={accountId === currentUserId}
+                        canDelete={accountId !== currentUserId}
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </StaffCardSection>
           </div>
-        </StaffCardSection>
+
+          {totalPages > 1 && (
+            <StaffCardSection title="Browse More Accounts" description="Move between pages to review older records without overloading one screen.">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="text-sm text-[#67707e]">
+                  Page <span className="font-bold text-[#101c2d]">{currentPage}</span> of <span className="font-bold text-[#101c2d]">{totalPages}</span>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="rounded-full border border-gray-300 px-5 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="rounded-full bg-[#101c2d] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#16263b] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </StaffCardSection>
+          )}
+        </>
       )}
     </StaffPageShell>
   );

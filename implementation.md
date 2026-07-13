@@ -14,9 +14,9 @@ Current status:
 - Phase 7 is completed.
 - Phase 8 is completed.
 - Phase 9 is completed.
-- Phase 10 is planned.
-- Phase 11 is planned.
-- Phase 12 is planned.
+- Phase 10 is completed.
+- Phase 11 is completed.
+- Phase 12 is completed.
 - When resuming work later, read this file first and then continue from the next approved phase.
 
 ## How To Use This Document
@@ -1553,7 +1553,7 @@ Frontend:
 ## Phase 12: Admin Decluttering and Workspace Cleanup
 
 Status:
-- Planned
+- Completed
 
 ### Objective
 
@@ -1638,6 +1638,42 @@ Frontend:
 
 - Admin decluttering should prefer separation by task and intention rather than only visual restyling.
 - Keep admin powerful, but make the workspace easier to scan and less mentally heavy.
+
+### Completed Work
+
+- Simplified the main staff navigation language so sidebar labels and route descriptions are shorter, easier to scan, and less repetitive.
+- Reworked the staff workspace shell so the desktop sidebar now stays fixed more reliably while the main content remains the primary reading and working area.
+- Reduced sidebar noise by:
+  - showing compact labels for all destinations
+  - showing supporting descriptions only for the active item
+  - adding lighter same-section quick links under the page header for faster movement on both desktop and mobile
+- Added shared staff section tabs in the workspace primitives so heavier admin pages can split work by task instead of stacking everything into one vertical flow.
+- Rebuilt package management into calmer task-based areas:
+  - overview
+  - create or edit
+  - reorder
+  - catalog
+- Split the package form itself into smaller working sections:
+  - summary
+  - route
+  - itinerary
+  - visibility
+- Kept package management aligned with real travel complexity by preserving structured route stops and structured itinerary editing inside the new segmented package workflow.
+- Reworked services management into clearer areas:
+  - overview
+  - add or edit
+  - catalog
+- Reworked user and staff management into clearer areas:
+  - overview
+  - account access form
+  - directory
+- Preserved the existing backend and operational capabilities while reducing the amount of information visible at one time, which improves mobile readability and lowers long-page fatigue.
+- Verified the client build successfully after the Phase 12 changes.
+
+### Additional Notes
+
+- This phase focused on decluttering and workflow separation, not on introducing a new visual theme.
+- The package workspace received the deepest restructuring because it was the heaviest single admin page and had to continue supporting multi-stop travel products.
 
 ---
 

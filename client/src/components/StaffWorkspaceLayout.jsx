@@ -17,6 +17,9 @@ const StaffWorkspaceLayout = () => {
   const navigationSections = getStaffWorkspaceSections(role);
   const pageMeta = getStaffPageMeta(location.pathname);
   const displayName = user?.name || user?.email || 'Staff User';
+  const activeSection = navigationSections.find((section) => (
+    section.items.some((item) => isStaffWorkspaceItemActive(location.pathname, item.to))
+  )) || navigationSections[0];
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -38,9 +41,9 @@ const StaffWorkspaceLayout = () => {
         />
       )}
 
-      <div className="mx-auto flex min-h-screen max-w-[1600px]">
+      <div className="mx-auto flex min-h-screen max-w-[1560px] items-start">
         <aside
-          className={`fixed inset-y-0 left-0 z-50 w-[320px] max-w-[86vw] transform border-r border-[#1e2a3c] bg-[#101c2d] text-white shadow-2xl transition-transform duration-300 lg:static lg:max-w-none lg:translate-x-0 lg:shadow-none ${
+          className={`fixed inset-y-0 left-0 z-50 w-[290px] max-w-[84vw] transform border-r border-[#1e2a3c] bg-[#101c2d] text-white shadow-2xl transition-transform duration-300 lg:sticky lg:top-0 lg:inset-y-auto lg:left-auto lg:h-screen lg:max-w-none lg:translate-x-0 lg:shadow-none ${
             mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
@@ -48,7 +51,7 @@ const StaffWorkspaceLayout = () => {
             <div className="border-b border-white/10 px-6 py-6">
               <Link to="/admin" className="block">
                 <p className="text-xs font-black uppercase tracking-[0.35em] text-[#d8c79a]">NuurPath</p>
-                <h1 className="mt-2 text-2xl font-black tracking-[0.18em] text-white">Staff Workspace</h1>
+                <h1 className="mt-2 text-2xl font-black tracking-[0.12em] text-white">Staff Workspace</h1>
               </Link>
               <div className="mt-6 rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
                 <div className="text-xs font-black uppercase tracking-[0.22em] text-white/60">Signed in as</div>
@@ -79,10 +82,19 @@ const StaffWorkspaceLayout = () => {
                               : 'border border-transparent text-white/85 hover:border-white/10 hover:bg-white/6 hover:text-white'
                           }`}
                         >
-                          <div className="text-sm font-bold">{item.label}</div>
-                          <div className={`mt-1 text-xs leading-5 ${isActive ? 'text-[#3a4658]' : 'text-white/60'}`}>
-                            {item.description}
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-sm font-bold">{item.label}</div>
+                            {isActive && (
+                              <span className="rounded-full bg-white/35 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#101c2d]">
+                                Here
+                              </span>
+                            )}
                           </div>
+                          {isActive && (
+                            <div className="mt-1 text-xs leading-5 text-[#3a4658]">
+                              {item.description}
+                            </div>
+                          )}
                         </Link>
                       );
                     })}
@@ -137,6 +149,11 @@ const StaffWorkspaceLayout = () => {
                 <div className="min-w-0">
                   <div className="text-xs font-black uppercase tracking-[0.24em] text-[#8a7443]">NuurPath Staff</div>
                   <h2 className="truncate text-xl font-black text-[#101c2d] sm:text-2xl">{pageMeta.title}</h2>
+                  {activeSection && (
+                    <div className="mt-2 inline-flex rounded-full border border-[#e4ddcf] bg-[#fcfbf8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#7f6a3d]">
+                      {activeSection.label}
+                    </div>
+                  )}
                   <p className="mt-1 hidden max-w-3xl text-sm leading-6 text-[#67707e] md:block">
                     {pageMeta.description}
                   </p>
@@ -148,6 +165,29 @@ const StaffWorkspaceLayout = () => {
                 </div>
               </div>
             </div>
+            {activeSection?.items?.length > 1 && (
+              <div className="border-t border-[#eee7d9] bg-[#f9f6ef]/80">
+                <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-4 py-3 sm:px-6 lg:px-8">
+                  {activeSection.items.map((item) => {
+                    const isActive = isStaffWorkspaceItemActive(location.pathname, item.to);
+
+                    return (
+                      <Link
+                        key={item.to}
+                        to={item.to}
+                        className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition ${
+                          isActive
+                            ? 'bg-[#101c2d] text-white'
+                            : 'border border-[#ddd3bf] bg-white text-[#4f5763] hover:border-[#bca77a] hover:text-[#101c2d]'
+                        }`}
+                      >
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </header>
 
           <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">

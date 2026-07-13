@@ -6,91 +6,91 @@ export const STAFF_WORKSPACE_SECTIONS = [
       {
         to: '/admin',
         label: 'Dashboard',
-        description: 'See the big picture and active queues.',
+        description: 'Requests, workload, and daily focus.',
         roles: ['admin', 'manager'],
       },
     ],
   },
   {
     id: 'follow-up',
-    label: 'Request Follow-Up',
+    label: 'Requests',
     items: [
       {
         to: '/admin/package-bookings',
         label: 'Package Requests',
-        description: 'Travel package leads and passport details.',
+        description: 'Package leads and passport details.',
         roles: ['admin', 'manager'],
       },
       {
         to: '/admin/flight-bookings',
         label: 'Flight Requests',
-        description: 'Routes, quotes, and travel follow-up.',
+        description: 'Routes, dates, and quote follow-up.',
         roles: ['admin', 'manager'],
       },
       {
         to: '/admin/service-inquiries',
         label: 'Service Requests',
-        description: 'Visa, passport, and document support.',
+        description: 'Visa, passport, and document help.',
         roles: ['admin', 'manager'],
       },
       {
         to: '/admin/consultations',
         label: 'Consultations',
-        description: 'Private consultation bookings and notes.',
+        description: 'Booked sessions and notes.',
         roles: ['admin', 'manager'],
       },
       {
         to: '/admin/chat',
         label: 'Customer Chat',
-        description: 'Live staff-to-customer conversations.',
+        description: 'Live customer conversations.',
         roles: ['admin', 'manager'],
       },
     ],
   },
   {
     id: 'content',
-    label: 'Content and Trust',
+    label: 'Content',
     items: [
       {
         to: '/admin/packages',
         label: 'Packages',
-        description: 'Manage offers, journey routes, and order.',
+        description: 'Offers, routes, and public order.',
         roles: ['admin'],
       },
       {
         to: '/admin/services',
         label: 'Services',
-        description: 'Keep support services clear and current.',
+        description: 'Public service cards and wording.',
         roles: ['admin'],
       },
       {
         to: '/admin/reviews',
         label: 'Reviews',
-        description: 'Approve social proof and testimonials.',
+        description: 'Testimonials waiting for approval.',
         roles: ['admin', 'manager'],
       },
       {
         to: '/admin/media-posts',
-        label: 'Travel Evidence',
-        description: 'Publish trusted journey proof and story posts.',
+        label: 'Travel Stories',
+        description: 'Journey proof and story posts.',
         roles: ['admin'],
       },
       {
         to: '/admin/newsletter',
         label: 'Newsletter',
-        description: 'Review subscribers and export active contacts.',
+        description: 'Subscribers and export.',
         roles: ['admin'],
       },
     ],
   },
   {
     id: 'team',
-    label: 'People',
+    label: 'Access',
     items: [
       {
         to: '/admin/users',
-        label: 'Users and Staff',
-        description: 'Separate customers, managers, and admins.',
+        label: 'Accounts',
+        description: 'Customers, managers, and admin access.',
         roles: ['admin'],
       },
     ],
@@ -100,51 +100,51 @@ export const STAFF_WORKSPACE_SECTIONS = [
 export const STAFF_PAGE_META = {
   '/admin': {
     title: 'Operations Dashboard',
-    description: 'Track request volume, follow-up queues, and where the team should focus next.',
+    description: 'Track queue pressure, workload, and where the team should focus next.',
   },
   '/admin/package-bookings': {
     title: 'Package Requests',
-    description: 'Review customer travel requests, passport details, and package follow-up from one place.',
+    description: 'Review package requests, passport details, and next-step follow-up in one place.',
   },
   '/admin/flight-bookings': {
     title: 'Flight Requests',
-    description: 'Keep flight inquiries organized with clear status, route details, and next-step follow-up.',
+    description: 'Keep flight inquiries organized with clear status, route details, and follow-up.',
   },
   '/admin/service-inquiries': {
     title: 'Service Requests',
-    description: 'Handle visa, passport, and document-support requests with less clutter and clearer urgency.',
+    description: 'Handle visa, passport, and document support requests with clearer urgency.',
   },
   '/admin/consultations': {
     title: 'Consultations',
-    description: 'See scheduled consultation requests, customer details, and internal follow-up notes quickly.',
+    description: 'See consultation bookings, customer details, and follow-up notes quickly.',
   },
   '/admin/chat': {
     title: 'Customer Chat',
-    description: 'Stay close to live customer conversations and respond without losing request context.',
+    description: 'Respond to live customer conversations without losing request context.',
   },
   '/admin/packages': {
     title: 'Packages',
-    description: 'Manage package content, route structure, and public ordering without overwhelming forms.',
+    description: 'Create, reorder, and review package content without one long page.',
   },
   '/admin/services': {
     title: 'Services',
-    description: 'Maintain service offerings while keeping related inquiries easy to reach.',
+    description: 'Maintain public services and keep related inquiries easy to reach.',
   },
   '/admin/reviews': {
     title: 'Reviews',
-    description: 'Moderate testimonials and trust content that customers see publicly.',
+    description: 'Moderate testimonials and trust content shown publicly.',
   },
   '/admin/media-posts': {
-    title: 'Travel Evidence',
-    description: 'Manage public proof posts, journey stories, and destination evidence in one place.',
+    title: 'Travel Stories',
+    description: 'Manage proof posts, journey stories, and destination evidence in one place.',
   },
   '/admin/newsletter': {
     title: 'Newsletter',
-    description: 'Track subscribers, export contacts, and keep newsletter collection operationally simple.',
+    description: 'Track subscribers, export contacts, and keep newsletter collection simple.',
   },
   '/admin/users': {
-    title: 'Users and Staff',
-    description: 'Keep customer accounts, managers, and admins clearly separated and easier to manage.',
+    title: 'Accounts',
+    description: 'Keep customers, managers, and admins clearly separated and easier to manage.',
   },
 };
 

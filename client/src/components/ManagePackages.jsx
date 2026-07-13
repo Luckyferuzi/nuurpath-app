@@ -1,5 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import axios, { resolveBackendUrl } from '../lib/api';
+import {
+  StaffCardSection,
+  StaffEmptyState,
+  StaffFilterPills,
+  StaffMetricCard,
+  StaffPageShell,
+  StaffSectionTabs,
+} from './staff/WorkspacePrimitives.jsx';
 
 const EMPTY_FORM_DATA = {
   title: '',
@@ -23,8 +32,26 @@ const PACKAGE_TYPE_OPTIONS = [
   'Custom Package',
 ];
 
+const PACKAGE_FORM_SECTIONS = [
+  { value: 'summary', label: 'Summary' },
+  { value: 'route', label: 'Route' },
+  { value: 'itinerary', label: 'Itinerary' },
+  { value: 'visibility', label: 'Visibility' },
+];
+
+const PACKAGE_CATALOG_FILTERS = [
+  { value: 'all', label: 'All packages' },
+  { value: 'featured', label: 'Featured' },
+  { value: 'multi-stop', label: 'Multi-city' },
+  { value: 'single-stop', label: 'Single stop' },
+];
+
 function getPackageId(pkg) {
   return pkg?._id || pkg?.id;
+}
+
+function getPackageImageUrl(pkg) {
+  return Array.isArray(pkg?.images) && pkg.images.length > 0 ? resolveBackendUrl(pkg.images[0]) : '';
 }
 
 function sortFeaturedPackages(packages) {
@@ -78,6 +105,45 @@ function parseJourneyStops(value) {
     notes: stop?.notes || '',
     image: stop?.image || '',
     id: stop?.id || `journey-${Date.now()}-${index}`,
+    }));
+}
+
+function isMultiStopPackage(pkg) {
+  return Array.isArray(pkg?.journeyStops) && pkg.journeyStops.length > 1;
+}
+
+function getPackageRouteSummary(pkg) {
+  if (Array.isArray(pkg?.journeyStops) && pkg.journeyStops.length > 0) {
+    return pkg.journeyStops.map((stop) => stop.city).filter(Boolean).join(' -> ');
+  }
+
+  return pkg?.destination || 'Route not provided';
+}
+
+function matchesPackageCatalogFilter(pkg, filterValue) {
+  if (filterValue === 'all') {
+    return true;
+  }
+
+  if (filterValue === 'featured') {
+    return Boolean(pkg?.isFeatured);
+  }
+
+  if (filterValue === 'multi-stop') {
+    return isMultiStopPackage(pkg);
+  }
+
+  if (filterValue === 'single-stop') {
+    return !isMultiStopPackage(pkg);
+  }
+
+  return true;
+}
+
+function getPackageCatalogFilterOptions(packages) {
+  return PACKAGE_CATALOG_FILTERS.map((option) => ({
+    ...option,
+    count: packages.filter((pkg) => matchesPackageCatalogFilter(pkg, option.value)).length,
   }));
 }
 
@@ -103,6 +169,10 @@ const ManagePackages = () => {
   const [draggedItineraryIndex, setDraggedItineraryIndex] = useState(null);
   const [draggedPackageIndex, setDraggedPackageIndex] = useState(null);
   const [draggedFeaturedIndex, setDraggedFeaturedIndex] = useState(null);
+  const [activePanel, setActivePanel] = useState('overview');
+  const [activeFormSection, setActiveFormSection] = useState('summary');
+  const [catalogSearchTerm, setCatalogSearchTerm] = useState('');
+  const [catalogFilter, setCatalogFilter] = useState('all');
 
   useEffect(() => {
     fetchPackages();
@@ -132,15 +202,64 @@ const ManagePackages = () => {
     setItineraryItems([]);
     setJourneyStops([]);
     setFormError(null);
+    setActiveFormSection('summary');
   };
 
   const baselineFeaturedPackages = useMemo(
     () => sortFeaturedPackages(packages),
     [packages]
   );
+  const filteredCatalogPackages = useMemo(() => {
+    const term = catalogSearchTerm.trim().toLowerCase();
+
+    return packages.filter((pkg) => {
+      if (!matchesPackageCatalogFilter(pkg, catalogFilter)) {
+        return false;
+      }
+
+      if (!term) {
+        return true;
+      }
+
+      return (
+        String(pkg?.title || '').toLowerCase().includes(term) ||
+        String(pkg?.destination || '').toLowerCase().includes(term) ||
+        String(pkg?.type || '').toLowerCase().includes(term) ||
+        getPackageRouteSummary(pkg).toLowerCase().includes(term)
+      );
+    });
+  }, [catalogFilter, catalogSearchTerm, packages]);
   const hasPackageOrderChanges = packageOrderDraft.map(getPackageId).join(',') !== packages.map(getPackageId).join(',');
   const hasFeaturedOrderChanges = featuredOrderDraft.map(getPackageId).join(',') !== baselineFeaturedPackages.map(getPackageId).join(',');
   const hasOrderChanges = hasPackageOrderChanges || hasFeaturedOrderChanges;
+  const packageMetrics = useMemo(() => ([
+    {
+      label: 'Total Packages',
+      value: packages.length,
+      hint: 'All public travel packages currently in the catalog.',
+      tone: 'default',
+    },
+    {
+      label: 'Featured Packages',
+      value: packages.filter((pkg) => pkg.isFeatured).length,
+      hint: 'Packages currently highlighted in the homepage featured area.',
+      tone: 'accent',
+    },
+    {
+      label: 'Multi-city Routes',
+      value: packages.filter((pkg) => isMultiStopPackage(pkg)).length,
+      hint: 'Packages already using structured route stops for more complex journeys.',
+      tone: 'warm',
+    },
+    {
+      label: 'Order Draft Changes',
+      value: hasOrderChanges ? 'Pending' : 'Saved',
+      hint: hasOrderChanges
+        ? 'There are unsaved ordering changes waiting in the reorder panel.'
+        : 'General and featured order are currently in sync.',
+      tone: hasOrderChanges ? 'warm' : 'default',
+    },
+  ]), [hasOrderChanges, packages]);
 
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target;
@@ -278,6 +397,21 @@ const ManagePackages = () => {
     setFormError(null);
     setFormSuccess('');
 
+    if (
+      !String(formData.title || '').trim() ||
+      !String(formData.description || '').trim() ||
+      !String(formData.price || '').trim() ||
+      !String(formData.destination || '').trim() ||
+      !String(formData.duration || '').trim() ||
+      !String(formData.type || '').trim()
+    ) {
+      setFormError('Complete the summary fields before saving the package.');
+      setActivePanel('create');
+      setActiveFormSection('summary');
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       const finalItinerary = itineraryItems.length > 0
         ? JSON.stringify(itineraryItems.map((item, index) => ({
@@ -361,6 +495,8 @@ const ManagePackages = () => {
     setExistingImageUrl(pkg.images && pkg.images.length > 0 ? resolveBackendUrl(pkg.images[0]) : '');
     setFormError(null);
     setFormSuccess('');
+    setActivePanel('create');
+    setActiveFormSection('summary');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -419,6 +555,18 @@ const ManagePackages = () => {
     setOrderSuccess('');
   };
 
+  const currentFormStepIndex = PACKAGE_FORM_SECTIONS.findIndex((section) => section.value === activeFormSection);
+
+  const moveFormSection = (direction) => {
+    const targetIndex = currentFormStepIndex + direction;
+
+    if (targetIndex < 0 || targetIndex >= PACKAGE_FORM_SECTIONS.length) {
+      return;
+    }
+
+    setActiveFormSection(PACKAGE_FORM_SECTIONS[targetIndex].value);
+  };
+
   const savePackageOrder = async () => {
     setIsSavingOrder(true);
     setOrderError(null);
@@ -445,522 +593,781 @@ const ManagePackages = () => {
   };
 
   if (loading) {
-    return <div className="p-10 text-center">Loading packages...</div>;
+    return <div className="p-10 text-center text-sm text-gray-500">Loading packages...</div>;
   }
 
   return (
-    <div className="container mx-auto max-w-6xl px-4 py-10">
-      <h2 className="mb-8 text-3xl font-bold text-[#0B1C3E]">Manage Packages</h2>
-
+    <StaffPageShell
+      eyebrow="Content"
+      title="Packages"
+      description="Create, reorder, and review travel packages in separate steps so the workspace stays easier to scan on both desktop and mobile."
+      actions={(
+        <>
+          <Link
+            to="/admin/package-bookings"
+            className="rounded-full border border-[#101c2d] px-5 py-3 text-sm font-bold text-[#101c2d] transition hover:bg-[#101c2d] hover:text-white"
+          >
+            Open Package Requests
+          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              resetForm();
+              setFormSuccess('');
+              setActivePanel('create');
+            }}
+            className="rounded-full bg-[#101c2d] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#16263b]"
+          >
+            {editingId ? 'Start New Package' : 'Create Package'}
+          </button>
+        </>
+      )}
+    >
       {error && (
-        <div className="mb-4 rounded-lg bg-red-100 p-3 text-red-700">{error}</div>
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">{error}</div>
+      )}
+      {formError && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">{formError}</div>
+      )}
+      {formSuccess && (
+        <div className="rounded-2xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-green-700">{formSuccess}</div>
+      )}
+      {orderError && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">{orderError}</div>
+      )}
+      {orderSuccess && (
+        <div className="rounded-2xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-green-700">{orderSuccess}</div>
       )}
 
-      <div className="mb-10 rounded-2xl border border-gray-100 bg-white p-6 shadow-md">
-        <div className="mb-6">
-          <h3 className="text-xl font-bold text-[#0B1C3E]">{editingId ? 'Edit Package' : 'Add New Package'}</h3>
-          <p className="mt-2 text-sm text-gray-600">
-            Group the package clearly so staff can understand the route, the selling points, and how it should appear publicly.
-          </p>
-        </div>
+      <StaffSectionTabs
+        tabs={[
+          { value: 'overview', label: 'Overview' },
+          { value: 'create', label: editingId ? 'Edit Package' : 'Create Package' },
+          { value: 'reorder', label: 'Reorder' },
+          { value: 'catalog', label: 'Catalog', count: packages.length },
+        ]}
+        value={activePanel}
+        onChange={setActivePanel}
+      />
 
-        {formError && (
-          <div className="mb-4 rounded-lg bg-red-100 p-3 text-red-700">{formError}</div>
-        )}
-        {formSuccess && (
-          <div className="mb-4 rounded-lg bg-green-100 p-3 text-green-700">{formSuccess}</div>
-        )}
+      {activePanel === 'overview' && (
+        <>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {packageMetrics.map((metric) => (
+              <StaffMetricCard key={metric.label} label={metric.label} value={metric.value} hint={metric.hint} tone={metric.tone} />
+            ))}
+          </div>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
-          <section className="rounded-xl border border-gray-100 bg-gray-50 p-5">
-            <h4 className="mb-4 text-lg font-bold text-[#0B1C3E]">Basic Information</h4>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-gray-700">Package title</span>
-                <input
-                  name="title"
-                  value={formData.title}
-                  onChange={handleChange}
-                  placeholder="Premium Umrah Package - December 2026"
-                  className="w-full rounded-lg border border-gray-300 p-3"
-                  required
-                />
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-gray-700">Package type</span>
-                <input
-                  list="package-type-options"
-                  name="type"
-                  value={formData.type}
-                  onChange={handleChange}
-                  placeholder="Umrah, Hajj, Holiday..."
-                  className="w-full rounded-lg border border-gray-300 p-3"
-                  required
-                />
-                <datalist id="package-type-options">
-                  {PACKAGE_TYPE_OPTIONS.map((option) => (
-                    <option key={option} value={option} />
-                  ))}
-                </datalist>
-              </label>
+          <StaffCardSection
+            title="Package workspace"
+            description="Open only the part of package management you need right now instead of working through one very long page."
+          >
+            <div className="grid gap-4 xl:grid-cols-3">
+              <article className="rounded-[1.5rem] border border-[#ece4d2] bg-[#fbfaf7] p-5">
+                <div className="text-xs font-black uppercase tracking-[0.2em] text-[#8a7443]">Create or edit</div>
+                <h3 className="mt-3 text-xl font-black text-[#101c2d]">Package details</h3>
+                <p className="mt-3 text-sm leading-6 text-[#5b6472]">
+                  Work through summary, route, itinerary, and visibility in smaller steps instead of one long form.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!editingId) {
+                      resetForm();
+                    }
+                    setActivePanel('create');
+                  }}
+                  className="mt-5 rounded-full bg-[#101c2d] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#16263b]"
+                >
+                  Open Package Form
+                </button>
+              </article>
+
+              <article className="rounded-[1.5rem] border border-[#ece4d2] bg-[#fbfaf7] p-5">
+                <div className="text-xs font-black uppercase tracking-[0.2em] text-[#8a7443]">Public order</div>
+                <h3 className="mt-3 text-xl font-black text-[#101c2d]">Homepage and catalog order</h3>
+                <p className="mt-3 text-sm leading-6 text-[#5b6472]">
+                  Adjust general package order separately from featured order, then save both together only once.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActivePanel('reorder')}
+                  className="mt-5 rounded-full border border-[#101c2d] px-4 py-2 text-sm font-bold text-[#101c2d] transition hover:bg-[#101c2d] hover:text-white"
+                >
+                  Open Reorder Panel
+                </button>
+              </article>
+
+              <article className="rounded-[1.5rem] border border-[#ece4d2] bg-[#fbfaf7] p-5">
+                <div className="text-xs font-black uppercase tracking-[0.2em] text-[#8a7443]">Live catalog</div>
+                <h3 className="mt-3 text-xl font-black text-[#101c2d]">Review package cards</h3>
+                <p className="mt-3 text-sm leading-6 text-[#5b6472]">
+                  Search existing packages, open one for editing, or remove one without hunting through the form area.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActivePanel('catalog')}
+                  className="mt-5 rounded-full border border-[#101c2d] px-4 py-2 text-sm font-bold text-[#101c2d] transition hover:bg-[#101c2d] hover:text-white"
+                >
+                  Open Catalog
+                </button>
+              </article>
             </div>
+          </StaffCardSection>
 
-            <label className="mt-4 block">
-              <span className="mb-2 block text-sm font-semibold text-gray-700">Description</span>
-              <textarea
-                name="description"
-                value={formData.description}
-                onChange={handleChange}
-                placeholder="Explain the main value of this package, who it suits, and what support is included."
-                className="h-28 w-full rounded-lg border border-gray-300 p-3"
-                required
+          <StaffCardSection
+            title="Current public order"
+            description="This quick preview shows the packages nearest the top of the public catalog right now."
+          >
+            {packageOrderDraft.length === 0 ? (
+              <StaffEmptyState
+                title="No packages yet"
+                description="Create the first package to start shaping the public catalog."
+                action={(
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetForm();
+                      setActivePanel('create');
+                    }}
+                    className="rounded-full bg-[#101c2d] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#16263b]"
+                  >
+                    Create First Package
+                  </button>
+                )}
               />
-            </label>
-          </section>
-
-          <section className="rounded-xl border border-gray-100 bg-gray-50 p-5">
-            <h4 className="mb-4 text-lg font-bold text-[#0B1C3E]">Pricing and Public Summary</h4>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-gray-700">Price</span>
-                <input
-                  name="price"
-                  value={formData.price}
-                  onChange={handleChange}
-                  placeholder="1500"
-                  className="w-full rounded-lg border border-gray-300 p-3"
-                  required
-                />
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-gray-700">Summary destination</span>
-                <input
-                  name="destination"
-                  value={formData.destination}
-                  onChange={handleChange}
-                  placeholder="Makkah and Madinah"
-                  className="w-full rounded-lg border border-gray-300 p-3"
-                  required
-                />
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-gray-700">Duration</span>
-                <input
-                  name="duration"
-                  value={formData.duration}
-                  onChange={handleChange}
-                  placeholder="10 Days"
-                  className="w-full rounded-lg border border-gray-300 p-3"
-                  required
-                />
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-gray-700">Main image</span>
-                <input
-                  type="file"
-                  onChange={handleImageChange}
-                  accept="image/*"
-                  className="w-full rounded-lg border border-gray-300 p-3"
-                />
-              </label>
-            </div>
-
-            {existingImageUrl && (
-              <div className="mt-4">
-                <p className="mb-2 text-sm font-semibold text-gray-700">Current image</p>
-                <img src={existingImageUrl} alt="Current package" className="h-24 w-40 rounded-lg border border-gray-200 object-cover" />
+            ) : (
+              <div className="grid gap-4 xl:grid-cols-2">
+                {packageOrderDraft.slice(0, 4).map((pkg) => (
+                  <article key={getPackageId(pkg)} className="rounded-[1.5rem] border border-[#ece4d2] bg-[#fbfaf7] p-5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-[#101c2d] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-white">
+                        Order #{pkg.displayOrder}
+                      </span>
+                      {pkg.isFeatured && (
+                        <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-amber-700">
+                          Featured #{pkg.featuredOrder || '-'}
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="mt-3 text-xl font-black text-[#101c2d]">{pkg.title}</h3>
+                    <p className="mt-2 text-sm text-[#67707e]">{pkg.destination} | {pkg.duration} | {pkg.type}</p>
+                    <p className="mt-2 text-sm leading-6 text-[#5b6472]">Route: {getPackageRouteSummary(pkg)}</p>
+                  </article>
+                ))}
               </div>
             )}
-          </section>
+          </StaffCardSection>
+        </>
+      )}
 
-          <section className="rounded-xl border border-gray-100 bg-gray-50 p-5">
-            <div className="mb-4 flex items-center justify-between gap-4">
-              <div>
-                <h4 className="text-lg font-bold text-[#0B1C3E]">Journey Route</h4>
-                <p className="mt-1 text-sm text-gray-600">
-                  Use this section when a package moves through more than one city, such as Makkah, Madinah, Jeddah, or transit stops.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={addJourneyStop}
-                className="rounded-lg bg-[#0B1C3E] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-[#1a2f55]"
-              >
-                Add Stop
-              </button>
-            </div>
+      {activePanel === 'create' && (
+        <StaffCardSection
+          title={editingId ? 'Edit Package' : 'Create Package'}
+          description={editingId
+            ? 'Update one part of the package at a time so edits stay easier to follow.'
+            : 'Build the package in smaller sections so route details, itinerary, and visibility do not pile into one long screen.'}
+        >
+          <StaffSectionTabs
+            tabs={PACKAGE_FORM_SECTIONS}
+            value={activeFormSection}
+            onChange={setActiveFormSection}
+          />
 
-            {journeyStops.length > 0 ? (
-              <div className="space-y-4">
-                {journeyStops.map((stop, index) => (
-                  <div key={stop.id} className="rounded-xl border border-gray-200 bg-white p-4">
-                    <div className="mb-3 flex items-center justify-between">
-                      <h5 className="font-bold text-[#0B1C3E]">Stop {index + 1}</h5>
-                      <div className="flex gap-2">
+          <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+            {activeFormSection === 'summary' && (
+              <>
+                <section className="rounded-[1.5rem] border border-[#ece4d2] bg-[#fbfaf7] p-5">
+                  <h4 className="text-lg font-black text-[#101c2d]">Basic information</h4>
+                  <p className="mt-2 text-sm leading-6 text-[#67707e]">
+                    Keep the public package title and description clear so the team and the customer both understand the offer quickly.
+                  </p>
+                  <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-semibold text-gray-700">Package title</span>
+                      <input
+                        name="title"
+                        value={formData.title}
+                        onChange={handleChange}
+                        placeholder="Premium Umrah Package - December 2026"
+                        className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d]"
+                        required
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-semibold text-gray-700">Package type</span>
+                      <input
+                        list="package-type-options"
+                        name="type"
+                        value={formData.type}
+                        onChange={handleChange}
+                        placeholder="Umrah, Hajj, Holiday..."
+                        className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d]"
+                        required
+                      />
+                      <datalist id="package-type-options">
+                        {PACKAGE_TYPE_OPTIONS.map((option) => (
+                          <option key={option} value={option} />
+                        ))}
+                      </datalist>
+                    </label>
+                  </div>
+
+                  <label className="mt-4 block">
+                    <span className="mb-2 block text-sm font-semibold text-gray-700">Description</span>
+                    <textarea
+                      name="description"
+                      value={formData.description}
+                      onChange={handleChange}
+                      placeholder="Explain the main value of this package, who it suits, and what support is included."
+                      className="h-32 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d]"
+                      required
+                    />
+                  </label>
+                </section>
+
+                <section className="rounded-[1.5rem] border border-[#ece4d2] bg-[#fbfaf7] p-5">
+                  <h4 className="text-lg font-black text-[#101c2d]">Pricing and public summary</h4>
+                  <p className="mt-2 text-sm leading-6 text-[#67707e]">
+                    Use a short destination and duration for the public cards, then attach the main image customers will recognize first.
+                  </p>
+                  <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-semibold text-gray-700">Price</span>
+                      <input
+                        name="price"
+                        value={formData.price}
+                        onChange={handleChange}
+                        placeholder="1500"
+                        className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d]"
+                        required
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-semibold text-gray-700">Summary destination</span>
+                      <input
+                        name="destination"
+                        value={formData.destination}
+                        onChange={handleChange}
+                        placeholder="Makkah and Madinah"
+                        className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d]"
+                        required
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-semibold text-gray-700">Duration</span>
+                      <input
+                        name="duration"
+                        value={formData.duration}
+                        onChange={handleChange}
+                        placeholder="10 Days"
+                        className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d]"
+                        required
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-semibold text-gray-700">Main image</span>
+                      <input
+                        type="file"
+                        onChange={handleImageChange}
+                        accept="image/*"
+                        className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-[#101c2d]"
+                      />
+                    </label>
+                  </div>
+
+                  {existingImageUrl && (
+                    <div className="mt-5 flex items-center gap-4 rounded-[1.25rem] border border-[#ece4d2] bg-white p-4">
+                      <img src={existingImageUrl} alt="Current package" className="h-24 w-32 rounded-xl border border-gray-200 object-cover" />
+                      <div>
+                        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Current image</div>
+                        <p className="mt-2 text-sm text-[#67707e]">Upload a new image only if this package needs a different lead photo.</p>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              </>
+            )}
+
+            {activeFormSection === 'route' && (
+              <section className="rounded-[1.5rem] border border-[#ece4d2] bg-[#fbfaf7] p-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <h4 className="text-lg font-black text-[#101c2d]">Journey route</h4>
+                    <p className="mt-2 text-sm leading-6 text-[#67707e]">
+                      Add route stops when the journey moves through more than one city, such as Makkah, Madinah, Jeddah, or transit stages.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addJourneyStop}
+                    className="rounded-full bg-[#101c2d] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#16263b]"
+                  >
+                    Add Stop
+                  </button>
+                </div>
+
+                {journeyStops.length > 0 ? (
+                  <div className="mt-5 space-y-4">
+                    {journeyStops.map((stop, index) => (
+                      <div key={stop.id} className="rounded-[1.25rem] border border-[#e5dcc9] bg-white p-4">
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                          <h5 className="text-base font-black text-[#101c2d]">Stop {index + 1}</h5>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => moveJourneyStop(index, -1)}
+                              disabled={index === 0}
+                              className="rounded-full border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-40"
+                            >
+                              Move Up
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveJourneyStop(index, 1)}
+                              disabled={index === journeyStops.length - 1}
+                              className="rounded-full border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-40"
+                            >
+                              Move Down
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeJourneyStop(index)}
+                              className="rounded-full border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                          <input
+                            type="text"
+                            placeholder="City"
+                            className="rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d]"
+                            value={stop.city}
+                            onChange={(event) => updateJourneyStop(index, 'city', event.target.value)}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Stay label, for example 4 Nights"
+                            className="rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d]"
+                            value={stop.stayLabel}
+                            onChange={(event) => updateJourneyStop(index, 'stayLabel', event.target.value)}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Accommodation or hotel"
+                            className="rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] md:col-span-2"
+                            value={stop.accommodation}
+                            onChange={(event) => updateJourneyStop(index, 'accommodation', event.target.value)}
+                          />
+                          <textarea
+                            placeholder="Notes for this stop"
+                            className="h-28 rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] md:col-span-2"
+                            value={stop.notes}
+                            onChange={(event) => updateJourneyStop(index, 'notes', event.target.value)}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-5 rounded-[1.25rem] border border-dashed border-[#d8cdb7] bg-white p-6 text-sm leading-6 text-[#67707e]">
+                    No structured route stops yet. Add stops here when the package includes more than one city or stage.
+                  </div>
+                )}
+              </section>
+            )}
+
+            {activeFormSection === 'itinerary' && (
+              <section className="rounded-[1.5rem] border border-[#ece4d2] bg-[#fbfaf7] p-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <h4 className="text-lg font-black text-[#101c2d]">Day-by-day itinerary</h4>
+                    <p className="mt-2 text-sm leading-6 text-[#67707e]">
+                      Use structured days for detailed journeys. If you only need one short overview, keep the simple itinerary text instead.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addItineraryDay}
+                    className="rounded-full bg-[#101c2d] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#16263b]"
+                  >
+                    Add Day
+                  </button>
+                </div>
+
+                {itineraryItems.length > 0 ? (
+                  <div className="mt-5 space-y-3">
+                    {itineraryItems.map((item, index) => (
+                      <div
+                        key={item.id}
+                        draggable
+                        onDragStart={() => handleItineraryDragStart(index)}
+                        onDragOver={handleDragOver}
+                        onDrop={() => handleItineraryDrop(index)}
+                        className={`flex items-start gap-3 rounded-[1.25rem] border border-[#e5dcc9] bg-white p-4 ${
+                          draggedItineraryIndex === index ? 'border-dashed border-gray-400 opacity-50' : ''
+                        }`}
+                      >
+                        <div className="cursor-move pt-2 text-gray-400" title="Drag to reorder">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                          </svg>
+                        </div>
+                        <div className="w-full space-y-3">
+                          <div className="font-black text-[#101c2d]">Day {item.day}</div>
+                          <input
+                            type="text"
+                            placeholder="Title"
+                            className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d]"
+                            value={item.title}
+                            onChange={(event) => updateItineraryDay(index, 'title', event.target.value)}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Location"
+                            className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d]"
+                            value={item.location}
+                            onChange={(event) => updateItineraryDay(index, 'location', event.target.value)}
+                          />
+                          <textarea
+                            placeholder="Activities or description"
+                            className="h-28 w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d]"
+                            value={item.description}
+                            onChange={(event) => updateItineraryDay(index, 'description', event.target.value)}
+                          />
+                          <div className="flex flex-wrap items-center gap-3">
+                            <span className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Day image</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(event) => handleItineraryImageUpload(index, event)}
+                              className="text-sm"
+                              disabled={uploadingItineraryIndex === index}
+                            />
+                            {uploadingItineraryIndex === index && (
+                              <div className="h-5 w-5 animate-spin rounded-full border-b-2 border-[#101c2d]"></div>
+                            )}
+                            {item.image && uploadingItineraryIndex !== index && (
+                              <img src={resolveBackendUrl(item.image)} alt="Itinerary preview" className="h-10 w-10 rounded-xl border border-gray-200 object-cover" />
+                            )}
+                          </div>
+                        </div>
                         <button
                           type="button"
-                          onClick={() => moveJourneyStop(index, -1)}
-                          disabled={index === 0}
-                          className="rounded border border-gray-300 px-2 py-1 text-xs font-semibold text-gray-600 disabled:opacity-40"
-                        >
-                          Up
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveJourneyStop(index, 1)}
-                          disabled={index === journeyStops.length - 1}
-                          className="rounded border border-gray-300 px-2 py-1 text-xs font-semibold text-gray-600 disabled:opacity-40"
-                        >
-                          Down
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeJourneyStop(index)}
-                          className="rounded border border-red-200 px-2 py-1 text-xs font-semibold text-red-600"
+                          onClick={() => removeItineraryDay(index)}
+                          className="rounded-full border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50"
                         >
                           Remove
                         </button>
                       </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                      <input
-                        type="text"
-                        placeholder="City"
-                        className="rounded-lg border border-gray-300 p-3"
-                        value={stop.city}
-                        onChange={(event) => updateJourneyStop(index, 'city', event.target.value)}
-                      />
-                      <input
-                        type="text"
-                        placeholder="Stay label, for example 4 Nights"
-                        className="rounded-lg border border-gray-300 p-3"
-                        value={stop.stayLabel}
-                        onChange={(event) => updateJourneyStop(index, 'stayLabel', event.target.value)}
-                      />
-                      <input
-                        type="text"
-                        placeholder="Accommodation or hotel"
-                        className="rounded-lg border border-gray-300 p-3 md:col-span-2"
-                        value={stop.accommodation}
-                        onChange={(event) => updateJourneyStop(index, 'accommodation', event.target.value)}
-                      />
-                      <textarea
-                        placeholder="Notes for this stop"
-                        className="h-24 rounded-lg border border-gray-300 p-3 md:col-span-2"
-                        value={stop.notes}
-                        onChange={(event) => updateJourneyStop(index, 'notes', event.target.value)}
-                      />
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-xl border border-dashed border-gray-300 bg-white p-6 text-sm text-gray-500">
-                No structured route stops yet. Add stops here if the package includes more than one city or stage.
-              </div>
+                ) : (
+                  <textarea
+                    name="itinerary"
+                    value={formData.itinerary}
+                    onChange={handleChange}
+                    placeholder="Simple text itinerary, or use Add Day for a structured itinerary."
+                    className="mt-5 h-32 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d]"
+                  />
+                )}
+              </section>
             )}
-          </section>
 
-          <section className="rounded-xl border border-gray-100 bg-gray-50 p-5">
-            <div className="mb-4 flex items-center justify-between gap-4">
-              <div>
-                <h4 className="text-lg font-bold text-[#0B1C3E]">Day-by-Day Itinerary</h4>
-                <p className="mt-1 text-sm text-gray-600">
-                  Use structured days when you want a detailed public itinerary. Leave it empty to use the simple text field instead.
+            {activeFormSection === 'visibility' && (
+              <section className="rounded-[1.5rem] border border-[#ece4d2] bg-[#fbfaf7] p-5">
+                <h4 className="text-lg font-black text-[#101c2d]">Visibility and homepage promotion</h4>
+                <p className="mt-2 text-sm leading-6 text-[#67707e]">
+                  Choose whether this package appears in the featured homepage area. Featured order can still be fine-tuned in the reorder panel.
                 </p>
-              </div>
+                <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <label className="flex items-start gap-3 rounded-[1.25rem] border border-[#e5dcc9] bg-white p-4">
+                    <input
+                      type="checkbox"
+                      name="isFeatured"
+                      checked={formData.isFeatured}
+                      onChange={handleChange}
+                      className="mt-1 h-4 w-4"
+                    />
+                    <div>
+                      <span className="block font-semibold text-[#101c2d]">Show this package in the featured section</span>
+                      <span className="mt-1 block text-sm text-[#67707e]">
+                        Featured packages can have a separate homepage order from the general package order.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-gray-700">Featured position</span>
+                    <input
+                      name="featuredOrder"
+                      value={formData.featuredOrder}
+                      onChange={handleChange}
+                      placeholder="Leave blank to place at the end"
+                      className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d]"
+                      disabled={!formData.isFeatured}
+                    />
+                    <span className="mt-2 block text-xs text-gray-500">
+                      You can also fine-tune featured order in the reorder panel.
+                    </span>
+                  </label>
+                </div>
+              </section>
+            )}
+
+            <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
-                onClick={addItineraryDay}
-                className="rounded-lg bg-[#0B1C3E] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-[#1a2f55]"
+                onClick={() => moveFormSection(-1)}
+                disabled={currentFormStepIndex === 0}
+                className="rounded-full border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Add Day
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() => moveFormSection(1)}
+                disabled={currentFormStepIndex === PACKAGE_FORM_SECTIONS.length - 1}
+                className="rounded-full border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-2 rounded-full bg-[#006837] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#00502a] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isSubmitting && <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-white"></div>}
+                {editingId ? 'Save Package' : 'Create Package'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  resetForm();
+                  setFormSuccess('');
+                  setActivePanel('overview');
+                }}
+                className="rounded-full border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+              >
+                {editingId ? 'Cancel Editing' : 'Close Form'}
               </button>
             </div>
+          </form>
+        </StaffCardSection>
+      )}
 
-            {itineraryItems.length > 0 ? (
-              <div className="space-y-3">
-                {itineraryItems.map((item, index) => (
+      {activePanel === 'reorder' && (
+        <StaffCardSection
+          title="Public package order"
+          description="Move the full package catalog and the homepage featured sequence separately, then save both together once you are happy with the result."
+        >
+          <div className="grid gap-6 xl:grid-cols-2">
+            <div className="rounded-[1.5rem] border border-[#ece4d2] bg-[#fbfaf7] p-5">
+              <h3 className="text-lg font-black text-[#101c2d]">General package order</h3>
+              <p className="mt-2 text-sm leading-6 text-[#67707e]">
+                Drag packages to control the order customers see by default. New packages are placed at the end unless you move them.
+              </p>
+              <div className="mt-5 space-y-3">
+                {packageOrderDraft.map((pkg, index) => (
                   <div
-                    key={item.id}
+                    key={getPackageId(pkg)}
                     draggable
-                    onDragStart={() => handleItineraryDragStart(index)}
+                    onDragStart={() => handlePackageDragStart(index)}
                     onDragOver={handleDragOver}
-                    onDrop={() => handleItineraryDrop(index)}
-                    className={`flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-4 ${draggedItineraryIndex === index ? 'border-dashed border-gray-400 opacity-50' : ''}`}
+                    onDrop={() => handlePackageDrop(index)}
+                    className={`flex items-center gap-4 rounded-[1.25rem] border border-[#e5dcc9] bg-white p-4 ${
+                      draggedPackageIndex === index ? 'border-dashed border-gray-400 opacity-50' : ''
+                    }`}
                   >
-                    <div className="cursor-move pt-2 text-gray-400" title="Drag to reorder">
+                    <div className="cursor-move text-gray-400" title="Drag to reorder">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
                       </svg>
                     </div>
-                    <div className="w-full space-y-3">
-                      <div className="font-bold text-[#0B1C3E]">Day {item.day}</div>
-                      <input
-                        type="text"
-                        placeholder="Title"
-                        className="w-full rounded-lg border border-gray-300 p-3"
-                        value={item.title}
-                        onChange={(event) => updateItineraryDay(index, 'title', event.target.value)}
-                      />
-                      <input
-                        type="text"
-                        placeholder="Location"
-                        className="w-full rounded-lg border border-gray-300 p-3"
-                        value={item.location}
-                        onChange={(event) => updateItineraryDay(index, 'location', event.target.value)}
-                      />
-                      <textarea
-                        placeholder="Activities or description"
-                        className="h-24 w-full rounded-lg border border-gray-300 p-3"
-                        value={item.description}
-                        onChange={(event) => updateItineraryDay(index, 'description', event.target.value)}
-                      />
-                      <div className="flex flex-wrap items-center gap-3">
-                        <span className="text-xs font-bold uppercase tracking-[2px] text-gray-500">Day image</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(event) => handleItineraryImageUpload(index, event)}
-                          className="text-sm"
-                          disabled={uploadingItineraryIndex === index}
-                        />
-                        {uploadingItineraryIndex === index && (
-                          <div className="h-5 w-5 animate-spin rounded-full border-b-2 border-[#0B1C3E]"></div>
-                        )}
-                        {item.image && uploadingItineraryIndex !== index && (
-                          <img src={resolveBackendUrl(item.image)} alt="Itinerary preview" className="h-10 w-10 rounded border border-gray-200 object-cover" />
-                        )}
-                      </div>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#101c2d] text-sm font-bold text-white">
+                      {index + 1}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => removeItineraryDay(index)}
-                      className="rounded border border-red-200 px-2 py-1 text-sm font-bold text-red-600"
-                    >
-                      x
-                    </button>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-bold text-[#101c2d]">{pkg.title}</p>
+                      <p className="text-sm text-[#67707e]">{pkg.destination} | {pkg.duration}</p>
+                    </div>
+                    {pkg.isFeatured && (
+                      <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-amber-700">
+                        Featured
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
-            ) : (
-              <textarea
-                name="itinerary"
-                value={formData.itinerary}
-                onChange={handleChange}
-                placeholder="Simple text itinerary, or use Add Day for a structured itinerary."
-                className="h-28 w-full rounded-lg border border-gray-300 p-3"
-              />
-            )}
-          </section>
-
-          <section className="rounded-xl border border-gray-100 bg-gray-50 p-5">
-            <h4 className="mb-4 text-lg font-bold text-[#0B1C3E]">Visibility and Homepage Promotion</h4>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <label className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-4">
-                <input
-                  type="checkbox"
-                  name="isFeatured"
-                  checked={formData.isFeatured}
-                  onChange={handleChange}
-                  className="mt-1 h-4 w-4"
-                />
-                <div>
-                  <span className="block font-semibold text-[#0B1C3E]">Show this package in the featured section</span>
-                  <span className="mt-1 block text-sm text-gray-600">
-                    Featured packages can have a separate homepage order from the general package order.
-                  </span>
-                </div>
-              </label>
-
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-gray-700">Featured position</span>
-                <input
-                  name="featuredOrder"
-                  value={formData.featuredOrder}
-                  onChange={handleChange}
-                  placeholder="Leave blank to place at the end"
-                  className="w-full rounded-lg border border-gray-300 p-3"
-                  disabled={!formData.isFeatured}
-                />
-                <span className="mt-2 block text-xs text-gray-500">
-                  You can also fine-tune featured order in the reorder workspace below.
-                </span>
-              </label>
             </div>
-          </section>
 
-          <div className="flex flex-wrap gap-4">
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="flex items-center gap-2 rounded-lg bg-[#006837] px-6 py-3 font-bold text-white transition-colors hover:bg-[#00502a]"
-            >
-              {isSubmitting && <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-white"></div>}
-              {editingId ? 'Update Package' : 'Create Package'}
-            </button>
-            {editingId && (
-              <button
-                type="button"
-                onClick={resetForm}
-                className="rounded-lg bg-gray-500 px-6 py-3 font-bold text-white transition-colors hover:bg-gray-600"
-              >
-                Cancel Editing
-              </button>
-            )}
-          </div>
-        </form>
-      </div>
-
-      <div className="mb-10 grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between gap-4">
-            <div>
-              <h3 className="text-xl font-bold text-[#0B1C3E]">General Package Order</h3>
-              <p className="mt-1 text-sm text-gray-600">
-                Drag packages to control the order customers see by default. New packages are placed at the end unless you move them.
+            <div className="rounded-[1.5rem] border border-[#ece4d2] bg-[#fbfaf7] p-5">
+              <h3 className="text-lg font-black text-[#101c2d]">Featured package order</h3>
+              <p className="mt-2 text-sm leading-6 text-[#67707e]">
+                Drag only the homepage featured packages here to control their separate sequence.
               </p>
-            </div>
-          </div>
-          <div className="space-y-3">
-            {packageOrderDraft.map((pkg, index) => (
-              <div
-                key={getPackageId(pkg)}
-                draggable
-                onDragStart={() => handlePackageDragStart(index)}
-                onDragOver={handleDragOver}
-                onDrop={() => handlePackageDrop(index)}
-                className={`flex items-center gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 ${draggedPackageIndex === index ? 'border-dashed border-gray-400 opacity-50' : ''}`}
-              >
-                <div className="cursor-move text-gray-400" title="Drag to reorder">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
-                  </svg>
+              {featuredOrderDraft.length > 0 ? (
+                <div className="mt-5 space-y-3">
+                  {featuredOrderDraft.map((pkg, index) => (
+                    <div
+                      key={getPackageId(pkg)}
+                      draggable
+                      onDragStart={() => handleFeaturedDragStart(index)}
+                      onDragOver={handleDragOver}
+                      onDrop={() => handleFeaturedDrop(index)}
+                      className={`flex items-center gap-4 rounded-[1.25rem] border border-[#e5dcc9] bg-white p-4 ${
+                        draggedFeaturedIndex === index ? 'border-dashed border-gray-400 opacity-50' : ''
+                      }`}
+                    >
+                      <div className="cursor-move text-gray-400" title="Drag to reorder">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                        </svg>
+                      </div>
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#d8c79a] text-sm font-bold text-[#101c2d]">
+                        {index + 1}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-bold text-[#101c2d]">{pkg.title}</p>
+                        <p className="text-sm text-[#67707e]">General order #{pkg.displayOrder}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#0B1C3E] text-sm font-bold text-white">
-                  {index + 1}
+              ) : (
+                <div className="mt-5 rounded-[1.25rem] border border-dashed border-[#d8cdb7] bg-white p-6 text-sm leading-6 text-[#67707e]">
+                  No featured packages yet. Mark a package as featured in the form and it will appear here.
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-bold text-[#0B1C3E]">{pkg.title}</p>
-                  <p className="text-sm text-gray-500">{pkg.destination} | {pkg.duration}</p>
-                </div>
-                {pkg.isFeatured && (
-                  <span className="rounded-full bg-[#D4AF37]/20 px-3 py-1 text-xs font-bold uppercase tracking-[2px] text-[#8f6b00]">
-                    Featured
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <div className="mb-4">
-            <h3 className="text-xl font-bold text-[#0B1C3E]">Featured Package Order</h3>
-            <p className="mt-1 text-sm text-gray-600">
-              Drag only the homepage-featured packages here to control their separate featured sequence.
-            </p>
-          </div>
-          {featuredOrderDraft.length > 0 ? (
-            <div className="space-y-3">
-              {featuredOrderDraft.map((pkg, index) => (
-                <div
-                  key={getPackageId(pkg)}
-                  draggable
-                  onDragStart={() => handleFeaturedDragStart(index)}
-                  onDragOver={handleDragOver}
-                  onDrop={() => handleFeaturedDrop(index)}
-                  className={`flex items-center gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 ${draggedFeaturedIndex === index ? 'border-dashed border-gray-400 opacity-50' : ''}`}
-                >
-                  <div className="cursor-move text-gray-400" title="Drag to reorder">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
-                    </svg>
-                  </div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#D4AF37] text-sm font-bold text-[#0B1C3E]">
-                    {index + 1}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-bold text-[#0B1C3E]">{pkg.title}</p>
-                    <p className="text-sm text-gray-500">General order #{pkg.displayOrder}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-500">
-              No featured packages yet. Mark a package as featured in the form above and it will appear here.
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="mb-10 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-center gap-4">
-          <button
-            type="button"
-            onClick={savePackageOrder}
-            disabled={isSavingOrder || !hasOrderChanges}
-            className="rounded-lg bg-[#0B1C3E] px-6 py-3 font-bold text-white transition-colors hover:bg-[#1a2f55] disabled:opacity-50"
-          >
-            {isSavingOrder ? 'Saving Order...' : 'Save Package Order'}
-          </button>
-          <button
-            type="button"
-            onClick={resetOrderDrafts}
-            disabled={!hasOrderChanges}
-            className="rounded-lg border border-gray-300 px-6 py-3 font-bold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
-          >
-            Reset Draft Order
-          </button>
-          <span className="text-sm text-gray-500">
-            Save when you are happy with both the general package order and the featured package order.
-          </span>
-        </div>
-        {orderError && (
-          <div className="mt-4 rounded-lg bg-red-100 p-3 text-red-700">{orderError}</div>
-        )}
-        {orderSuccess && (
-          <div className="mt-4 rounded-lg bg-green-100 p-3 text-green-700">{orderSuccess}</div>
-        )}
-      </div>
-
-      <div className="grid gap-6">
-        {packages.map((pkg) => (
-          <div key={getPackageId(pkg)} className="flex flex-col justify-between rounded-xl border border-gray-200 bg-white p-6 shadow-sm md:flex-row md:items-center">
-            <div className="flex-1">
-              <div className="mb-2 flex flex-wrap items-center gap-2">
-                <h3 className="text-xl font-bold text-[#0B1C3E]">{pkg.title}</h3>
-                <span className="rounded-full bg-[#0B1C3E]/10 px-3 py-1 text-xs font-bold uppercase tracking-[2px] text-[#0B1C3E]">
-                  Order #{pkg.displayOrder}
-                </span>
-                {pkg.isFeatured && (
-                  <span className="rounded-full bg-[#D4AF37]/20 px-3 py-1 text-xs font-bold uppercase tracking-[2px] text-[#8f6b00]">
-                    Featured #{pkg.featuredOrder || '-'}
-                  </span>
-                )}
-              </div>
-              <p className="text-sm text-gray-600">{pkg.destination} | {pkg.duration} | {pkg.type}</p>
-              <p className="mt-1 font-bold text-[#D4AF37]">${pkg.price}</p>
-              {Array.isArray(pkg.journeyStops) && pkg.journeyStops.length > 0 && (
-                <p className="mt-2 text-sm text-gray-500">
-                  Route: {pkg.journeyStops.map((stop) => stop.city).join(' -> ')}
-                </p>
               )}
             </div>
-            <div className="mt-4 flex gap-3 md:mt-0">
-              <button onClick={() => handleEdit(pkg)} className="text-sm font-bold text-blue-600 hover:text-blue-800">
-                Edit
-              </button>
-              <button onClick={() => handleDelete(getPackageId(pkg))} className="text-sm font-bold text-red-500 hover:text-red-700">
-                Delete
-              </button>
-            </div>
           </div>
-        ))}
-      </div>
-    </div>
+
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={savePackageOrder}
+              disabled={isSavingOrder || !hasOrderChanges}
+              className="rounded-full bg-[#101c2d] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#16263b] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSavingOrder ? 'Saving Order...' : 'Save Package Order'}
+            </button>
+            <button
+              type="button"
+              onClick={resetOrderDrafts}
+              disabled={!hasOrderChanges}
+              className="rounded-full border border-gray-300 px-5 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Reset Draft Order
+            </button>
+            <span className="text-sm text-[#67707e]">
+              Save when you are happy with both the general package order and the featured order.
+            </span>
+          </div>
+        </StaffCardSection>
+      )}
+
+      {activePanel === 'catalog' && (
+        <>
+          <StaffCardSection
+            title="Find a package"
+            description="Search by package title, destination, type, or route and narrow the view before editing."
+          >
+            <div className="space-y-4">
+              <StaffFilterPills
+                options={getPackageCatalogFilterOptions(packages)}
+                value={catalogFilter}
+                onChange={setCatalogFilter}
+              />
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-gray-700">Search packages</span>
+                <input
+                  type="text"
+                  value={catalogSearchTerm}
+                  onChange={(event) => setCatalogSearchTerm(event.target.value)}
+                  placeholder="Search by title, destination, type, or route..."
+                  className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                />
+              </label>
+            </div>
+          </StaffCardSection>
+
+          <StaffCardSection
+            title="Package catalog"
+            description="Review the live package summaries here, then jump into editing only when you need to change something."
+          >
+            {filteredCatalogPackages.length === 0 ? (
+              <StaffEmptyState
+                title="No packages match this view"
+                description="Try another filter or search term, or create the first package to start building the catalog."
+              />
+            ) : (
+              <div className="grid gap-5 xl:grid-cols-2">
+                {filteredCatalogPackages.map((pkg) => {
+                  const imageUrl = getPackageImageUrl(pkg);
+
+                  return (
+                    <article key={getPackageId(pkg)} className="overflow-hidden rounded-[1.75rem] border border-[#ebe4d3] bg-white shadow-sm">
+                      <div className="flex flex-col gap-5 p-5 sm:flex-row">
+                        {imageUrl ? (
+                          <div className="overflow-hidden rounded-[1.25rem] border border-[#ece4d2] bg-[#fbfaf7] sm:w-[180px]">
+                            <img src={imageUrl} alt={pkg.title} className="h-44 w-full object-cover sm:h-full" />
+                          </div>
+                        ) : (
+                          <div className="flex h-44 items-center justify-center rounded-[1.25rem] border border-dashed border-[#d8cdb7] bg-[#fbfaf7] text-sm font-semibold text-[#8a7443] sm:w-[180px]">
+                            No image yet
+                          </div>
+                        )}
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full bg-[#101c2d]/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#101c2d]">
+                              Order #{pkg.displayOrder}
+                            </span>
+                            {pkg.isFeatured && (
+                              <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-amber-700">
+                                Featured #{pkg.featuredOrder || '-'}
+                              </span>
+                            )}
+                            <span className="rounded-full bg-[#f3efe5] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#7f6a3d]">
+                              {pkg.type}
+                            </span>
+                          </div>
+
+                          <h3 className="mt-3 text-xl font-black text-[#101c2d]">{pkg.title}</h3>
+                          <p className="mt-2 text-sm text-[#67707e]">{pkg.destination} | {pkg.duration}</p>
+                          <p className="mt-3 text-sm leading-6 text-[#5b6472]">Route: {getPackageRouteSummary(pkg)}</p>
+                          <p className="mt-3 text-base font-black text-[#8a7443]">${pkg.price}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-3 border-t border-[#efe8d8] px-5 py-4">
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(pkg)}
+                          className="rounded-full bg-[#101c2d] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#16263b]"
+                        >
+                          Edit Package
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(getPackageId(pkg))}
+                          className="rounded-full border border-red-200 px-4 py-2 text-sm font-bold text-red-700 transition hover:bg-red-50"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </StaffCardSection>
+        </>
+      )}
+    </StaffPageShell>
   );
 };
 

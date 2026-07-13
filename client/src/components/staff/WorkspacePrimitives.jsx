@@ -130,6 +130,38 @@ export function StaffFilterPills({ options, value, onChange }) {
   );
 }
 
+export function StaffSectionTabs({ tabs, value, onChange }) {
+  return (
+    <div className="overflow-x-auto">
+      <div className="inline-flex min-w-full gap-2 rounded-[1.5rem] border border-[#e6decc] bg-[#fbfaf7] p-2">
+        {tabs.map((tab) => {
+          const isActive = tab.value === value;
+
+          return (
+            <button
+              key={tab.value}
+              type="button"
+              onClick={() => onChange(tab.value)}
+              className={`inline-flex items-center justify-center gap-2 rounded-[1.1rem] px-4 py-2.5 text-sm font-semibold transition ${
+                isActive
+                  ? 'bg-[#101c2d] text-white shadow-sm'
+                  : 'text-[#5b6472] hover:bg-white hover:text-[#101c2d]'
+              }`}
+            >
+              <span>{tab.label}</span>
+              {tab.count !== undefined && (
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${isActive ? 'bg-white/15 text-white' : 'bg-white text-[#8a7443]'}`}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function StaffEmptyState({ title, description, action }) {
   return (
     <div className="rounded-[1.75rem] border border-dashed border-[#d8cdb7] bg-[#fbfaf7] p-10 text-center">
