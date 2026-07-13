@@ -71,7 +71,7 @@ const Home = () => {
   const upcomingTrips = prioritizedTrips.slice(0, 5).map((pkg) => ({
     id: pkg._id || pkg.id,
     title: pkg.title,
-    description: getPackageShortDescription(pkg.description, 132),
+    description: getPackageShortDescription(pkg.description, 108),
     highlights: getPackageHighlights(pkg).slice(0, 2),
     journeyLabel: getPackageJourneyLabel(pkg),
     image: (pkg.images && pkg.images.length > 0)
@@ -261,6 +261,24 @@ const Home = () => {
         .animate-pulse {
           animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
+        .home-line-clamp-1 {
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 1;
+          overflow: hidden;
+        }
+        .home-line-clamp-2 {
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 2;
+          overflow: hidden;
+        }
+        .home-line-clamp-3 {
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 3;
+          overflow: hidden;
+        }
       `}</style>
 
       <section className="bg-[#0B1C3E] text-white">
@@ -312,7 +330,7 @@ const Home = () => {
           <div className="mb-8 mt-10 text-center text-red-500">{packagesError}</div>
         )}
         <div
-          className="group relative mx-auto mt-10 min-h-[320px] max-w-[58rem] overflow-hidden rounded-[1.6rem] border border-[#e6dfd2] bg-white shadow-[0_18px_44px_rgba(16,28,45,0.08)] lg:min-h-[340px]"
+          className="group relative mx-auto mt-10 min-h-[300px] max-w-[52rem] overflow-hidden rounded-[1.6rem] border border-[#e6dfd2] bg-white shadow-[0_18px_44px_rgba(16,28,45,0.08)] lg:min-h-[310px]"
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
           onTouchStart={onTouchStart}
@@ -320,11 +338,11 @@ const Home = () => {
           onTouchEnd={onTouchEnd}
         >
           {showTripSkeleton ? (
-            <div className="grid min-h-[320px] lg:grid-cols-[1fr_1fr]">
-              <div className="min-h-[240px] bg-[#f3eee4] lg:min-h-full">
+            <div className="grid min-h-[300px] lg:grid-cols-[0.94fr_1.06fr]">
+              <div className="min-h-[220px] bg-[#f3eee4] lg:min-h-full">
                 <div className="h-full w-full bg-gray-300"></div>
               </div>
-              <div className="flex flex-col justify-center gap-4 bg-white p-6 sm:p-7">
+              <div className="flex flex-col justify-center gap-4 bg-white p-5 sm:p-6 lg:p-7">
                 <div className="h-5 w-28 rounded bg-gray-200"></div>
                 <div className="h-8 w-3/4 rounded bg-gray-200"></div>
                 <div className="h-4 w-full rounded bg-gray-200"></div>
@@ -337,8 +355,8 @@ const Home = () => {
             </div>
           ) : activeTrip ? (
             <>
-              <div className="grid min-h-[320px] lg:grid-cols-[1fr_1fr]">
-                <div className="flex h-[250px] items-center justify-center overflow-hidden bg-[#f3eee4] sm:h-[300px] lg:h-full">
+              <div className="grid min-h-[300px] lg:grid-cols-[0.94fr_1.06fr]">
+                <div className="flex h-[220px] items-center justify-center overflow-hidden bg-[#f3eee4] sm:h-[250px] lg:h-full">
                   <img
                     src={activeTrip.image}
                     alt={activeTrip.title}
@@ -348,17 +366,17 @@ const Home = () => {
                     decoding="async"
                   />
                 </div>
-                <div className="flex flex-col justify-center bg-white p-6 sm:p-8 lg:p-10">
+                <div className="flex flex-col justify-center bg-white p-5 sm:p-6 lg:p-7">
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7240]">
                     Featured package
                   </p>
-                  <h3 className="mt-3 text-2xl font-black tracking-tight text-[#101c2d] sm:text-[2rem]">
+                  <h3 className="home-line-clamp-2 mt-3 text-xl font-black tracking-tight text-[#101c2d] sm:text-[1.7rem]">
                     {activeTrip.title}
                   </h3>
-                  <p className="mt-3 text-sm font-semibold text-[#2d5f50]">
+                  <p className="home-line-clamp-1 mt-3 text-sm font-semibold text-[#2d5f50]">
                     {activeTrip.journeyLabel}
                   </p>
-                  <p className="mt-4 text-sm leading-7 text-[#5f6774] sm:text-base">
+                  <p className="home-line-clamp-3 mt-3 text-sm leading-7 text-[#5f6774]">
                     {activeTrip.description}
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">

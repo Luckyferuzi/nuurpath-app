@@ -1316,6 +1316,10 @@ Frontend:
   - a clearer half-image, half-summary split
   - fewer nested borders around the image area
 - Simplified the homepage featured-package slider rendering as well so it now shows one active package card at a time instead of stacking slide layers underneath, which keeps the image and summary area more reliable.
+- Tightened the homepage featured-package card sizing so it now has:
+  - a smaller overall footprint
+  - more consistent height between packages
+  - shorter controlled summary text to reduce uneven stretching
 
 ### Implementation Notes
 
