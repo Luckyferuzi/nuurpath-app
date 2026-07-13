@@ -46,6 +46,8 @@ model User {
   pushSubscriptions    PushSubscription[]
   wishlist             Wishlist[]
   uploadedFiles        StoredFile[]
+  mediaPostComments    MediaPostComment[]
+  mediaPostInteractions MediaPostInteraction[]
 }
 
 model StoredFile {
@@ -275,9 +277,44 @@ model MediaPost {
   updatedAt        DateTime  @updatedAt
 
   relatedPackage Package? @relation(fields: [relatedPackageId], references: [id], onDelete: SetNull)
+  comments       MediaPostComment[]
+  interactions   MediaPostInteraction[]
 
   @@index([displayOrder])
   @@index([isPublished, displayOrder])
+}
+
+model MediaPostComment {
+  id             Int       @id @default(autoincrement())
+  mediaPostId    Int
+  userId         Int?
+  authorName     String
+  authorLocation String?
+  message        String
+  createdAt      DateTime  @default(now())
+
+  mediaPost MediaPost @relation(fields: [mediaPostId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([mediaPostId, createdAt])
+  @@index([userId])
+}
+
+model MediaPostInteraction {
+  id         Int      @id @default(autoincrement())
+  mediaPostId Int
+  userId     Int?
+  type       String
+  visitorKey String
+  createdAt  DateTime @default(now())
+
+  mediaPost MediaPost @relation(fields: [mediaPostId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([mediaPostId, type, visitorKey])
+  @@index([mediaPostId, createdAt])
+  @@index([userId])
+  @@index([type])
 }
 
 model Wishlist {

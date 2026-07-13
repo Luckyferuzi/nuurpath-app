@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import axios, { resolveBackendUrl } from '../lib/api';
+import { formatMediaPostInteractionLabel, formatMediaPostRelativeTime } from '../lib/mediaPosts.js';
 import {
   StaffCardSection,
   StaffEmptyState,
   StaffFilterPills,
+  StaffInfoPill,
   StaffMetricCard,
   StaffPageShell,
 } from './staff/WorkspacePrimitives.jsx';
@@ -176,15 +179,21 @@ const ManageMediaPosts = () => {
       tone: 'warm',
     },
     {
-      label: 'Linked Packages',
-      value: mediaPosts.filter((post) => Boolean(post.relatedPackageId)).length,
-      hint: 'Stories already connected to a package for stronger context.',
+      label: 'Story Comments',
+      value: mediaPosts.reduce((total, post) => total + Number(post.engagement?.comments || 0), 0),
+      hint: 'Public replies already left on live travel stories.',
       tone: 'default',
     },
     {
-      label: 'Video Stories',
-      value: mediaPosts.filter((post) => Boolean(String(post.videoUrl || '').trim())).length,
-      hint: 'Posts that include an external video link instead of storing large video files directly.',
+      label: 'Story Likes',
+      value: mediaPosts.reduce((total, post) => total + Number(post.engagement?.likes || 0), 0),
+      hint: 'Unique story likes tracked from the public website.',
+      tone: 'accent',
+    },
+    {
+      label: 'Video Opens',
+      value: mediaPosts.reduce((total, post) => total + Number(post.engagement?.videoViews || 0), 0),
+      hint: 'Tracked clicks on story video buttons from public post pages.',
       tone: 'default',
     },
   ];
@@ -404,7 +413,7 @@ const ManageMediaPosts = () => {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {metrics.map((metric) => (
           <StaffMetricCard key={metric.label} label={metric.label} value={metric.value} hint={metric.hint} tone={metric.tone} />
         ))}
@@ -590,7 +599,7 @@ const ManageMediaPosts = () => {
 
       <StaffCardSection
         title="Published and Draft Stories"
-        description="Use the order controls to shape homepage storytelling, then publish or hide posts as needed."
+        description="Use the order controls to shape homepage storytelling, then watch replies, likes, and video interest without leaving this workspace."
       >
         {filteredMediaPosts.length === 0 ? (
           <StaffEmptyState
@@ -669,7 +678,76 @@ const ManageMediaPosts = () => {
                       )}
                     </div>
 
+                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-[1.1rem] border border-[#ece4d2] bg-[#fbfaf7] px-4 py-3">
+                        <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a828f]">Likes</div>
+                        <div className="mt-2 text-2xl font-black text-[#101c2d]">{post.engagement?.likes || 0}</div>
+                      </div>
+                      <div className="rounded-[1.1rem] border border-[#ece4d2] bg-[#fbfaf7] px-4 py-3">
+                        <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a828f]">Comments</div>
+                        <div className="mt-2 text-2xl font-black text-[#101c2d]">{post.engagement?.comments || 0}</div>
+                      </div>
+                      <div className="rounded-[1.1rem] border border-[#ece4d2] bg-[#fbfaf7] px-4 py-3">
+                        <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a828f]">Video Opens</div>
+                        <div className="mt-2 text-2xl font-black text-[#101c2d]">{post.engagement?.videoViews || 0}</div>
+                      </div>
+                    </div>
+
+                    {(post.recentComments?.length > 0 || post.recentInteractions?.length > 0) ? (
+                      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                        <div className="rounded-[1.25rem] border border-[#ece4d2] bg-[#fbfaf7] p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <h4 className="text-sm font-black text-[#101c2d]">Latest replies</h4>
+                            <StaffInfoPill tone="warm">{post.engagement?.comments || 0}</StaffInfoPill>
+                          </div>
+                          <div className="mt-3 space-y-3">
+                            {post.recentComments?.length ? post.recentComments.map((comment) => (
+                              <div key={comment.id} className="rounded-[1rem] border border-white bg-white px-3 py-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <span className="text-sm font-black text-[#101c2d]">{comment.authorDisplayName || comment.authorName}</span>
+                                  <span className="text-xs text-[#7a828f]">{formatMediaPostRelativeTime(comment.createdAt)}</span>
+                                </div>
+                                <p className="mt-2 text-sm leading-6 text-[#5b6472]">{comment.message}</p>
+                              </div>
+                            )) : (
+                              <p className="text-sm leading-6 text-[#67707e]">No replies yet on this story.</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="rounded-[1.25rem] border border-[#ece4d2] bg-[#fbfaf7] p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <h4 className="text-sm font-black text-[#101c2d]">Recent activity</h4>
+                            <StaffInfoPill tone="accent">
+                              {(post.engagement?.likes || 0) + (post.engagement?.videoViews || 0)}
+                            </StaffInfoPill>
+                          </div>
+                          <div className="mt-3 space-y-3">
+                            {post.recentInteractions?.length ? post.recentInteractions.map((interaction) => (
+                              <div key={interaction.id} className="rounded-[1rem] border border-white bg-white px-3 py-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <span className="text-sm font-black text-[#101c2d]">{interaction.actorName}</span>
+                                  <span className="text-xs text-[#7a828f]">{formatMediaPostRelativeTime(interaction.createdAt)}</span>
+                                </div>
+                                <p className="mt-2 text-sm leading-6 text-[#5b6472]">
+                                  {formatMediaPostInteractionLabel(interaction.type)}
+                                </p>
+                              </div>
+                            )) : (
+                              <p className="text-sm leading-6 text-[#67707e]">No likes or video opens tracked yet.</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+
                     <div className="mt-5 flex flex-wrap gap-3">
+                      <Link
+                        to={`/stories/${post.id}`}
+                        className="rounded-full border border-[#d8cfbf] px-4 py-2 text-sm font-bold text-[#101c2d] transition hover:bg-[#faf8f3]"
+                      >
+                        Preview Story
+                      </Link>
                       <button
                         type="button"
                         onClick={() => handleEdit(post)}

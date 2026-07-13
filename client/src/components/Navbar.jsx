@@ -7,6 +7,7 @@ import NotificationBell from './NotificationBell';
 const customerLinks = [
     { to: '/', label: 'Home' },
     { to: '/packages', label: 'Packages' },
+    { to: '/stories', label: 'Stories' },
     { to: '/book-flight', label: 'Request Flight' },
     { to: '/contact', label: 'Contact' },
 ];

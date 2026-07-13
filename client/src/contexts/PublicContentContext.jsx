@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import axios from '../lib/api';
 
-const PUBLIC_CONTENT_CACHE_KEY = 'nuurpath.public-content.v2';
+const PUBLIC_CONTENT_CACHE_KEY = 'nuurpath.public-content.v3';
 const REFRESH_INTERVAL_MS = 45000;
 
 const PublicContentContext = createContext(null);

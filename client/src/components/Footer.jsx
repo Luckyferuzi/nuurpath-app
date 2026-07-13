@@ -5,6 +5,7 @@ import { buildWhatsAppUrl } from '../lib/whatsapp.js';
 
 const navigationLinks = [
   { to: '/packages', label: 'Packages' },
+  { to: '/stories', label: 'Stories' },
   { to: '/book-flight', label: 'Request Flight' },
   { to: '/contact', label: 'Contact' },
 ];

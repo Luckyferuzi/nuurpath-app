@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../db');
 const auth = require('../middleware/auth');
+const softAuth = require('../middleware/softAuth');
 const { requireAdmin, requireAdminOrManager } = require('../middleware/adminAuth');
 const {
     packageImageUpload,
@@ -27,6 +28,33 @@ const {
 } = require('../utils/validation');
 
 const MEDIA_POST_IMAGE_LIMIT = 8;
+const MEDIA_POST_PUBLIC_COMMENT_LIMIT = 20;
+const MEDIA_POST_RECENT_ACTIVITY_LIMIT = 4;
+const MEDIA_POST_INTERACTION_TYPES = Object.freeze({
+    LIKE: 'LIKE',
+    VIDEO_VIEW: 'VIDEO_VIEW',
+});
+const RELATED_PACKAGE_SELECT = {
+    id: true,
+    title: true,
+    destination: true,
+};
+const COMMENT_WITH_USER_INCLUDE = {
+    user: {
+        select: {
+            id: true,
+            name: true,
+        },
+    },
+};
+const INTERACTION_WITH_USER_INCLUDE = {
+    user: {
+        select: {
+            id: true,
+            name: true,
+        },
+    },
+};
 
 function parseExistingImagesField(value) {
     if (value === undefined) {
@@ -68,16 +96,100 @@ function isValidExternalVideoUrl(value) {
     }
 }
 
-function serializeMediaPost(post) {
+function normalizeMediaPostInteractionType(value) {
+    const normalizedValue = toTrimmedString(value).toUpperCase();
+
+    if (!normalizedValue) {
+        return null;
+    }
+
+    return Object.values(MEDIA_POST_INTERACTION_TYPES).includes(normalizedValue)
+        ? normalizedValue
+        : null;
+}
+
+function createEmptyEngagementSummary() {
+    return {
+        likes: 0,
+        comments: 0,
+        videoViews: 0,
+    };
+}
+
+function readEngagementSummary(engagementSummaryMap, mediaPostId) {
+    if (!engagementSummaryMap || !engagementSummaryMap.has(mediaPostId)) {
+        return createEmptyEngagementSummary();
+    }
+
+    return engagementSummaryMap.get(mediaPostId);
+}
+
+function serializeMediaPostComment(comment) {
+    if (!comment || typeof comment !== 'object') {
+        return comment;
+    }
+
+    return {
+        id: comment.id,
+        mediaPostId: comment.mediaPostId,
+        userId: comment.userId || null,
+        authorName: comment.authorName,
+        authorLocation: comment.authorLocation,
+        message: comment.message,
+        createdAt: comment.createdAt,
+        authorDisplayName: comment.user?.name || comment.authorName,
+    };
+}
+
+function serializeMediaPostInteraction(interaction) {
+    if (!interaction || typeof interaction !== 'object') {
+        return interaction;
+    }
+
+    return {
+        id: interaction.id,
+        mediaPostId: interaction.mediaPostId,
+        userId: interaction.userId || null,
+        type: interaction.type,
+        createdAt: interaction.createdAt,
+        actorName: interaction.user?.name || 'Website visitor',
+    };
+}
+
+function serializeMediaPost(post, options = {}) {
     if (!post || typeof post !== 'object') {
         return post;
     }
 
-    return {
-        ...post,
+    const {
+        comments: rawComments,
+        interactions: rawInteractions,
+        ...rest
+    } = post;
+    const response = {
+        ...rest,
         heroImage: Array.isArray(post.images) && post.images.length > 0 ? post.images[0] : null,
         mediaCount: (Array.isArray(post.images) ? post.images.length : 0) + (post.videoUrl ? 1 : 0),
+        engagement: options.engagementSummary || createEmptyEngagementSummary(),
     };
+
+    if (options.comments !== undefined) {
+        response.comments = options.comments.map(serializeMediaPostComment);
+    }
+
+    if (options.recentComments !== undefined) {
+        response.recentComments = options.recentComments.map(serializeMediaPostComment);
+    }
+
+    if (options.recentInteractions !== undefined) {
+        response.recentInteractions = options.recentInteractions.map(serializeMediaPostInteraction);
+    }
+
+    if (options.relatedStories !== undefined) {
+        response.relatedStories = options.relatedStories;
+    }
+
+    return response;
 }
 
 async function createMediaPostImageUrls(files, uploadedByUserId, createdStoredFileIds) {
@@ -118,6 +230,82 @@ async function resolveRelatedPackageId(value) {
     return { value: relatedPackageId };
 }
 
+async function buildEngagementSummaryMap(mediaPostIds) {
+    const normalizedMediaPostIds = Array.from(new Set(
+        (Array.isArray(mediaPostIds) ? mediaPostIds : [])
+            .map((value) => toPositiveInteger(value))
+            .filter((value) => value !== null)
+    ));
+
+    const summaryMap = new Map();
+    normalizedMediaPostIds.forEach((mediaPostId) => {
+        summaryMap.set(mediaPostId, createEmptyEngagementSummary());
+    });
+
+    if (normalizedMediaPostIds.length === 0) {
+        return summaryMap;
+    }
+
+    const [commentCounts, interactionCounts] = await Promise.all([
+        prisma.mediaPostComment.groupBy({
+            by: ['mediaPostId'],
+            where: {
+                mediaPostId: {
+                    in: normalizedMediaPostIds,
+                },
+            },
+            _count: {
+                _all: true,
+            },
+        }),
+        prisma.mediaPostInteraction.groupBy({
+            by: ['mediaPostId', 'type'],
+            where: {
+                mediaPostId: {
+                    in: normalizedMediaPostIds,
+                },
+            },
+            _count: {
+                _all: true,
+            },
+        }),
+    ]);
+
+    commentCounts.forEach((entry) => {
+        const currentSummary = summaryMap.get(entry.mediaPostId) || createEmptyEngagementSummary();
+        currentSummary.comments = entry._count._all;
+        summaryMap.set(entry.mediaPostId, currentSummary);
+    });
+
+    interactionCounts.forEach((entry) => {
+        const currentSummary = summaryMap.get(entry.mediaPostId) || createEmptyEngagementSummary();
+
+        if (entry.type === MEDIA_POST_INTERACTION_TYPES.LIKE) {
+            currentSummary.likes = entry._count._all;
+        }
+
+        if (entry.type === MEDIA_POST_INTERACTION_TYPES.VIDEO_VIEW) {
+            currentSummary.videoViews = entry._count._all;
+        }
+
+        summaryMap.set(entry.mediaPostId, currentSummary);
+    });
+
+    return summaryMap;
+}
+
+async function ensurePublishedMediaPostExists(mediaPostId) {
+    return prisma.mediaPost.findFirst({
+        where: {
+            id: mediaPostId,
+            isPublished: true,
+        },
+        select: {
+            id: true,
+        },
+    });
+}
+
 router.get('/', async (req, res) => {
     try {
         const limit = req.query.limit === undefined ? null : toPositiveInteger(req.query.limit);
@@ -134,17 +322,18 @@ router.get('/', async (req, res) => {
             ],
             include: {
                 relatedPackage: {
-                    select: {
-                        id: true,
-                        title: true,
-                        destination: true,
-                    },
+                    select: RELATED_PACKAGE_SELECT,
                 },
             },
             ...(limit ? { take: limit } : {}),
         });
+        const engagementSummaryMap = await buildEngagementSummaryMap(mediaPosts.map((post) => post.id));
 
-        return res.json(mediaPosts.map(serializeMediaPost));
+        return res.json(mediaPosts.map((post) => (
+            serializeMediaPost(post, {
+                engagementSummary: readEngagementSummary(engagementSummaryMap, post.id),
+            })
+        )));
     } catch (err) {
         console.error('Error fetching public media posts:', err.message);
         return res.status(500).send('Server Error');
@@ -161,18 +350,230 @@ router.get('/manage', auth, requireAdminOrManager, async (req, res) => {
             ],
             include: {
                 relatedPackage: {
-                    select: {
-                        id: true,
-                        title: true,
-                        destination: true,
+                    select: RELATED_PACKAGE_SELECT,
+                },
+                comments: {
+                    orderBy: {
+                        createdAt: 'desc',
                     },
+                    take: 2,
+                    include: COMMENT_WITH_USER_INCLUDE,
+                },
+                interactions: {
+                    orderBy: {
+                        createdAt: 'desc',
+                    },
+                    take: MEDIA_POST_RECENT_ACTIVITY_LIMIT,
+                    include: INTERACTION_WITH_USER_INCLUDE,
+                },
+            },
+        });
+        const engagementSummaryMap = await buildEngagementSummaryMap(mediaPosts.map((post) => post.id));
+
+        return res.json(mediaPosts.map((post) => (
+            serializeMediaPost(post, {
+                engagementSummary: readEngagementSummary(engagementSummaryMap, post.id),
+                recentComments: post.comments || [],
+                recentInteractions: post.interactions || [],
+            })
+        )));
+    } catch (err) {
+        console.error('Error fetching media posts for management:', err.message);
+        return res.status(500).send('Server Error');
+    }
+});
+
+router.get('/:id', async (req, res) => {
+    try {
+        const mediaPostId = toPositiveInteger(req.params.id);
+        if (mediaPostId === null) {
+            return sendInvalidId(res);
+        }
+
+        const mediaPost = await prisma.mediaPost.findFirst({
+            where: {
+                id: mediaPostId,
+                isPublished: true,
+            },
+            include: {
+                relatedPackage: {
+                    select: RELATED_PACKAGE_SELECT,
+                },
+                comments: {
+                    orderBy: {
+                        createdAt: 'desc',
+                    },
+                    take: MEDIA_POST_PUBLIC_COMMENT_LIMIT,
+                    include: COMMENT_WITH_USER_INCLUDE,
                 },
             },
         });
 
-        return res.json(mediaPosts.map(serializeMediaPost));
+        if (!mediaPost) {
+            return res.status(404).json({ msg: 'Travel story not found.' });
+        }
+
+        const relatedStories = await prisma.mediaPost.findMany({
+            where: {
+                isPublished: true,
+                NOT: {
+                    id: mediaPostId,
+                },
+            },
+            orderBy: [
+                { displayOrder: 'asc' },
+                { eventDate: 'desc' },
+                { id: 'asc' },
+            ],
+            include: {
+                relatedPackage: {
+                    select: RELATED_PACKAGE_SELECT,
+                },
+            },
+            take: 3,
+        });
+
+        const [engagementSummaryMap, relatedStorySummaryMap] = await Promise.all([
+            buildEngagementSummaryMap([mediaPostId]),
+            buildEngagementSummaryMap(relatedStories.map((story) => story.id)),
+        ]);
+
+        return res.json(serializeMediaPost(mediaPost, {
+            engagementSummary: readEngagementSummary(engagementSummaryMap, mediaPost.id),
+            comments: mediaPost.comments || [],
+            relatedStories: relatedStories.map((story) => (
+                serializeMediaPost(story, {
+                    engagementSummary: readEngagementSummary(relatedStorySummaryMap, story.id),
+                })
+            )),
+        }));
     } catch (err) {
-        console.error('Error fetching media posts for management:', err.message);
+        console.error('Error fetching media post details:', err.message);
+        return res.status(500).send('Server Error');
+    }
+});
+
+router.post('/:id/comments', softAuth, async (req, res) => {
+    try {
+        const mediaPostId = toPositiveInteger(req.params.id);
+        if (mediaPostId === null) {
+            return sendInvalidId(res);
+        }
+
+        const mediaPost = await ensurePublishedMediaPostExists(mediaPostId);
+        if (!mediaPost) {
+            return res.status(404).json({ msg: 'Travel story not found.' });
+        }
+
+        const message = toTrimmedString(req.body?.message);
+        if (!message) {
+            return sendValidationError(res, 'Comment message is required.');
+        }
+
+        if (message.length > 800) {
+            return sendValidationError(res, 'Comment message must be 800 characters or fewer.');
+        }
+
+        const fallbackAuthorName = toTrimmedString(req.user?.name);
+        const authorName = toTrimmedString(req.body?.authorName || req.body?.name) || fallbackAuthorName;
+        if (!authorName) {
+            return sendValidationError(res, 'Your name is required before sending a comment.');
+        }
+
+        if (authorName.length > 80) {
+            return sendValidationError(res, 'Name must be 80 characters or fewer.');
+        }
+
+        const authorLocation = toTrimmedString(req.body?.authorLocation || req.body?.location) || null;
+        if (authorLocation && authorLocation.length > 80) {
+            return sendValidationError(res, 'Location must be 80 characters or fewer.');
+        }
+
+        const comment = await prisma.mediaPostComment.create({
+            data: {
+                mediaPostId,
+                userId: toPositiveInteger(req.user?.id),
+                authorName,
+                authorLocation,
+                message,
+            },
+            include: COMMENT_WITH_USER_INCLUDE,
+        });
+        const engagementSummaryMap = await buildEngagementSummaryMap([mediaPostId]);
+
+        return res.status(201).json({
+            comment: serializeMediaPostComment(comment),
+            engagement: readEngagementSummary(engagementSummaryMap, mediaPostId),
+        });
+    } catch (err) {
+        console.error('Error creating media post comment:', err.message);
+        return res.status(500).send('Server Error');
+    }
+});
+
+router.post('/:id/interactions', softAuth, async (req, res) => {
+    try {
+        const mediaPostId = toPositiveInteger(req.params.id);
+        if (mediaPostId === null) {
+            return sendInvalidId(res);
+        }
+
+        const interactionType = normalizeMediaPostInteractionType(req.body?.type);
+        if (!interactionType) {
+            return sendValidationError(res, 'Interaction type must be LIKE or VIDEO_VIEW.');
+        }
+
+        const visitorKey = toTrimmedString(req.body?.visitorKey);
+        if (!visitorKey) {
+            return sendValidationError(res, 'visitorKey is required.');
+        }
+
+        if (visitorKey.length > 120) {
+            return sendValidationError(res, 'visitorKey must be 120 characters or fewer.');
+        }
+
+        const mediaPost = await ensurePublishedMediaPostExists(mediaPostId);
+        if (!mediaPost) {
+            return res.status(404).json({ msg: 'Travel story not found.' });
+        }
+
+        const compoundWhere = {
+            mediaPostId_type_visitorKey: {
+                mediaPostId,
+                type: interactionType,
+                visitorKey,
+            },
+        };
+        const existingInteraction = await prisma.mediaPostInteraction.findUnique({
+            where: compoundWhere,
+        });
+
+        if (!existingInteraction) {
+            await prisma.mediaPostInteraction.create({
+                data: {
+                    mediaPostId,
+                    userId: toPositiveInteger(req.user?.id),
+                    type: interactionType,
+                    visitorKey,
+                },
+            });
+        } else if (!existingInteraction.userId && toPositiveInteger(req.user?.id) !== null) {
+            await prisma.mediaPostInteraction.update({
+                where: { id: existingInteraction.id },
+                data: {
+                    userId: toPositiveInteger(req.user?.id),
+                },
+            });
+        }
+
+        const engagementSummaryMap = await buildEngagementSummaryMap([mediaPostId]);
+
+        return res.json({
+            tracked: !existingInteraction,
+            engagement: readEngagementSummary(engagementSummaryMap, mediaPostId),
+        });
+    } catch (err) {
+        console.error('Error saving media post interaction:', err.message);
         return res.status(500).send('Server Error');
     }
 });
@@ -248,11 +649,7 @@ router.post('/', auth, requireAdmin, async (req, res) => {
             },
             include: {
                 relatedPackage: {
-                    select: {
-                        id: true,
-                        title: true,
-                        destination: true,
-                    },
+                    select: RELATED_PACKAGE_SELECT,
                 },
             },
         });
@@ -388,11 +785,7 @@ router.put('/:id', auth, requireAdmin, async (req, res) => {
             },
             include: {
                 relatedPackage: {
-                    select: {
-                        id: true,
-                        title: true,
-                        destination: true,
-                    },
+                    select: RELATED_PACKAGE_SELECT,
                 },
             },
         });

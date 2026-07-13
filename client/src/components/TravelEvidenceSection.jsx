@@ -1,35 +1,8 @@
 import React from 'react';
-import { resolveBackendUrl } from '../lib/api';
+import { Link } from 'react-router-dom';
 import { usePublicContent } from '../contexts/PublicContentContext.jsx';
-
-function formatEvidenceDate(value) {
-  if (!value) {
-    return 'Recent journey';
-  }
-
-  const parsedDate = new Date(value);
-  if (Number.isNaN(parsedDate.getTime())) {
-    return 'Recent journey';
-  }
-
-  return parsedDate.toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
-
-function getHeroImage(post) {
-  if (post?.heroImage) {
-    return resolveBackendUrl(post.heroImage);
-  }
-
-  if (Array.isArray(post?.images) && post.images.length > 0) {
-    return resolveBackendUrl(post.images[0]);
-  }
-
-  return 'https://placehold.co/1200x900/0B1C3E/D4AF37?text=NuurPath+Journey';
-}
+import { formatMediaPostDate, getMediaPostExcerpt, getMediaPostImageUrls } from '../lib/mediaPosts.js';
+import MediaPostImageCarousel from './MediaPostImageCarousel.jsx';
 
 const TravelEvidenceSection = () => {
   const {
@@ -40,21 +13,17 @@ const TravelEvidenceSection = () => {
 
   if (mediaPostsLoading && mediaPosts.length === 0) {
     return (
-      <section className="border-t border-gray-100 bg-white py-20">
-        <div className="container mx-auto px-4">
-          <div className="mb-12 text-center">
-            <h2 className="mb-2 text-3xl font-black uppercase tracking-widest text-[#0B1C3E]">Travel Evidence</h2>
-            <div className="mx-auto h-1 w-24 bg-[#D4AF37]"></div>
-          </div>
-          <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-3">
+      <section className="border-t border-[#ede5d5] bg-white py-16 sm:py-20">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid gap-6 lg:grid-cols-3">
             {[1, 2, 3].map((item) => (
-              <div key={item} className="animate-pulse overflow-hidden rounded-[2rem] border border-gray-100 bg-gray-50">
-                <div className="h-72 bg-gray-200" />
-                <div className="space-y-4 p-6">
-                  <div className="h-3 w-24 rounded bg-gray-200" />
-                  <div className="h-6 w-3/4 rounded bg-gray-200" />
-                  <div className="h-4 w-full rounded bg-gray-200" />
-                  <div className="h-4 w-5/6 rounded bg-gray-200" />
+              <div key={item} className="animate-pulse overflow-hidden rounded-[1.75rem] border border-[#eee6d8] bg-[#fcfbf8]">
+                <div className="h-72 bg-[#ece5d8]" />
+                <div className="space-y-4 p-5">
+                  <div className="h-3 w-28 rounded bg-[#ece5d8]" />
+                  <div className="h-7 w-3/4 rounded bg-[#ece5d8]" />
+                  <div className="h-4 w-full rounded bg-[#ece5d8]" />
+                  <div className="h-4 w-5/6 rounded bg-[#ece5d8]" />
                 </div>
               </div>
             ))}
@@ -66,8 +35,8 @@ const TravelEvidenceSection = () => {
 
   if (mediaPostsError && mediaPosts.length === 0) {
     return (
-      <section className="border-t border-gray-100 bg-white py-20">
-        <div className="container mx-auto px-4 text-center text-red-500">
+      <section className="border-t border-[#ede5d5] bg-white py-16">
+        <div className="mx-auto max-w-7xl px-4 text-center text-sm text-red-600 sm:px-6 lg:px-8">
           {mediaPostsError}
         </div>
       </section>
@@ -78,71 +47,86 @@ const TravelEvidenceSection = () => {
     return null;
   }
 
+  const highlightedStories = mediaPosts.slice(0, 3);
+
   return (
-    <section className="border-t border-gray-100 bg-white py-20">
-      <div className="container mx-auto px-4">
-        <div className="mb-16 text-center">
-          <h2 className="mb-2 text-3xl font-black uppercase tracking-widest text-[#0B1C3E]">Travel Evidence</h2>
-          <div className="mx-auto h-1 w-24 bg-[#D4AF37]"></div>
-          <p className="mx-auto mt-6 max-w-3xl text-lg text-gray-600">
-            Real moments from recent journeys, destination support, and travel activity managed directly by the NuurPath team.
-          </p>
+    <section className="border-t border-[#ede5d5] bg-white py-16 sm:py-20">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div className="max-w-3xl">
+            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#8a7240]">Travel Stories</p>
+            <h2 className="mt-3 text-3xl font-black tracking-tight text-[#101c2d] sm:text-4xl">
+              Real moments, updates, and proof from recent journeys.
+            </h2>
+            <p className="mt-3 text-base leading-7 text-[#5f6774] sm:text-lg">
+              Open each story to see the full post, comments, and any video update without leaving the NuurPath experience too early.
+            </p>
+          </div>
+          <Link
+            to="/stories"
+            className="inline-flex rounded-full border border-[#d8cfbf] bg-white px-5 py-3 text-sm font-black uppercase tracking-[0.16em] text-[#101c2d] transition hover:bg-[#faf8f3]"
+          >
+            View all stories
+          </Link>
         </div>
 
-        <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-3">
-          {mediaPosts.slice(0, 6).map((post) => (
-            <article key={post.id} className="group overflow-hidden rounded-[2rem] border border-gray-100 bg-white shadow-xl shadow-gray-100/60 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl">
-              <div className="relative h-72 overflow-hidden bg-[#0B1C3E]/10">
-                <img
-                  src={getHeroImage(post)}
-                  alt={post.title}
-                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  loading="lazy"
-                  decoding="async"
+        <div className="mt-10 grid gap-6 lg:grid-cols-3">
+          {highlightedStories.map((post) => (
+            <article
+              key={post.id}
+              className="overflow-hidden rounded-[1.85rem] border border-[#e7dfcf] bg-white shadow-[0_14px_38px_rgba(16,28,45,0.06)]"
+            >
+              <Link to={`/stories/${post.id}`} className="block">
+                <MediaPostImageCarousel
+                  images={getMediaPostImageUrls(post)}
+                  title={post.title}
+                  className="h-72 border-b border-[#eee6d8]"
+                  imageClassName="h-full w-full object-contain"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0B1C3E]/80 via-[#0B1C3E]/10 to-transparent" />
-                <div className="absolute left-5 right-5 top-5 flex flex-wrap gap-2">
-                  {post.destination && (
-                    <span className="rounded-full bg-white/90 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-[#0B1C3E]">
+              </Link>
+
+              <div className="space-y-4 p-5 sm:p-6">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-[#faf7ef] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#8a7240]">
+                    {formatMediaPostDate(post.eventDate || post.createdAt)}
+                  </span>
+                  {post.destination ? (
+                    <span className="rounded-full border border-[#e8dfcf] px-3 py-1 text-[11px] font-bold text-[#4e5764]">
                       {post.destination}
                     </span>
-                  )}
-                  {post.relatedPackage?.title && (
-                    <span className="rounded-full bg-[#D4AF37] px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-[#0B1C3E]">
-                      {post.relatedPackage.title}
-                    </span>
-                  )}
+                  ) : null}
                 </div>
-                <div className="absolute bottom-5 left-5 right-5">
-                  <div className="text-[10px] font-black uppercase tracking-[0.24em] text-white/75">
-                    {formatEvidenceDate(post.eventDate || post.createdAt)}
-                  </div>
-                  <h3 className="mt-3 text-2xl font-black text-white">
-                    {post.title}
+
+                <div>
+                  <h3 className="text-2xl font-black tracking-tight text-[#101c2d]">
+                    <Link to={`/stories/${post.id}`} className="transition hover:text-[#0B1C3E]">
+                      {post.title}
+                    </Link>
                   </h3>
+                  <p className="mt-3 text-sm leading-7 text-[#5f6774]">
+                    {getMediaPostExcerpt(post.caption, 150)}
+                  </p>
                 </div>
-              </div>
 
-              <div className="p-6">
-                <p className="text-sm leading-7 text-gray-600">
-                  {post.caption}
-                </p>
+                <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-[#67707e]">
+                  <span>{post.engagement?.likes || 0} likes</span>
+                  <span>{post.engagement?.comments || 0} comments</span>
+                  <span>{post.images?.length || 0} photos</span>
+                  {post.videoUrl ? <span>Video available</span> : null}
+                </div>
 
-                <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-                  <div className="text-xs font-bold uppercase tracking-[0.2em] text-gray-400">
-                    {(post.images?.length || 0)} image{post.images?.length === 1 ? '' : 's'}
-                    {post.videoUrl ? ' + video story' : ''}
-                  </div>
-                  {post.videoUrl && (
-                    <a
-                      href={post.videoUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="rounded-full bg-[#0B1C3E] px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-white transition-colors hover:bg-[#1a2f55]"
-                    >
-                      Watch Story
-                    </a>
-                  )}
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <Link
+                    to={`/stories/${post.id}`}
+                    className="inline-flex rounded-full bg-[#0B1C3E] px-5 py-3 text-sm font-black uppercase tracking-[0.14em] text-white transition hover:bg-[#1a2f55]"
+                  >
+                    Open story
+                  </Link>
+                  {post.relatedPackage?.title ? (
+                    <span className="text-sm font-semibold text-[#52606d]">
+                      Linked to {post.relatedPackage.title}
+                    </span>
+                  ) : null}
                 </div>
               </div>
             </article>

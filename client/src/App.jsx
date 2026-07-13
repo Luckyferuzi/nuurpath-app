@@ -6,6 +6,8 @@ import { PublicContentProvider } from './contexts/PublicContentContext.jsx';
 import { StaffNotificationsProvider } from './contexts/StaffNotificationsContext.jsx';
 import PackageList from './components/PackageList.jsx';
 import PackageDetails from './components/PackageDetails.jsx';
+import TravelStoriesPage from './components/TravelStoriesPage.jsx';
+import TravelStoryDetails from './components/TravelStoryDetails.jsx';
 import Navbar from './components/Navbar.jsx';
 import BookingForm from './components/BookingForm.jsx';
 import PrivateConsultationBooking from './components/PrivateConsultationBooking.jsx';
@@ -102,6 +104,8 @@ function AppFrame() {
             <Route path="/" element={<Home />} />
             <Route path="/packages" element={<PackageList />} />
             <Route path="/packages/:id" element={<PackageDetails />} />
+            <Route path="/stories" element={<TravelStoriesPage />} />
+            <Route path="/stories/:id" element={<TravelStoryDetails />} />
             <Route path="/book/:packageId" element={<BookingForm />} />
             <Route path="/book-consultation" element={<PrivateConsultationBooking />} />
             <Route path="/book-flight" element={<FlightBookingForm />} />
