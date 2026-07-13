@@ -1311,6 +1311,10 @@ Frontend:
   - removing repeated summary information between the hero and sidebar
   - removing the duplicated request explanation
   - replacing browser-style save/login alerts with quieter inline feedback inside the page
+- Simplified the homepage featured-package card further so it now uses:
+  - one clean outer frame
+  - a clearer half-image, half-summary split
+  - fewer nested borders around the image area
 
 ### Implementation Notes
 
