@@ -330,7 +330,7 @@ const Home = () => {
           <div className="mb-8 mt-10 text-center text-red-500">{packagesError}</div>
         )}
         <div
-          className="group relative mx-auto mt-10 min-h-[300px] max-w-[52rem] overflow-hidden rounded-[1.6rem] border border-[#e6dfd2] bg-white shadow-[0_18px_44px_rgba(16,28,45,0.08)] lg:min-h-[310px]"
+          className="group relative mx-auto mt-10 min-h-[250px] max-w-[49rem] overflow-hidden rounded-[1.6rem] border border-[#e6dfd2] bg-white shadow-[0_18px_44px_rgba(16,28,45,0.08)] sm:min-h-[300px] lg:min-h-[310px]"
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
           onTouchStart={onTouchStart}
@@ -338,25 +338,25 @@ const Home = () => {
           onTouchEnd={onTouchEnd}
         >
           {showTripSkeleton ? (
-            <div className="grid min-h-[300px] lg:grid-cols-[0.94fr_1.06fr]">
-              <div className="min-h-[220px] bg-[#f3eee4] lg:min-h-full">
+            <div className="grid min-h-[250px] grid-cols-[132px_minmax(0,1fr)] sm:min-h-[300px] sm:grid-cols-[0.86fr_1.14fr] lg:grid-cols-[0.94fr_1.06fr]">
+              <div className="min-h-full bg-[#f3eee4]">
                 <div className="h-full w-full bg-gray-300"></div>
               </div>
-              <div className="flex flex-col justify-center gap-4 bg-white p-5 sm:p-6 lg:p-7">
+              <div className="flex flex-col justify-center gap-3 bg-white p-4 sm:gap-4 sm:p-6 lg:p-7">
                 <div className="h-5 w-28 rounded bg-gray-200"></div>
-                <div className="h-8 w-3/4 rounded bg-gray-200"></div>
+                <div className="h-7 w-3/4 rounded bg-gray-200"></div>
                 <div className="h-4 w-full rounded bg-gray-200"></div>
-                <div className="h-4 w-5/6 rounded bg-gray-200"></div>
+                <div className="h-4 w-4/5 rounded bg-gray-200"></div>
                 <div className="flex gap-3">
-                  <div className="h-11 w-36 rounded-full bg-gray-200"></div>
-                  <div className="h-11 w-36 rounded-full bg-gray-200"></div>
+                  <div className="h-10 w-28 rounded-full bg-gray-200"></div>
+                  <div className="h-10 w-28 rounded-full bg-gray-200"></div>
                 </div>
               </div>
             </div>
           ) : activeTrip ? (
             <>
-              <div className="grid min-h-[300px] lg:grid-cols-[0.94fr_1.06fr]">
-                <div className="flex h-[220px] items-center justify-center overflow-hidden bg-[#f3eee4] sm:h-[250px] lg:h-full">
+              <div className="grid min-h-[250px] grid-cols-[132px_minmax(0,1fr)] sm:min-h-[300px] sm:grid-cols-[0.86fr_1.14fr] lg:grid-cols-[0.94fr_1.06fr]">
+                <div className="flex min-h-full items-center justify-center overflow-hidden bg-[#f3eee4] p-2 sm:h-[250px] sm:p-4 lg:h-full">
                   <img
                     src={activeTrip.image}
                     alt={activeTrip.title}
@@ -366,33 +366,33 @@ const Home = () => {
                     decoding="async"
                   />
                 </div>
-                <div className="flex flex-col justify-center bg-white p-5 sm:p-6 lg:p-7">
+                <div className="flex flex-col justify-center bg-white p-4 sm:p-6 lg:p-7">
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7240]">
                     Featured package
                   </p>
-                  <h3 className="home-line-clamp-2 mt-3 text-xl font-black tracking-tight text-[#101c2d] sm:text-[1.7rem]">
+                  <h3 className="home-line-clamp-2 mt-2 text-lg font-black tracking-tight text-[#101c2d] sm:mt-3 sm:text-[1.7rem]">
                     {activeTrip.title}
                   </h3>
-                  <p className="home-line-clamp-1 mt-3 text-sm font-semibold text-[#2d5f50]">
+                  <p className="home-line-clamp-2 mt-2 text-sm font-semibold leading-6 text-[#2d5f50] sm:mt-3">
                     {activeTrip.journeyLabel}
                   </p>
-                  <p className="home-line-clamp-3 mt-3 text-sm leading-7 text-[#5f6774]">
+                  <p className="home-line-clamp-2 mt-2 text-sm leading-6 text-[#5f6774] sm:mt-3 sm:leading-7">
                     {activeTrip.description}
                   </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  <div className="mt-3 flex flex-wrap gap-2 sm:mt-4">
                     {activeTrip.highlights.map((item) => (
                       <span key={item} className="rounded-full border border-[#e5dece] bg-[#faf8f3] px-3 py-1.5 text-xs font-semibold text-[#4d5562]">
                         {item}
                       </span>
                     ))}
                   </div>
-                  <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                    <Link to={activeTrip.link} className="rounded-full bg-[#0B1C3E] px-7 py-3 text-center text-sm font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#1a2f55]">
+                  <div className="mt-4 flex flex-col gap-2 sm:mt-6 sm:gap-3 sm:flex-row">
+                    <Link to={activeTrip.link} className="rounded-full bg-[#0B1C3E] px-5 py-2.5 text-center text-xs font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#1a2f55] sm:px-7 sm:py-3 sm:text-sm">
                       View Package
                     </Link>
                     <button
                       onClick={() => handleBookNow(activeTrip.id)}
-                      className="rounded-full border border-[#d8cfbf] bg-white px-7 py-3 text-sm font-black uppercase tracking-[0.14em] text-[#101c2d] transition-colors hover:bg-[#faf8f3]"
+                      className="rounded-full border border-[#d8cfbf] bg-white px-5 py-2.5 text-xs font-black uppercase tracking-[0.14em] text-[#101c2d] transition-colors hover:bg-[#faf8f3] sm:px-7 sm:py-3 sm:text-sm"
                       type="button"
                     >
                       Request Package
@@ -403,20 +403,20 @@ const Home = () => {
 
               <button
                 onClick={prevSlide}
-                className="absolute left-3 top-1/2 z-10 -translate-y-1/2 rounded-full border border-[#e7decd] bg-white p-2.5 text-[#101c2d] shadow-sm transition-colors hover:bg-[#faf8f3] sm:left-4"
+                className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full border border-[#e7decd] bg-white p-2 text-[#101c2d] shadow-sm transition-colors hover:bg-[#faf8f3] sm:left-4 sm:p-2.5"
                 type="button"
               >
                 &#10094;
               </button>
               <button
                 onClick={nextSlide}
-                className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full border border-[#e7decd] bg-white p-2.5 text-[#101c2d] shadow-sm transition-colors hover:bg-[#faf8f3] sm:right-4"
+                className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full border border-[#e7decd] bg-white p-2 text-[#101c2d] shadow-sm transition-colors hover:bg-[#faf8f3] sm:right-4 sm:p-2.5"
                 type="button"
               >
                 &#10095;
               </button>
 
-              <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 gap-2">
+              <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 gap-2 sm:bottom-4">
                 {upcomingTrips.map((_, idx) => (
                   <button
                     key={idx}

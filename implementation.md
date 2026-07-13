@@ -1320,6 +1320,9 @@ Frontend:
   - a smaller overall footprint
   - more consistent height between packages
   - shorter controlled summary text to reduce uneven stretching
+- Refined the mobile package presentation further by:
+  - reshaping the homepage featured-package card into a more compact phone-friendly split layout
+  - simplifying mobile package-list cards into calmer image-and-summary rows instead of heavier stacked blocks
 
 ### Implementation Notes
 

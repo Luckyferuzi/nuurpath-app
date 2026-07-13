@@ -18,6 +18,13 @@ const ICONS = {
   wishlistEmpty: '\u2661',
 };
 
+const clampStyle = (lines) => ({
+  display: '-webkit-box',
+  WebkitBoxOrient: 'vertical',
+  WebkitLineClamp: lines,
+  overflow: 'hidden',
+});
+
 const PackageCard = ({ pkg, wishlist, toggleWishlist }) => {
   const packageId = pkg._id || pkg.id;
   const isSaved = wishlist.has(packageId);
@@ -38,10 +45,10 @@ const PackageCard = ({ pkg, wishlist, toggleWishlist }) => {
 
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-[1.55rem] border border-[#e5dece] bg-white shadow-[0_14px_34px_rgba(16,28,45,0.05)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_18px_44px_rgba(16,28,45,0.08)]">
-      <Link to={`/packages/${packageId}`} className="block px-4 pb-0 pt-4 sm:px-5 sm:pt-5">
-        <div className="relative h-56 overflow-hidden rounded-[1.3rem] border border-[#ece4d6] bg-[#f4efe5] sm:h-60">
+      <div className="grid grid-cols-[116px_minmax(0,1fr)] gap-4 p-4 sm:hidden">
+        <Link to={`/packages/${packageId}`} className="relative block overflow-hidden rounded-[1.15rem] border border-[#ece4d6] bg-[#f4efe5]">
           {pkg.isFeatured ? (
-            <span className="absolute left-4 top-4 rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-[#0B1C3E] shadow-sm">
+            <span className="absolute left-2 top-2 z-10 rounded-full bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-[#0B1C3E] shadow-sm">
               Featured
             </span>
           ) : null}
@@ -50,74 +57,149 @@ const PackageCard = ({ pkg, wishlist, toggleWishlist }) => {
               event.preventDefault();
               toggleWishlist(packageId);
             }}
-            className="absolute right-4 top-4 rounded-full border border-[#e4dbc9] bg-white p-2 shadow-sm transition-colors hover:bg-[#faf8f3]"
+            className="absolute right-2 top-2 z-10 rounded-full border border-[#e4dbc9] bg-white p-1.5 shadow-sm transition-colors hover:bg-[#faf8f3]"
             title={isSaved ? 'Remove from Wishlist' : 'Add to Wishlist'}
             type="button"
           >
-            <span className={`text-xl ${isSaved ? 'text-red-500' : 'text-gray-400'}`}>
+            <span className={`text-lg ${isSaved ? 'text-red-500' : 'text-gray-400'}`}>
               {isSaved ? ICONS.wishlistFilled : ICONS.wishlistEmpty}
             </span>
           </button>
           <img
             src={pkg.images && pkg.images.length > 0 ? getImageUrl(pkg.images[0]) : 'https://placehold.co/600x400?text=No+Image'}
             alt={pkg.title}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+            className="h-full min-h-[168px] w-full object-cover"
             loading="lazy"
             decoding="async"
           />
-        </div>
-      </Link>
+        </Link>
 
-      <div className="flex grow flex-col p-5 sm:p-6">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7240]">
-              {typeLabel}
-            </p>
-            <h3 className="mt-3 text-xl font-black tracking-tight text-[#101c2d] sm:text-[1.6rem]">
-              <Link to={`/packages/${packageId}`} className="transition-colors hover:text-[#0B1C3E]">
-                {pkg.title}
-              </Link>
-            </h3>
-          </div>
-        </div>
+        <div className="flex min-w-0 flex-col">
+          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">
+            {typeLabel}
+          </p>
+          <h3 className="mt-2 text-lg font-black tracking-tight text-[#101c2d]" style={clampStyle(2)}>
+            <Link to={`/packages/${packageId}`} className="transition-colors hover:text-[#0B1C3E]">
+              {pkg.title}
+            </Link>
+          </h3>
+          <p className="mt-2 text-sm font-semibold leading-6 text-[#2d5f50]" style={clampStyle(2)}>
+            {journeyLabel}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-[#5f6774]" style={clampStyle(2)}>
+            {summary}
+          </p>
 
-        <p className="mt-3 text-sm font-semibold text-[#2d5f50]">
-          {journeyLabel}
-        </p>
-        <p className="mt-3 text-sm leading-7 text-[#5f6774]">
-          {summary}
-        </p>
+          {highlights.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {highlights.map((item) => (
+                <span key={item} className="rounded-full border border-[#e5dece] bg-[#faf8f3] px-2.5 py-1 text-[11px] font-semibold text-[#4d5562]">
+                  {item}
+                </span>
+              ))}
+            </div>
+          ) : null}
 
-        {highlights.length > 0 ? (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {highlights.map((item) => (
-              <span key={item} className="rounded-full border border-[#e5dece] bg-[#faf8f3] px-3 py-1.5 text-xs font-semibold text-[#4d5562]">
-                {item}
-              </span>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="mt-6 flex items-end justify-between gap-4 border-t border-[#ede6d8] pt-4">
-          <div>
-            <span className="block text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Starting from</span>
-            <span className="mt-1 block text-2xl font-black text-[#006837]">
+          <div className="mt-4 border-t border-[#ede6d8] pt-3">
+            <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Starting from</span>
+            <span className="mt-1 block text-xl font-black text-[#006837]">
               {priceLabel}
             </span>
           </div>
-          <p className="max-w-[180px] text-right text-xs leading-6 text-[#6a7280]">
-            {supportLine}
-          </p>
-        </div>
 
-        <div className="mt-5">
-          <Link
-            to={`/packages/${packageId}`}
-            className="block rounded-full bg-[#0B1C3E] px-5 py-3 text-center text-sm font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-[#1a2f55]"
-          >
-            View Package
-          </Link>
+          <div className="mt-4">
+            <Link
+              to={`/packages/${packageId}`}
+              className="block rounded-full bg-[#0B1C3E] px-4 py-2.5 text-center text-xs font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#1a2f55]"
+            >
+              View Package
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      <div className="hidden sm:flex sm:h-full sm:flex-col">
+        <Link to={`/packages/${packageId}`} className="block px-5 pb-0 pt-5">
+          <div className="relative h-60 overflow-hidden rounded-[1.3rem] border border-[#ece4d6] bg-[#f4efe5]">
+            {pkg.isFeatured ? (
+              <span className="absolute left-4 top-4 rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-[#0B1C3E] shadow-sm">
+                Featured
+              </span>
+            ) : null}
+            <button
+              onClick={(event) => {
+                event.preventDefault();
+                toggleWishlist(packageId);
+              }}
+              className="absolute right-4 top-4 rounded-full border border-[#e4dbc9] bg-white p-2 shadow-sm transition-colors hover:bg-[#faf8f3]"
+              title={isSaved ? 'Remove from Wishlist' : 'Add to Wishlist'}
+              type="button"
+            >
+              <span className={`text-xl ${isSaved ? 'text-red-500' : 'text-gray-400'}`}>
+                {isSaved ? ICONS.wishlistFilled : ICONS.wishlistEmpty}
+              </span>
+            </button>
+            <img
+              src={pkg.images && pkg.images.length > 0 ? getImageUrl(pkg.images[0]) : 'https://placehold.co/600x400?text=No+Image'}
+              alt={pkg.title}
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+        </Link>
+
+        <div className="flex grow flex-col p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7240]">
+                {typeLabel}
+              </p>
+              <h3 className="mt-3 text-xl font-black tracking-tight text-[#101c2d] sm:text-[1.6rem]">
+                <Link to={`/packages/${packageId}`} className="transition-colors hover:text-[#0B1C3E]">
+                  {pkg.title}
+                </Link>
+              </h3>
+            </div>
+          </div>
+
+          <p className="mt-3 text-sm font-semibold text-[#2d5f50]">
+            {journeyLabel}
+          </p>
+          <p className="mt-3 text-sm leading-7 text-[#5f6774]">
+            {summary}
+          </p>
+
+          {highlights.length > 0 ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {highlights.map((item) => (
+                <span key={item} className="rounded-full border border-[#e5dece] bg-[#faf8f3] px-3 py-1.5 text-xs font-semibold text-[#4d5562]">
+                  {item}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="mt-6 flex items-end justify-between gap-4 border-t border-[#ede6d8] pt-4">
+            <div>
+              <span className="block text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Starting from</span>
+              <span className="mt-1 block text-2xl font-black text-[#006837]">
+                {priceLabel}
+              </span>
+            </div>
+            <p className="max-w-[180px] text-right text-xs leading-6 text-[#6a7280]">
+              {supportLine}
+            </p>
+          </div>
+
+          <div className="mt-5">
+            <Link
+              to={`/packages/${packageId}`}
+              className="block rounded-full bg-[#0B1C3E] px-5 py-3 text-center text-sm font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-[#1a2f55]"
+            >
+              View Package
+            </Link>
+          </div>
         </div>
       </div>
     </article>
