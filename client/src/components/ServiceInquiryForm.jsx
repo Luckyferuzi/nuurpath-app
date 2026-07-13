@@ -1,7 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import axios from '../lib/api';
 import { buildServiceInquiryWhatsAppUrl } from '../lib/whatsapp';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { usePublicContent } from '../contexts/PublicContentContext.jsx';
+import {
+  getServiceId,
+  getServiceRequestMeta,
+} from '../lib/servicePresentation.js';
+import { PublicPageHeader, PublicPageShell } from './PublicPageShell.jsx';
 
 const initialFormData = {
   contactName: '',
@@ -23,78 +30,36 @@ const documentStatusOptions = [
   'Documents ready',
 ];
 
-const getServiceMeta = (service) => {
-  const title = String(service?.title || '').toLowerCase();
-
-  if (title.includes('visa')) {
-    return {
-      heading: 'Start Visa Guidance',
-      intro: 'Tell us your destination and travel purpose. We help you understand the required documents and next steps.',
-      helper: 'Our team will review your details and guide you on requirements, preparation, and next steps. Approval is decided by the relevant authorities.',
-      submitLabel: 'Start Visa Guidance',
-    };
+function formatDisplayDate(value) {
+  if (!value) {
+    return 'Not provided yet';
   }
 
-  if (title.includes('passport')) {
-    return {
-      heading: 'Start Passport Support',
-      intro: 'Start your passport support request and receive guidance on procedures, documents, and preparation.',
-      helper: 'Our team will review your details and guide you on required steps and preparation. Completion depends on official procedures and issuing authorities.',
-      submitLabel: 'Start Passport Support',
-    };
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return 'Not provided yet';
   }
 
-  if (title.includes('document')) {
-    return {
-      heading: 'Start Travel Document Support',
-      intro: 'Share your situation so our team can guide you on travel documents, preparation, and next steps.',
-      helper: 'We help you understand the process and required documents before continuing with you on WhatsApp.',
-      submitLabel: 'Get Document Guidance',
-    };
-  }
+  return parsedDate.toLocaleDateString();
+}
 
-  if (title.includes('flight')) {
-    return {
-      heading: 'Ask About Flights',
-      intro: 'Share your route, dates, and travel needs. Our team will guide you on the next steps and suitable options.',
-      helper: 'Flight availability and pricing are confirmed by our team after reviewing your request.',
-      submitLabel: 'Ask About Flights',
-    };
-  }
+function getFieldClassName() {
+  return 'w-full rounded-2xl border border-[#d8cfbf] bg-white px-4 py-3 text-sm text-[#101c2d] placeholder:text-[#8d94a0] transition-colors focus:border-[#0B1C3E] focus:outline-none focus:ring-4 focus:ring-[#0B1C3E]/10';
+}
 
-  if (title.includes('consult')) {
-    return {
-      heading: 'Request Consultation',
-      intro: 'Request a private consultation for personalized travel guidance and planning support.',
-      helper: 'Our team will review your request and continue with you on WhatsApp.',
-      submitLabel: 'Request Consultation',
-    };
-  }
-
-  if (title.includes('package') || title.includes('holiday') || title.includes('umrah')) {
-    return {
-      heading: 'Request Travel Package Guidance',
-      intro: 'Explore guided travel options and share your request online so our team can advise on availability and next steps.',
-      helper: 'Our team will review your request and continue with you on WhatsApp. No online payment is required on the website.',
-      submitLabel: 'Request Package Guidance',
-    };
-  }
-
-  return {
-    heading: 'Start Your Request',
-    intro: 'Need help with a travel service? Share your request and our team will guide you through the next steps.',
-    helper: 'We help you understand the required steps and continue with you on WhatsApp.',
-    submitLabel: 'Start Request',
-  };
-};
-
-const ServiceInquiryForm = ({ service, onClose, isModal }) => {
+export default function ServiceInquiryForm() {
+  const { serviceId } = useParams();
   const { user } = useAuth();
+  const { services, servicesLoading } = usePublicContent();
+  const service = useMemo(
+    () => services.find((item) => String(getServiceId(item)) === String(serviceId)) || null,
+    [services, serviceId]
+  );
   const [formData, setFormData] = useState(initialFormData);
   const [status, setStatus] = useState('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [successDetails, setSuccessDetails] = useState(null);
-  const serviceMeta = getServiceMeta(service);
 
   useEffect(() => {
     if (!user) {
@@ -109,15 +74,15 @@ const ServiceInquiryForm = ({ service, onClose, isModal }) => {
     }));
   }, [user]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
+  const handleChange = (event) => {
+    const { name, value } = event.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
 
-    if (!service?.id && !service?.title) {
+    if (!service?.id) {
       setStatus('error');
       setErrorMessage('No service was selected for this request.');
       return;
@@ -134,8 +99,8 @@ const ServiceInquiryForm = ({ service, onClose, isModal }) => {
 
     try {
       const payload = {
-        serviceId: service?.id,
-        serviceType: service?.title || 'Service Inquiry',
+        serviceId: service.id,
+        serviceType: service.title,
         contactName: formData.contactName.trim(),
         contactEmail: formData.contactEmail.trim(),
         contactPhone: formData.contactPhone.trim(),
@@ -150,7 +115,7 @@ const ServiceInquiryForm = ({ service, onClose, isModal }) => {
       const response = await axios.post('/services/inquiries', payload);
       const inquiry = response.data || {};
       const inquiryId = inquiry.inquiryId || inquiry.id;
-      const serviceTitle = inquiry.serviceTitle || inquiry.serviceType || service?.title || 'Service Request';
+      const serviceTitle = inquiry.serviceTitle || inquiry.serviceType || service.title || 'Service Request';
       const whatsappUrl = buildServiceInquiryWhatsAppUrl({
         inquiryId,
         contactName: payload.contactName,
@@ -163,163 +128,385 @@ const ServiceInquiryForm = ({ service, onClose, isModal }) => {
       setSuccessDetails({
         inquiryId,
         serviceTitle,
+        country: payload.country,
+        preferredDate: payload.preferredDate,
+        applicants: payload.applicants,
         whatsappUrl,
       });
       setStatus('success');
-    } catch (err) {
+    } catch (error) {
       setStatus('error');
-      setErrorMessage(err.response?.data?.msg || err.message || 'Something went wrong. Please try again or contact us on WhatsApp.');
+      setErrorMessage(
+        error.response?.data?.msg
+          || error.message
+          || 'Something went wrong. Please try again or contact us on WhatsApp.'
+      );
     }
   };
 
-  const containerStyle = {
-    maxWidth: '600px',
-    margin: isModal ? '0 auto' : '40px auto',
-    padding: '30px',
-    border: isModal ? 'none' : '1px solid #e0e0e0',
-    borderRadius: '8px',
-    backgroundColor: '#fff',
-    boxShadow: isModal ? 'none' : '0 4px 6px rgba(0,0,0,0.05)',
-  };
+  if (servicesLoading && !service) {
+    return (
+      <PublicPageShell background="soft" contentClassName="py-10 sm:py-12 lg:py-16">
+        <div className="rounded-[1.8rem] border border-[#e5dece] bg-white p-10 text-center text-[#5f6774] shadow-sm">
+          Loading the selected service...
+        </div>
+      </PublicPageShell>
+    );
+  }
 
-  const inputStyle = {
-    width: '100%',
-    padding: '10px',
-    marginBottom: '15px',
-    borderRadius: '4px',
-    border: '1px solid #ccc',
-    boxSizing: 'border-box',
-  };
+  if (!service) {
+    return (
+      <PublicPageShell background="soft" contentClassName="py-10 sm:py-12 lg:py-16">
+        <div className="rounded-[1.8rem] border border-[#f0d7d7] bg-white p-10 text-center shadow-sm">
+          <h1 className="text-2xl font-black text-[#101c2d]">Service not available</h1>
+          <p className="mt-4 text-sm leading-7 text-[#5f6774]">
+            This service could not be found right now. You can return to the homepage and choose another support path.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <Link
+              to="/"
+              className="rounded-full bg-[#0B1C3E] px-6 py-3 text-sm font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#1a2f55]"
+            >
+              Back to Home
+            </Link>
+            <Link
+              to="/contact"
+              className="rounded-full border border-[#d8cfbf] bg-white px-6 py-3 text-sm font-black uppercase tracking-[0.14em] text-[#101c2d] transition-colors hover:bg-[#faf8f3]"
+            >
+              Contact NuurPath
+            </Link>
+          </div>
+        </div>
+      </PublicPageShell>
+    );
+  }
+
+  const meta = getServiceRequestMeta(service);
+  const fieldClassName = getFieldClassName();
+  const secondarySuccessPath = meta.intent === 'package' ? '/packages' : '/';
+  const secondarySuccessLabel = meta.intent === 'package' ? 'Explore Packages' : 'Back to Home';
 
   if (status === 'success' && successDetails) {
     return (
-      <div style={containerStyle}>
-        <div className="rounded-xl border border-green-200 bg-green-50 p-6 text-center">
-          <h2 className="text-2xl font-bold text-[#0B1C3E] mb-3">Your Request Has Been Received</h2>
-          <p className="text-gray-700 mb-3">
-            Service: <span className="font-semibold">{successDetails.serviceTitle}</span>
-          </p>
-          <p className="text-gray-700 mb-3">
-            Reference <span className="font-semibold">#{successDetails.inquiryId}</span>. Our team will review your details, prepare the next steps, and continue with you on WhatsApp.
-          </p>
-          <p className="text-gray-700 mb-5">
-            No online payment is required on the website.
-          </p>
+      <PublicPageShell background="soft" contentClassName="py-10 sm:py-12 lg:py-16">
+        <PublicPageHeader
+          eyebrow={meta.eyebrow}
+          title="Your service request has been received"
+          description="The important first step has already been captured on the website. The NuurPath team will review your request and continue with you on WhatsApp using the number you submitted."
+          aside={(
+            <div className="rounded-[1.35rem] bg-[#0B1C3E] p-5 text-white">
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#D4AF37]">Reference</p>
+              <p className="mt-3 text-3xl font-black">#{successDetails.inquiryId}</p>
+              <p className="mt-3 text-sm leading-7 text-slate-200">
+                Keep this number if you want to reference the request during follow-up.
+              </p>
+            </div>
+          )}
+        />
 
-          <div className="flex flex-col gap-3">
-            <a
-              href={successDetails.whatsappUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full bg-[#25D366] text-white py-3 rounded-lg font-bold hover:opacity-95 transition-opacity"
-            >
-              Continue on WhatsApp
-            </a>
-            <button
-              type="button"
-              onClick={() => {
-                if (typeof onClose === 'function') {
-                  onClose();
-                }
-              }}
-              className="w-full border border-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
-            >
-              {isModal ? 'Close' : 'Done'}
-            </button>
-          </div>
+        <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <section className="rounded-[1.7rem] border border-[#d7eadb] bg-white p-6 shadow-sm sm:p-8">
+            <div className="rounded-[1.35rem] border border-[#d7eadb] bg-[#f5fbf6] p-5">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#2d5f50]">Request snapshot</p>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div className="rounded-[1.1rem] bg-white p-4 sm:col-span-2">
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Service</p>
+                  <p className="mt-2 text-sm font-semibold text-[#101c2d]">{successDetails.serviceTitle}</p>
+                </div>
+                <div className="rounded-[1.1rem] bg-white p-4">
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">{meta.countryLabel}</p>
+                  <p className="mt-2 text-sm font-semibold text-[#101c2d]">{successDetails.country || 'Not provided yet'}</p>
+                </div>
+                <div className="rounded-[1.1rem] bg-white p-4">
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">{meta.preferredDateLabel}</p>
+                  <p className="mt-2 text-sm font-semibold text-[#101c2d]">{formatDisplayDate(successDetails.preferredDate)}</p>
+                </div>
+                <div className="rounded-[1.1rem] bg-white p-4">
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">{meta.applicantsLabel}</p>
+                  <p className="mt-2 text-sm font-semibold text-[#101c2d]">{successDetails.applicants || 'Not provided yet'}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 rounded-[1.35rem] border border-[#ece4d6] bg-[#fcfbf8] p-5">
+              <h2 className="text-xl font-black tracking-tight text-[#101c2d]">What happens next</h2>
+              <ul className="mt-4 space-y-3 text-sm leading-7 text-[#5f6774]">
+                {meta.whatWeReview.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+              <p className="mt-5 text-sm leading-7 text-[#5f6774]">{meta.paymentNote}</p>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <a
+                href={successDetails.whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 rounded-full bg-[#25D366] px-6 py-3 text-center text-sm font-black uppercase tracking-[0.14em] text-white transition-opacity hover:opacity-95"
+              >
+                Continue on WhatsApp
+              </a>
+              <Link
+                to={secondarySuccessPath}
+                className="rounded-full border border-[#d8cfbf] bg-white px-6 py-3 text-center text-sm font-black uppercase tracking-[0.14em] text-[#101c2d] transition-colors hover:bg-[#faf8f3]"
+              >
+                {secondarySuccessLabel}
+              </Link>
+            </div>
+          </section>
+
+          <aside className="space-y-6">
+            <section className="rounded-[1.55rem] border border-[#ece4d6] bg-white p-5 shadow-sm">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a7240]">Selected service</p>
+              <h2 className="mt-3 text-xl font-black tracking-tight text-[#101c2d]">{service.title}</h2>
+              <p className="mt-3 text-sm leading-7 text-[#5f6774]">
+                {service.description || meta.cardDescription}
+              </p>
+            </section>
+
+            <section className="rounded-[1.55rem] bg-[#0B1C3E] p-5 text-white shadow-sm">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#D4AF37]">Response note</p>
+              <p className="mt-3 text-sm leading-7 text-slate-200">{meta.responseNote}</p>
+            </section>
+          </aside>
         </div>
-      </div>
+      </PublicPageShell>
     );
   }
 
   return (
-    <div style={containerStyle}>
-      <h2 className="text-2xl font-bold mb-6 text-[#0B1C3E] text-center">{serviceMeta.heading}</h2>
-      <p className="text-center text-gray-600 mb-6">{serviceMeta.intro}</p>
+    <PublicPageShell background="soft" contentClassName="py-10 sm:py-12 lg:py-16">
+      <PublicPageHeader
+        eyebrow={meta.eyebrow}
+        title={meta.heading}
+        description={meta.intro}
+        aside={(
+          <>
+            <div className="rounded-[1.35rem] border border-[#ece4d6] bg-[#fcfbf8] p-5">
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Selected service</p>
+              <p className="mt-3 text-lg font-black text-[#101c2d]">{service.title}</p>
+              <p className="mt-3 text-sm leading-7 text-[#5f6774]">
+                {service.description || meta.cardDescription}
+              </p>
+            </div>
+            <div className="rounded-[1.35rem] bg-[#0B1C3E] p-5 text-white">
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#D4AF37]">No online payment</p>
+              <p className="mt-3 text-sm leading-7 text-slate-200">{meta.paymentNote}</p>
+            </div>
+          </>
+        )}
+      />
 
-      <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-        <p className="text-sm text-gray-500 uppercase tracking-wide font-bold">Selected Service</p>
-        <p className="text-xl font-bold text-[#0B1C3E]">{service?.title || 'Service Support'}</p>
-        <p className="text-sm text-gray-600 mt-2">
-          Start your request online, then continue with our team on WhatsApp.
-        </p>
-      </div>
-
-      <div className="mb-5 rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-gray-700">
-        {serviceMeta.helper}
-      </div>
-
-      {status === 'error' && (
-        <div className="p-4 mb-4 text-red-700 bg-red-100 rounded">
-          {errorMessage}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit}>
-        <label className="block mb-2 font-bold text-gray-700">Contact Name</label>
-        <input type="text" name="contactName" required style={inputStyle} value={formData.contactName} onChange={handleChange} />
-
-        <label className="block mb-2 font-bold text-gray-700">Contact Email</label>
-        <input type="email" name="contactEmail" required style={inputStyle} value={formData.contactEmail} onChange={handleChange} />
-
-        <label className="block mb-2 font-bold text-gray-700">Phone / WhatsApp Number</label>
-        <input type="tel" name="contactPhone" required style={inputStyle} value={formData.contactPhone} onChange={handleChange} />
-
-        <label className="block mb-2 font-bold text-gray-700">Country or Destination</label>
-        <input type="text" name="country" style={inputStyle} value={formData.country} onChange={handleChange} placeholder="e.g. Saudi Arabia" />
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-          <div>
-            <label className="block mb-2 font-bold text-gray-700">Preferred Date</label>
-            <input type="date" name="preferredDate" style={inputStyle} value={formData.preferredDate} onChange={handleChange} />
+      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_360px]">
+        <section className="rounded-[1.75rem] border border-[#e5dece] bg-white p-6 shadow-sm sm:p-8">
+          <div className="rounded-[1.35rem] border border-[#ece4d6] bg-[#fcfbf8] p-5 text-sm leading-7 text-[#5f6774]">
+            {meta.helper}
           </div>
-          <div>
-            <label className="block mb-2 font-bold text-gray-700">Applicants</label>
-            <input type="number" name="applicants" min="1" style={inputStyle} value={formData.applicants} onChange={handleChange} />
-          </div>
-        </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-          <div>
-            <label className="block mb-2 font-bold text-gray-700">Urgency</label>
-            <select name="urgency" style={inputStyle} value={formData.urgency} onChange={handleChange}>
-              <option value="">Select urgency</option>
-              {urgencyOptions.map((option) => (
-                <option key={option} value={option}>{option}</option>
+          {status === 'error' && errorMessage ? (
+            <div className="mt-6 rounded-[1.2rem] border border-[#f0d7d7] bg-[#fff6f6] px-4 py-3 text-sm text-[#b84f4f]">
+              {errorMessage}
+            </div>
+          ) : null}
+
+          <form onSubmit={handleSubmit} className="mt-6 space-y-8">
+            <section>
+              <div className="mb-4">
+                <h2 className="text-xl font-black tracking-tight text-[#101c2d]">Contact details</h2>
+                <p className="mt-2 text-sm leading-7 text-[#5f6774]">
+                  These details are used for the human follow-up after the team reviews your request.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold text-[#101c2d]">Contact name</span>
+                  <input
+                    type="text"
+                    name="contactName"
+                    required
+                    className={fieldClassName}
+                    value={formData.contactName}
+                    onChange={handleChange}
+                    placeholder="Your full name"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold text-[#101c2d]">Contact email</span>
+                  <input
+                    type="email"
+                    name="contactEmail"
+                    required
+                    className={fieldClassName}
+                    value={formData.contactEmail}
+                    onChange={handleChange}
+                    placeholder="you@example.com"
+                  />
+                </label>
+                <label className="block sm:col-span-2">
+                  <span className="mb-2 block text-sm font-bold text-[#101c2d]">Phone or WhatsApp number</span>
+                  <input
+                    type="tel"
+                    name="contactPhone"
+                    required
+                    className={fieldClassName}
+                    value={formData.contactPhone}
+                    onChange={handleChange}
+                    placeholder="The number NuurPath should use for follow-up"
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section>
+              <div className="mb-4">
+                <h2 className="text-xl font-black tracking-tight text-[#101c2d]">Request details</h2>
+                <p className="mt-2 text-sm leading-7 text-[#5f6774]">
+                  Share the destination, timeline, and how ready you already are so the team can guide the next step properly.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block sm:col-span-2">
+                  <span className="mb-2 block text-sm font-bold text-[#101c2d]">{meta.countryLabel}</span>
+                  <input
+                    type="text"
+                    name="country"
+                    className={fieldClassName}
+                    value={formData.country}
+                    onChange={handleChange}
+                    placeholder={meta.countryPlaceholder}
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold text-[#101c2d]">{meta.preferredDateLabel}</span>
+                  <input
+                    type="date"
+                    name="preferredDate"
+                    className={fieldClassName}
+                    value={formData.preferredDate}
+                    onChange={handleChange}
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold text-[#101c2d]">{meta.applicantsLabel}</span>
+                  <input
+                    type="number"
+                    name="applicants"
+                    min="1"
+                    className={fieldClassName}
+                    value={formData.applicants}
+                    onChange={handleChange}
+                    placeholder="Optional"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold text-[#101c2d]">Urgency</span>
+                  <select
+                    name="urgency"
+                    className={fieldClassName}
+                    value={formData.urgency}
+                    onChange={handleChange}
+                  >
+                    <option value="">Select urgency</option>
+                    {urgencyOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold text-[#101c2d]">Document status</span>
+                  <select
+                    name="documentStatus"
+                    className={fieldClassName}
+                    value={formData.documentStatus}
+                    onChange={handleChange}
+                  >
+                    <option value="">Select document status</option>
+                    {documentStatusOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </section>
+
+            <section>
+              <div className="mb-4">
+                <h2 className="text-xl font-black tracking-tight text-[#101c2d]">Your request</h2>
+                <p className="mt-2 text-sm leading-7 text-[#5f6774]">
+                  Give the team enough context to understand what you need before the conversation continues on WhatsApp.
+                </p>
+              </div>
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold text-[#101c2d]">{meta.messageLabel}</span>
+                <textarea
+                  name="message"
+                  required
+                  className={`${fieldClassName} min-h-[140px]`}
+                  value={formData.message}
+                  onChange={handleChange}
+                  placeholder={meta.messagePlaceholder}
+                />
+              </label>
+            </section>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="max-w-2xl text-sm leading-7 text-[#5f6774]">
+                The website captures the first serious request step. Any payment instruction or final confirmation is handled by the team only after review.
+              </p>
+              <button
+                type="submit"
+                disabled={status === 'submitting'}
+                className="rounded-full bg-[#0B1C3E] px-7 py-3 text-sm font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#1a2f55] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {status === 'submitting' ? 'Sending Request...' : meta.submitLabel}
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <aside className="space-y-6">
+          <section className="rounded-[1.55rem] border border-[#ece4d6] bg-white p-5 shadow-sm">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a7240]">{meta.summaryTitle}</p>
+            <div className="mt-5 space-y-4">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">{meta.countryLabel}</p>
+                <p className="mt-1 text-sm font-semibold text-[#101c2d]">{formData.country || 'Not provided yet'}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">{meta.preferredDateLabel}</p>
+                <p className="mt-1 text-sm font-semibold text-[#101c2d]">{formatDisplayDate(formData.preferredDate)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">{meta.applicantsLabel}</p>
+                <p className="mt-1 text-sm font-semibold text-[#101c2d]">{formData.applicants || 'Not provided yet'}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Document status</p>
+                <p className="mt-1 text-sm font-semibold text-[#101c2d]">{formData.documentStatus || 'Not provided yet'}</p>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-[1.55rem] border border-[#ece4d6] bg-white p-5 shadow-sm">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a7240]">{meta.checklistTitle}</p>
+            <ul className="mt-4 space-y-3 text-sm leading-7 text-[#5f6774]">
+              {meta.checklist.map((item) => (
+                <li key={item}>{item}</li>
               ))}
-            </select>
-          </div>
-          <div>
-            <label className="block mb-2 font-bold text-gray-700">Document Status</label>
-            <select name="documentStatus" style={inputStyle} value={formData.documentStatus} onChange={handleChange}>
-              <option value="">Select document status</option>
-              {documentStatusOptions.map((option) => (
-                <option key={option} value={option}>{option}</option>
-              ))}
-            </select>
-          </div>
-        </div>
+            </ul>
+          </section>
 
-        <label className="block mb-2 font-bold text-gray-700">How Can We Help?</label>
-        <textarea
-          name="message"
-          required
-          style={{ ...inputStyle, height: '90px' }}
-          value={formData.message}
-          onChange={handleChange}
-          placeholder="Tell us what you need help with, your destination, and any important details."
-        />
-
-        <button
-          type="submit"
-          disabled={status === 'submitting'}
-          className="w-full bg-[#0B1C3E] text-white py-3 rounded-lg font-bold hover:bg-[#1a2f55] transition-colors disabled:opacity-50"
-        >
-          {status === 'submitting' ? 'Sending Request...' : serviceMeta.submitLabel}
-        </button>
-      </form>
-    </div>
+          <section className="rounded-[1.55rem] bg-[#0B1C3E] p-5 text-white shadow-sm">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#D4AF37]">Response note</p>
+            <p className="mt-3 text-sm leading-7 text-slate-200">{meta.responseNote}</p>
+          </section>
+        </aside>
+      </div>
+    </PublicPageShell>
   );
-};
-
-export default ServiceInquiryForm;
+}

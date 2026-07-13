@@ -1,9 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import axios from '../lib/api';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import axios, { resolveBackendUrl } from '../lib/api';
 import { buildPackageRequestWhatsAppUrl } from '../lib/whatsapp';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { usePublicContent } from '../contexts/PublicContentContext.jsx';
 import { countries } from '../data/countries';
+import {
+  formatPackagePrice,
+  getPackageHighlights,
+  getPackageRouteSummary,
+  getPackageShortDescription,
+  getPackageTypeLabel,
+} from '../lib/packagePresentation.js';
+import { PublicPageHeader, PublicPageShell } from './PublicPageShell.jsx';
 
 const initialFormData = {
   fullName: '',
@@ -20,30 +29,52 @@ const initialFormData = {
   nationality: '',
 };
 
-const BookingForm = ({ packageId: propPackageId, onClose, isModal }) => {
-  const { packageId: paramPackageId } = useParams();
-  const packageId = propPackageId || paramPackageId;
+const requestSteps = [
+  'Send the request with the main traveler details.',
+  'NuurPath reviews package availability and any travel notes you shared.',
+  'Our team continues with you on WhatsApp for confirmation and the next step.',
+];
+
+const documentTips = [
+  'Passport copy is optional at this stage, but it helps early document review.',
+  'Passport validity should still cover at least 6 months after travel.',
+  'If you do not have all document details yet, you can still send the request now.',
+];
+
+function formatDisplayDate(value) {
+  if (!value) {
+    return 'Not provided yet';
+  }
+
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return 'Not provided yet';
+  }
+
+  return parsedDate.toLocaleDateString();
+}
+
+function getFieldClassName() {
+  return 'w-full rounded-2xl border border-[#d8cfbf] bg-white px-4 py-3 text-sm text-[#101c2d] placeholder:text-[#8d94a0] transition-colors focus:border-[#0B1C3E] focus:outline-none focus:ring-4 focus:ring-[#0B1C3E]/10';
+}
+
+export default function BookingForm() {
+  const { packageId } = useParams();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
-  const [pkg, setPkg] = useState(null);
+  const { packages } = usePublicContent();
+  const cachedPackage = useMemo(
+    () => packages.find((item) => String(item?._id || item?.id) === String(packageId)) || null,
+    [packages, packageId]
+  );
+  const [pkg, setPkg] = useState(cachedPackage);
   const [formData, setFormData] = useState(initialFormData);
   const [status, setStatus] = useState('idle');
+  const [packageLoading, setPackageLoading] = useState(!cachedPackage);
   const [uploading, setUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successDetails, setSuccessDetails] = useState(null);
-
-  useEffect(() => {
-    if (!packageId) {
-      return;
-    }
-
-    axios.get(`/packages/${packageId}`)
-      .then((res) => setPkg(res.data))
-      .catch((err) => {
-        console.error('Failed to fetch package:', err);
-        setErrorMessage('Unable to load the selected package right now.');
-      });
-  }, [packageId]);
 
   useEffect(() => {
     if (!user) {
@@ -58,13 +89,64 @@ const BookingForm = ({ packageId: propPackageId, onClose, isModal }) => {
     }));
   }, [user]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
+  useEffect(() => {
+    if (cachedPackage) {
+      setPkg(cachedPackage);
+    }
+  }, [cachedPackage]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const fetchPackage = async () => {
+      if (!packageId) {
+        setPackageLoading(false);
+        setErrorMessage('No package was selected for this request.');
+        return;
+      }
+
+      try {
+        const response = await axios.get(`/packages/${packageId}`);
+
+        if (!isActive) {
+          return;
+        }
+
+        setPkg(response.data);
+      } catch (error) {
+        console.error('Failed to fetch package:', error);
+
+        if (!isActive) {
+          return;
+        }
+
+        setErrorMessage(
+          error.response?.status === 404
+            ? 'This package is not available right now.'
+            : 'Unable to load the selected package right now.'
+        );
+      } finally {
+        if (isActive) {
+          setPackageLoading(false);
+        }
+      }
+    };
+
+    fetchPackage();
+
+    return () => {
+      isActive = false;
+    };
+  }, [packageId]);
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handlePassportUpload = async (e) => {
-    const file = e.target.files?.[0];
+  const handlePassportUpload = async (event) => {
+    const file = event.target.files?.[0];
+
     if (!file) {
       return;
     }
@@ -76,21 +158,22 @@ const BookingForm = ({ packageId: propPackageId, onClose, isModal }) => {
     setErrorMessage('');
 
     try {
-      const res = await axios.post('/bookings/upload', uploadData, {
+      const response = await axios.post('/bookings/upload', uploadData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      setFormData((prev) => ({ ...prev, passportCopy: res.data.url }));
+      setFormData((prev) => ({ ...prev, passportCopy: response.data.url }));
     } catch (error) {
-      console.error('Upload failed', error);
+      console.error('Passport upload failed:', error);
       setErrorMessage(error.response?.data?.msg || 'Failed to upload the passport copy.');
     } finally {
       setUploading(false);
+      event.target.value = '';
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
 
     if (!packageId) {
       setStatus('error');
@@ -101,6 +184,7 @@ const BookingForm = ({ packageId: propPackageId, onClose, isModal }) => {
     const trimmedName = formData.fullName.trim();
     const trimmedEmail = formData.email.trim();
     const trimmedPhone = formData.phone.trim();
+    const passengerCount = parseInt(formData.passengers, 10);
 
     if (trimmedPhone.length < 7) {
       setStatus('error');
@@ -137,7 +221,7 @@ const BookingForm = ({ packageId: propPackageId, onClose, isModal }) => {
         specialRequests: formData.specialRequests.trim(),
         nationality: formData.nationality || undefined,
         travelDate: formData.date || undefined,
-        passengers: parseInt(formData.passengers, 10),
+        passengers: passengerCount,
         packageId: parseInt(packageId, 10),
       };
 
@@ -158,190 +242,497 @@ const BookingForm = ({ packageId: propPackageId, onClose, isModal }) => {
       setSuccessDetails({
         requestId,
         packageTitle,
+        travelDate: payload.travelDate,
+        passengers: payload.passengers,
+        locationFrom: payload.locationFrom,
         whatsappUrl,
       });
       setStatus('success');
-    } catch (err) {
-      console.error('Package request error:', err.response?.data || err.message);
+    } catch (error) {
+      console.error('Package request error:', error.response?.data || error.message);
       setStatus('error');
-      setErrorMessage(err.response?.data?.msg || err.response?.data?.error || 'Something went wrong. Please try again or contact us on WhatsApp.');
+      setErrorMessage(
+        error.response?.data?.msg
+          || error.response?.data?.error
+          || 'Something went wrong. Please try again or contact us on WhatsApp.'
+      );
     }
   };
 
-  const containerStyle = {
-    maxWidth: '600px',
-    margin: isModal ? '0 auto' : '40px auto',
-    padding: '30px',
-    border: isModal ? 'none' : '1px solid #e0e0e0',
-    borderRadius: '8px',
-    backgroundColor: '#fff',
-    boxShadow: isModal ? 'none' : '0 4px 6px rgba(0,0,0,0.05)',
-  };
+  const fieldClassName = getFieldClassName();
+  const packageHighlights = getPackageHighlights(pkg).slice(0, 3);
+  const packageImage = pkg?.images?.[0] ? resolveBackendUrl(pkg.images[0]) : '';
+  const packageSummary = getPackageShortDescription(pkg?.description, 170);
+  const packageRoute = getPackageRouteSummary(pkg);
+  const packageType = getPackageTypeLabel(pkg?.type);
 
-  const inputStyle = {
-    width: '100%',
-    padding: '10px',
-    marginBottom: '15px',
-    borderRadius: '4px',
-    border: '1px solid #ccc',
-    boxSizing: 'border-box',
-  };
+  if (packageLoading && !pkg) {
+    return (
+      <PublicPageShell background="soft" contentClassName="py-10 sm:py-12 lg:py-16">
+        <div className="rounded-[1.8rem] border border-[#e5dece] bg-white p-10 text-center text-[#5f6774] shadow-sm">
+          Loading the selected package...
+        </div>
+      </PublicPageShell>
+    );
+  }
+
+  if (!pkg) {
+    return (
+      <PublicPageShell background="soft" contentClassName="py-10 sm:py-12 lg:py-16">
+        <div className="rounded-[1.8rem] border border-[#f0d7d7] bg-white p-10 text-center shadow-sm">
+          <h1 className="text-2xl font-black text-[#101c2d]">Package not available</h1>
+          <p className="mt-4 text-sm leading-7 text-[#5f6774]">
+            {errorMessage || 'This package could not be loaded right now.'}
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <Link
+              to="/packages"
+              className="rounded-full bg-[#0B1C3E] px-6 py-3 text-sm font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#1a2f55]"
+            >
+              Back to Packages
+            </Link>
+            <Link
+              to="/contact"
+              className="rounded-full border border-[#d8cfbf] bg-white px-6 py-3 text-sm font-black uppercase tracking-[0.14em] text-[#101c2d] transition-colors hover:bg-[#faf8f3]"
+            >
+              Contact NuurPath
+            </Link>
+          </div>
+        </div>
+      </PublicPageShell>
+    );
+  }
 
   if (status === 'success' && successDetails) {
     return (
-      <div style={containerStyle}>
-        <div className="rounded-xl border border-green-200 bg-green-50 p-6 text-center">
-          <h2 className="text-2xl font-bold text-[#0B1C3E] mb-3">Your Package Request Has Been Received</h2>
-          <p className="text-gray-700 mb-3">
-            Your request for <span className="font-semibold">{successDetails.packageTitle}</span> has been received.
-          </p>
-          <p className="text-gray-700 mb-4">
-            Reference <span className="font-semibold">#{successDetails.requestId}</span>. The NuurPath team will review your details, confirm availability, and continue with you on WhatsApp.
-          </p>
-          <p className="text-gray-700 mb-4">
-            No online payment is required on the website.
-          </p>
-          {!isAuthenticated && (
-            <p className="text-sm text-gray-500 mb-5">
-              Create an account to track requests and receive future offers. You can still start a request without signing in.
-            </p>
+      <PublicPageShell background="soft" contentClassName="py-10 sm:py-12 lg:py-16">
+        <PublicPageHeader
+          eyebrow="Package request sent"
+          title="Your package request is now with NuurPath"
+          description="The important first step has been completed on the website. Our team will now review the request, confirm availability, and continue with you on WhatsApp."
+          aside={(
+            <div className="rounded-[1.35rem] bg-[#0B1C3E] p-5 text-white">
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#D4AF37]">Reference</p>
+              <p className="mt-3 text-3xl font-black">#{successDetails.requestId}</p>
+              <p className="mt-3 text-sm leading-7 text-slate-200">
+                Keep this request number for quick follow-up if you contact the team.
+              </p>
+            </div>
           )}
-          <div className="flex flex-col gap-3">
-            <a
-              href={successDetails.whatsappUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full bg-[#25D366] text-white py-3 rounded-lg font-bold hover:opacity-95 transition-opacity"
-            >
-              Continue on WhatsApp
-            </a>
-            {isAuthenticated && (
-              <button
-                type="button"
-                onClick={() => navigate('/dashboard?tab=bookings')}
-                className="w-full border border-[#0B1C3E] text-[#0B1C3E] py-3 rounded-lg font-bold hover:bg-gray-50 transition-colors"
+        />
+
+        <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <section className="rounded-[1.7rem] border border-[#d7eadb] bg-white p-6 shadow-sm sm:p-8">
+            <div className="rounded-[1.35rem] border border-[#d7eadb] bg-[#f5fbf6] p-5">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#2d5f50]">Request snapshot</p>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div className="rounded-[1.1rem] bg-white p-4">
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Package</p>
+                  <p className="mt-2 text-sm font-semibold text-[#101c2d]">{successDetails.packageTitle}</p>
+                </div>
+                <div className="rounded-[1.1rem] bg-white p-4">
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Travelers</p>
+                  <p className="mt-2 text-sm font-semibold text-[#101c2d]">{successDetails.passengers}</p>
+                </div>
+                <div className="rounded-[1.1rem] bg-white p-4">
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Preferred travel date</p>
+                  <p className="mt-2 text-sm font-semibold text-[#101c2d]">{formatDisplayDate(successDetails.travelDate)}</p>
+                </div>
+                <div className="rounded-[1.1rem] bg-white p-4">
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Departure city</p>
+                  <p className="mt-2 text-sm font-semibold text-[#101c2d]">{successDetails.locationFrom || 'Not provided yet'}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 rounded-[1.35rem] border border-[#ece4d6] bg-[#fcfbf8] p-5">
+              <h2 className="text-xl font-black tracking-tight text-[#101c2d]">What happens next</h2>
+              <ol className="mt-4 space-y-3 text-sm leading-7 text-[#5f6774]">
+                {requestSteps.map((step, index) => (
+                  <li key={step} className="flex gap-3">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#0B1C3E] text-xs font-black text-white">
+                      {index + 1}
+                    </span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
+              <p className="mt-5 text-sm leading-7 text-[#5f6774]">
+                No online payment is required on the website. If payment is needed later, the team will explain the confirmed offline method after reviewing the request.
+              </p>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <a
+                href={successDetails.whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 rounded-full bg-[#25D366] px-6 py-3 text-center text-sm font-black uppercase tracking-[0.14em] text-white transition-opacity hover:opacity-95"
               >
-                View My Requests
-              </button>
-            )}
-            {isModal && onClose ? (
-              <button
-                type="button"
-                onClick={onClose}
-                className="w-full border border-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
-              >
-                Close
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => navigate('/packages')}
-                className="w-full border border-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
-              >
-                Browse More Packages
-              </button>
-            )}
-          </div>
+                Continue on WhatsApp
+              </a>
+              {isAuthenticated ? (
+                <button
+                  type="button"
+                  onClick={() => navigate('/dashboard?tab=bookings')}
+                  className="rounded-full border border-[#0B1C3E] bg-white px-6 py-3 text-sm font-black uppercase tracking-[0.14em] text-[#0B1C3E] transition-colors hover:bg-[#faf8f3]"
+                >
+                  View My Requests
+                </button>
+              ) : (
+                <Link
+                  to="/packages"
+                  className="rounded-full border border-[#d8cfbf] bg-white px-6 py-3 text-center text-sm font-black uppercase tracking-[0.14em] text-[#101c2d] transition-colors hover:bg-[#faf8f3]"
+                >
+                  Browse More Packages
+                </Link>
+              )}
+            </div>
+          </section>
+
+          <aside className="space-y-6">
+            <section className="rounded-[1.55rem] border border-[#ece4d6] bg-white p-5 shadow-sm">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a7240]">Selected package</p>
+              <h2 className="mt-3 text-xl font-black tracking-tight text-[#101c2d]">{pkg.title}</h2>
+              <p className="mt-3 text-sm leading-7 text-[#5f6774]">{packageSummary}</p>
+            </section>
+
+            <section className="rounded-[1.55rem] bg-[#0B1C3E] p-5 text-white shadow-sm">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#D4AF37]">Payment note</p>
+              <p className="mt-3 text-sm leading-7 text-slate-200">
+                Payment is handled outside the website after the team reviews availability and shares the confirmed next step with you.
+              </p>
+            </section>
+          </aside>
         </div>
-      </div>
+      </PublicPageShell>
     );
   }
 
   return (
-    <div style={containerStyle}>
-      <h2 className="text-2xl font-bold mb-6 text-[#0B1C3E] text-center">
-        Request Package
-      </h2>
+    <PublicPageShell background="soft" contentClassName="py-10 sm:py-12 lg:py-16">
+      <PublicPageHeader
+        eyebrow="Package request"
+        title="Start your package request with a clear first step"
+        description="This page captures the important request details before direct follow-up begins. Send the request here, then NuurPath continues with you on WhatsApp for availability, confirmation, and the next step."
+        aside={(
+          <>
+            <div className="rounded-[1.35rem] border border-[#ece4d6] bg-[#fcfbf8] p-5">
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">No online payment</p>
+              <p className="mt-3 text-sm leading-7 text-[#5f6774]">
+                Payment is not collected on the website. The team confirms availability first and then explains the offline payment step if needed.
+              </p>
+            </div>
+            <div className="rounded-[1.35rem] bg-[#0B1C3E] p-5 text-white">
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#D4AF37]">Dashboard support</p>
+              <p className="mt-3 text-sm leading-7 text-slate-200">
+                {isAuthenticated
+                  ? 'Because you are signed in, this package request will also appear in your dashboard after it is submitted.'
+                  : 'You do not need to log in to start a package request. If you sign in later, future requests can be easier to track.'}
+              </p>
+            </div>
+          </>
+        )}
+      />
 
-      {pkg && (
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <p className="text-sm text-gray-500 uppercase tracking-wide font-bold">Selected Package</p>
-          <p className="text-xl font-bold text-[#0B1C3E]">{pkg.title}</p>
-          <p className="text-xs text-gray-500 uppercase tracking-[2px] font-bold mt-2">Starting from</p>
-          <p className="text-[#D4AF37] font-bold">{typeof pkg.price === 'number' ? `$${pkg.price.toLocaleString()}` : pkg.price}</p>
-        </div>
-      )}
+      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_360px]">
+        <section className="rounded-[1.75rem] border border-[#e5dece] bg-white p-6 shadow-sm sm:p-8">
+          <div className="grid gap-5 rounded-[1.5rem] border border-[#ece4d6] bg-[#fcfbf8] p-5 sm:grid-cols-[176px_minmax(0,1fr)]">
+            <div className="flex items-center justify-center overflow-hidden rounded-[1.2rem] bg-[#f5efe5] p-3">
+              {packageImage ? (
+                <img
+                  src={packageImage}
+                  alt={pkg.title}
+                  className="h-full max-h-[220px] w-full object-contain"
+                  loading="eager"
+                  decoding="async"
+                />
+              ) : (
+                <div className="flex h-[180px] w-full items-center justify-center rounded-[1rem] bg-[#e6dece] px-4 text-center text-sm font-semibold text-[#5f6774]">
+                  Package image coming soon
+                </div>
+              )}
+            </div>
 
-      <div className="mb-5 rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-gray-700">
-        Start your request online and our team will review availability, required details, and next steps on WhatsApp. No online payment is required on the website. {isAuthenticated ? 'This request will also appear in your dashboard.' : 'No login is required to send this request.'}
-      </div>
-
-      {status === 'error' && <div className="p-4 mb-4 text-red-700 bg-red-100 rounded">{errorMessage}</div>}
-
-      <form onSubmit={handleSubmit}>
-        <label className="block mb-2 font-bold text-gray-700">Full Name</label>
-        <input type="text" name="fullName" required style={inputStyle} value={formData.fullName} onChange={handleChange} />
-
-        <label className="block mb-2 font-bold text-gray-700">Email Address</label>
-        <input type="email" name="email" required style={inputStyle} value={formData.email} onChange={handleChange} />
-
-        <label className="block mb-2 font-bold text-gray-700">Phone / WhatsApp Number</label>
-        <input type="tel" name="phone" required style={inputStyle} value={formData.phone} onChange={handleChange} />
-
-        <label className="block mb-2 font-bold text-gray-700">Preferred Travel Date</label>
-        <input type="date" name="date" style={inputStyle} value={formData.date} onChange={handleChange} />
-
-        <label className="block mb-2 font-bold text-gray-700">Number of Travelers</label>
-        <input type="number" name="passengers" min="1" required style={inputStyle} value={formData.passengers} onChange={handleChange} />
-
-        <label className="block mb-2 font-bold text-gray-700">Departure City</label>
-        <input type="text" name="locationFrom" style={inputStyle} value={formData.locationFrom} onChange={handleChange} placeholder="e.g. New York" />
-
-        <label className="block mb-2 font-bold text-gray-700">Special Requests or Travel Notes</label>
-        <textarea
-          name="specialRequests"
-          style={{ ...inputStyle, height: '90px' }}
-          value={formData.specialRequests}
-          onChange={handleChange}
-          placeholder="Tell us anything helpful about your travelers, dates, or preferences."
-        />
-
-        <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
-          <h3 className="text-lg font-bold text-[#0B1C3E] mb-2">Optional Travel Details</h3>
-          <p className="text-sm text-gray-500 mb-4">
-            These details are optional at this stage. Share them now if you want our team to review documents and requirements earlier.
-          </p>
-
-          <label className="block mb-2 font-bold text-gray-700">Passport Number</label>
-          <input type="text" name="passportNumber" style={inputStyle} value={formData.passportNumber} onChange={handleChange} placeholder="Enter passport number" />
-
-          <label className="block mb-2 font-bold text-gray-700">Passport Copy (Scan/Photo)</label>
-          <div className="mb-4">
-            <input
-              type="file"
-              accept="image/*,application/pdf"
-              onChange={handlePassportUpload}
-              style={inputStyle}
-            />
-            {uploading && <p className="text-sm text-blue-600">Uploading document...</p>}
-            {formData.passportCopy && <p className="text-sm text-green-600">Passport copy attached successfully.</p>}
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Selected package</p>
+              <h2 className="mt-3 text-2xl font-black tracking-tight text-[#101c2d]">{pkg.title}</h2>
+              <p className="mt-3 text-sm font-semibold text-[#2d5f50]">
+                {packageRoute || packageType}
+              </p>
+              <p className="mt-3 text-sm leading-7 text-[#5f6774]">{packageSummary}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {packageHighlights.map((item) => (
+                  <span key={item} className="rounded-full border border-[#e5dece] bg-white px-3 py-1.5 text-xs font-semibold text-[#4d5562]">
+                    {item}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-4 text-lg font-black text-[#006837]">
+                {formatPackagePrice(pkg.price)}
+              </p>
+            </div>
           </div>
 
-          <label className="block mb-2 font-bold text-gray-700">Passport Expiry Date</label>
-          <input type="date" name="passportExpiryDate" style={inputStyle} value={formData.passportExpiryDate} onChange={handleChange} />
+          {status === 'error' && errorMessage ? (
+            <div className="mt-6 rounded-[1.2rem] border border-[#f0d7d7] bg-[#fff6f6] px-4 py-3 text-sm text-[#b84f4f]">
+              {errorMessage}
+            </div>
+          ) : null}
 
-          <label className="block mb-2 font-bold text-gray-700">Nationality</label>
-          <select name="nationality" style={inputStyle} value={formData.nationality} onChange={handleChange}>
-            <option value="">Select nationality</option>
-            {countries.map((country) => (
-              <option key={country} value={country}>{country}</option>
-            ))}
-          </select>
+          <form onSubmit={handleSubmit} className="mt-6 space-y-8">
+            <section>
+              <div className="mb-4">
+                <h3 className="text-xl font-black tracking-tight text-[#101c2d]">Traveler contact</h3>
+                <p className="mt-2 text-sm leading-7 text-[#5f6774]">
+                  These are the details NuurPath uses for package follow-up and confirmation.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold text-[#101c2d]">Full name</span>
+                  <input
+                    type="text"
+                    name="fullName"
+                    required
+                    className={fieldClassName}
+                    value={formData.fullName}
+                    onChange={handleChange}
+                    placeholder="Your full name"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold text-[#101c2d]">Email address</span>
+                  <input
+                    type="email"
+                    name="email"
+                    required
+                    className={fieldClassName}
+                    value={formData.email}
+                    onChange={handleChange}
+                    placeholder="you@example.com"
+                  />
+                </label>
+                <label className="block sm:col-span-2">
+                  <span className="mb-2 block text-sm font-bold text-[#101c2d]">Phone or WhatsApp number</span>
+                  <input
+                    type="tel"
+                    name="phone"
+                    required
+                    className={fieldClassName}
+                    value={formData.phone}
+                    onChange={handleChange}
+                    placeholder="Enter the number the team should use for follow-up"
+                  />
+                </label>
+              </div>
+            </section>
 
-          <label className="block mb-2 font-bold text-gray-700">Date of Birth</label>
-          <input type="date" name="dateOfBirth" style={inputStyle} value={formData.dateOfBirth} onChange={handleChange} />
-        </div>
+            <section>
+              <div className="mb-4">
+                <h3 className="text-xl font-black tracking-tight text-[#101c2d]">Travel planning details</h3>
+                <p className="mt-2 text-sm leading-7 text-[#5f6774]">
+                  Share what is already known so the team can review availability and the best next step.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold text-[#101c2d]">Preferred travel date</span>
+                  <input
+                    type="date"
+                    name="date"
+                    className={fieldClassName}
+                    value={formData.date}
+                    onChange={handleChange}
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold text-[#101c2d]">Number of travelers</span>
+                  <input
+                    type="number"
+                    name="passengers"
+                    min="1"
+                    required
+                    className={fieldClassName}
+                    value={formData.passengers}
+                    onChange={handleChange}
+                  />
+                </label>
+                <label className="block sm:col-span-2">
+                  <span className="mb-2 block text-sm font-bold text-[#101c2d]">Departure city</span>
+                  <input
+                    type="text"
+                    name="locationFrom"
+                    className={fieldClassName}
+                    value={formData.locationFrom}
+                    onChange={handleChange}
+                    placeholder="Example: Dar es Salaam"
+                  />
+                </label>
+                <label className="block sm:col-span-2">
+                  <span className="mb-2 block text-sm font-bold text-[#101c2d]">Travel notes or special requests</span>
+                  <textarea
+                    name="specialRequests"
+                    className={`${fieldClassName} min-h-[120px]`}
+                    value={formData.specialRequests}
+                    onChange={handleChange}
+                    placeholder="Tell NuurPath anything helpful about the travelers, schedule, assistance needed, or comfort preferences."
+                  />
+                </label>
+              </div>
+            </section>
 
-        <button
-          type="submit"
-          disabled={status === 'submitting' || uploading}
-          className="w-full mt-6 bg-[#0B1C3E] text-white py-3 rounded-lg font-bold hover:bg-[#1a2f55] transition-colors disabled:opacity-50"
-        >
-          {status === 'submitting' ? 'Sending Request...' : 'Send Package Request'}
-        </button>
-      </form>
-    </div>
+            <section className="rounded-[1.5rem] border border-[#ece4d6] bg-[#fcfbf8] p-5">
+              <div className="mb-4">
+                <h3 className="text-xl font-black tracking-tight text-[#101c2d]">Optional document details</h3>
+                <p className="mt-2 text-sm leading-7 text-[#5f6774]">
+                  These are optional for the first request, but they help the team review readiness earlier.
+                </p>
+              </div>
+
+              <div className="rounded-[1.2rem] border border-[#e8dfcf] bg-white p-4">
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Helpful note</p>
+                <ul className="mt-3 space-y-2 text-sm leading-7 text-[#5f6774]">
+                  {documentTips.map((tip) => (
+                    <li key={tip}>{tip}</li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold text-[#101c2d]">Passport number</span>
+                  <input
+                    type="text"
+                    name="passportNumber"
+                    className={fieldClassName}
+                    value={formData.passportNumber}
+                    onChange={handleChange}
+                    placeholder="Enter passport number"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold text-[#101c2d]">Passport expiry date</span>
+                  <input
+                    type="date"
+                    name="passportExpiryDate"
+                    className={fieldClassName}
+                    value={formData.passportExpiryDate}
+                    onChange={handleChange}
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold text-[#101c2d]">Nationality</span>
+                  <select
+                    name="nationality"
+                    className={fieldClassName}
+                    value={formData.nationality}
+                    onChange={handleChange}
+                  >
+                    <option value="">Select nationality</option>
+                    {countries.map((country) => (
+                      <option key={country} value={country}>
+                        {country}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold text-[#101c2d]">Date of birth</span>
+                  <input
+                    type="date"
+                    name="dateOfBirth"
+                    className={fieldClassName}
+                    value={formData.dateOfBirth}
+                    onChange={handleChange}
+                  />
+                </label>
+                <label className="block sm:col-span-2">
+                  <span className="mb-2 block text-sm font-bold text-[#101c2d]">Passport copy</span>
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    className={fieldClassName}
+                    onChange={handlePassportUpload}
+                  />
+                  <div className="mt-2 text-sm">
+                    {uploading ? (
+                      <span className="text-[#0B1C3E]">Uploading document...</span>
+                    ) : formData.passportCopy ? (
+                      <span className="text-[#2d5f50]">Passport copy attached successfully.</span>
+                    ) : (
+                      <span className="text-[#6a7280]">Optional for the first step.</span>
+                    )}
+                  </div>
+                </label>
+              </div>
+            </section>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="max-w-2xl text-sm leading-7 text-[#5f6774]">
+                This request is reviewed by the NuurPath team before any payment or final confirmation step is discussed.
+              </p>
+              <button
+                type="submit"
+                disabled={status === 'submitting' || uploading}
+                className="rounded-full bg-[#0B1C3E] px-7 py-3 text-sm font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#1a2f55] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {status === 'submitting' ? 'Sending Request...' : 'Send Package Request'}
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <aside className="space-y-6">
+          <section className="rounded-[1.55rem] border border-[#ece4d6] bg-white p-5 shadow-sm">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a7240]">Request summary</p>
+            <h2 className="mt-3 text-xl font-black tracking-tight text-[#101c2d]">What you are about to send</h2>
+            <div className="mt-5 space-y-4">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Package</p>
+                <p className="mt-1 text-sm font-semibold text-[#101c2d]">{pkg.title}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Preferred travel date</p>
+                <p className="mt-1 text-sm font-semibold text-[#101c2d]">{formatDisplayDate(formData.date)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Travelers</p>
+                <p className="mt-1 text-sm font-semibold text-[#101c2d]">{formData.passengers || 1}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Departure city</p>
+                <p className="mt-1 text-sm font-semibold text-[#101c2d]">{formData.locationFrom || 'Not provided yet'}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8a7240]">Document attachment</p>
+                <p className="mt-1 text-sm font-semibold text-[#101c2d]">{formData.passportCopy ? 'Passport copy attached' : 'No file attached yet'}</p>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-[1.55rem] border border-[#ece4d6] bg-white p-5 shadow-sm">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a7240]">What happens next</p>
+            <ol className="mt-4 space-y-3 text-sm leading-7 text-[#5f6774]">
+              {requestSteps.map((step, index) => (
+                <li key={step} className="flex gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#0B1C3E] text-xs font-black text-white">
+                    {index + 1}
+                  </span>
+                  <span>{step}</span>
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          <section className="rounded-[1.55rem] bg-[#0B1C3E] p-5 text-white shadow-sm">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#D4AF37]">Trust note</p>
+            <p className="mt-3 text-sm leading-7 text-slate-200">
+              The website captures the first important details, but confirmation and any payment instruction only happen after human review from the NuurPath team.
+            </p>
+          </section>
+        </aside>
+      </div>
+    </PublicPageShell>
   );
-};
-
-export default BookingForm;
+}

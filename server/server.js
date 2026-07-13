@@ -43,6 +43,7 @@ const {
 } = require('./utils/socketRooms');
 
 const app = express();
+app.set('trust proxy', env.TRUST_PROXY);
 const allowedOriginSet = new Set(env.ALLOWED_ORIGINS);
 const apiBaseUrl = env.API_BASE_URL.replace(/\/+$/, '');
 const apiSocketUrl = apiBaseUrl.startsWith('https://')

@@ -6,13 +6,16 @@ import {
   getPackageJourneyLabel,
   getPackageShortDescription,
 } from '../lib/packagePresentation.js';
+import {
+  getServiceCtaLabel,
+  getServiceEntryPath,
+  getServicePublicDescription,
+} from '../lib/servicePresentation.js';
 import { usePublicContent } from '../contexts/PublicContentContext.jsx';
 import GlobalSupport from './GlobalSupport';
-import BookingForm from './BookingForm';
 import MemoriesGallery from './MemoriesGallery';
 import NewsletterForm from './NewsletterForm';
 import { PublicPageShell, PublicSectionHeading } from './PublicPageShell.jsx';
-import ServiceInquiryForm from './ServiceInquiryForm';
 import TravelEvidenceSection from './TravelEvidenceSection.jsx';
 
 const Home = () => {
@@ -30,10 +33,6 @@ const Home = () => {
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
   const minSwipeDistance = 50;
-  const [bookingModalOpen, setBookingModalOpen] = useState(false);
-  const [selectedTripId, setSelectedTripId] = useState(null);
-  const [serviceInquiryModalOpen, setServiceInquiryModalOpen] = useState(false);
-  const [selectedService, setSelectedService] = useState(null);
   const processSteps = [
     {
       title: 'Choose What You Need',
@@ -150,94 +149,6 @@ const Home = () => {
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
     }
-  };
-
-  const handleBookNow = (tripId) => {
-    setSelectedTripId(tripId);
-    setBookingModalOpen(true);
-    setIsPaused(true);
-  };
-
-  const closeBookingModal = () => {
-    setBookingModalOpen(false);
-    setSelectedTripId(null);
-    setIsPaused(false);
-  };
-
-  const isConsultationService = (service) => /consult/i.test(String(service?.title || ''));
-
-  const getServiceCtaLabel = (service) => {
-    const title = String(service?.title || '').toLowerCase();
-
-    if (title.includes('flight')) {
-      return 'Ask About Flights';
-    }
-
-    if (title.includes('passport')) {
-      return 'Start Passport Support';
-    }
-
-    if (title.includes('visa')) {
-      return 'Start Visa Guidance';
-    }
-
-    if (title.includes('document')) {
-      return 'Get Guidance';
-    }
-
-    if (title.includes('consult')) {
-      return 'Request Consultation';
-    }
-
-    if (title.includes('package') || title.includes('holiday') || title.includes('umrah')) {
-      return 'Request Package';
-    }
-
-    return 'Start Request';
-  };
-
-  const getServiceDescription = (service) => {
-    const title = String(service?.title || '').toLowerCase();
-
-    if (title.includes('umrah') || title.includes('package') || title.includes('holiday')) {
-      return 'Explore guided Umrah and travel package options, then submit your request online. Our team will continue with availability, requirements, and next steps on WhatsApp.';
-    }
-
-    if (title.includes('flight')) {
-      return 'Share your route, dates, and passenger details. Our team will check suitable options and follow up with guidance and quotation.';
-    }
-
-    if (title.includes('visa')) {
-      return 'Tell us your destination and travel purpose. We help you understand the required documents and next steps.';
-    }
-
-    if (title.includes('passport')) {
-      return 'Start your passport support request and receive guidance on procedures, documents, and preparation.';
-    }
-
-    if (title.includes('document')) {
-      return 'Share your situation so our team can guide you on travel documents, requirements, and preparation.';
-    }
-
-    if (title.includes('consult')) {
-      return 'Request a private consultation for personalized travel guidance and planning support.';
-    }
-
-    if (title.includes('hotel')) {
-      return 'Share your destination, dates, and room needs. Our team will guide you on suitable accommodation options and next steps.';
-    }
-
-    return 'Need help with a custom travel plan? Share your request online and our team will guide you through the next steps on WhatsApp.';
-  };
-
-  const openServiceInquiryModal = (service) => {
-    setSelectedService(service);
-    setServiceInquiryModalOpen(true);
-  };
-
-  const closeServiceInquiryModal = () => {
-    setSelectedService(null);
-    setServiceInquiryModalOpen(false);
   };
 
   const showTripSkeleton = packagesLoading && upcomingTrips.length === 0;
@@ -390,13 +301,12 @@ const Home = () => {
                     <Link to={activeTrip.link} className="rounded-full bg-[#0B1C3E] px-5 py-2.5 text-center text-xs font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#1a2f55] sm:px-7 sm:py-3 sm:text-sm">
                       View Package
                     </Link>
-                    <button
-                      onClick={() => handleBookNow(activeTrip.id)}
-                      className="rounded-full border border-[#d8cfbf] bg-white px-5 py-2.5 text-xs font-black uppercase tracking-[0.14em] text-[#101c2d] transition-colors hover:bg-[#faf8f3] sm:px-7 sm:py-3 sm:text-sm"
-                      type="button"
+                    <Link
+                      to={`/book/${activeTrip.id}`}
+                      className="rounded-full border border-[#d8cfbf] bg-white px-5 py-2.5 text-center text-xs font-black uppercase tracking-[0.14em] text-[#101c2d] transition-colors hover:bg-[#faf8f3] sm:px-7 sm:py-3 sm:text-sm"
                     >
                       Request Package
-                    </button>
+                    </Link>
                   </div>
                 </div>
               </div>
@@ -499,27 +409,17 @@ const Home = () => {
                 </div>
                 <h3 className="mb-3 text-xl font-black text-[#0B1C3E]">{service.title}</h3>
                 <p className="mb-4 leading-7 text-[#5f6774]">
-                  {getServiceDescription(service)}
+                  {getServicePublicDescription(service)}
                 </p>
                 <p className="mb-6 text-xs font-black uppercase tracking-[0.22em] text-[#8a7240]">
                   Human support for important travel steps
                 </p>
-                {isConsultationService(service) ? (
-                  <Link
-                    to="/book-consultation"
-                    className="inline-block rounded-full bg-[#0B1C3E] px-6 py-3 font-black uppercase tracking-[0.18em] text-white transition-colors hover:bg-[#1a2f55]"
-                  >
-                    {getServiceCtaLabel(service)}
-                  </Link>
-                ) : (
-                  <button
-                    onClick={() => openServiceInquiryModal(service)}
-                    className="rounded-full bg-[#0B1C3E] px-6 py-3 font-black uppercase tracking-[0.18em] text-white transition-colors hover:bg-[#1a2f55]"
-                    type="button"
-                  >
-                    {getServiceCtaLabel(service)}
-                  </button>
-                )}
+                <Link
+                  to={getServiceEntryPath(service)}
+                  className="inline-block rounded-full bg-[#0B1C3E] px-6 py-3 font-black uppercase tracking-[0.18em] text-white transition-colors hover:bg-[#1a2f55]"
+                >
+                  {getServiceCtaLabel(service)}
+                </Link>
               </div>
             ))
           ) : (
@@ -584,56 +484,6 @@ const Home = () => {
       </section>
 
       <GlobalSupport />
-
-      {bookingModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
-          onClick={closeBookingModal}
-        >
-          <div
-            className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={closeBookingModal}
-              className="absolute right-4 top-4 z-10 rounded-full bg-gray-100 p-1 text-gray-500 hover:text-gray-800"
-              type="button"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            <div className="p-2">
-              <BookingForm packageId={selectedTripId} onClose={closeBookingModal} isModal={true} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {serviceInquiryModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
-          onClick={closeServiceInquiryModal}
-        >
-          <div
-            className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={closeServiceInquiryModal}
-              className="absolute right-4 top-4 z-10 rounded-full bg-gray-100 p-1 text-gray-500 hover:text-gray-800"
-              type="button"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            <div className="p-2">
-              <ServiceInquiryForm service={selectedService} onClose={closeServiceInquiryModal} isModal={true} />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

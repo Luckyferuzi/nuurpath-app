@@ -31,6 +31,30 @@ function hasOwn(object, key) {
     return Object.prototype.hasOwnProperty.call(object || {}, key);
 }
 
+function isPackageDeleteConflict(error) {
+    return error?.code === 'P2003'
+        || String(error?.message || '').includes('PackageBooking_packageId_fkey')
+        || String(error?.message || '').includes('violates RESTRICT setting of foreign key constraint');
+}
+
+function buildPackageDeleteConflictMessage({ bookingCount = 0, reviewCount = 0 } = {}) {
+    const dependencyLabels = [];
+
+    if (bookingCount > 0) {
+        dependencyLabels.push(`${bookingCount} package request${bookingCount === 1 ? '' : 's'}`);
+    }
+
+    if (reviewCount > 0) {
+        dependencyLabels.push(`${reviewCount} review${reviewCount === 1 ? '' : 's'}`);
+    }
+
+    if (dependencyLabels.length === 0) {
+        return 'This package cannot be deleted because it is already connected to customer records.';
+    }
+
+    return `This package cannot be deleted because it already has ${dependencyLabels.join(' and ')} linked to it. Keep it for records or create a new package instead.`;
+}
+
 function buildPackageOrderBy() {
     return [
         { displayOrder: 'asc' },
@@ -591,12 +615,26 @@ router.delete('/:id', auth, requireAdmin, async (req, res) => {
             return sendInvalidId(res);
         }
 
-        const existingPackage = await prisma.package.findUnique({
-            where: { id },
-            select: { images: true },
-        });
+        const [existingPackage, bookingCount, reviewCount] = await prisma.$transaction([
+            prisma.package.findUnique({
+                where: { id },
+                select: { images: true },
+            }),
+            prisma.packageBooking.count({
+                where: { packageId: id },
+            }),
+            prisma.review.count({
+                where: { packageId: id },
+            }),
+        ]);
         if (!existingPackage) {
             return res.status(404).json({ msg: 'Package not found' });
+        }
+
+        if (bookingCount > 0 || reviewCount > 0) {
+            return res.status(409).json({
+                msg: buildPackageDeleteConflictMessage({ bookingCount, reviewCount }),
+            });
         }
 
         await prisma.package.delete({
@@ -611,6 +649,12 @@ router.delete('/:id', auth, requireAdmin, async (req, res) => {
 
         return res.json({ msg: 'Package removed' });
     } catch (err) {
+        if (isPackageDeleteConflict(err)) {
+            return res.status(409).json({
+                msg: buildPackageDeleteConflictMessage(),
+            });
+        }
+
         console.error(err.message);
         return res.status(500).send('Server Error');
     }

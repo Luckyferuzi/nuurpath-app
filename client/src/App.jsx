@@ -18,6 +18,7 @@ import FlightBookingsAdmin from './components/FlightBookingsAdmin.jsx';
 import ManageUsers from './components/ManageUsers.jsx';
 import ManageServices from './components/ManageServices.jsx';
 import ServiceInquiriesAdmin from './components/ServiceInquiriesAdmin.jsx';
+import ServiceInquiryForm from './components/ServiceInquiryForm.jsx';
 import ManagePackages from './components/ManagePackages.jsx';
 import ManageReviews from './components/ManageReviews.jsx';
 import ManageMediaPosts from './components/ManageMediaPosts.jsx';
@@ -53,6 +54,7 @@ const FOOTER_HIDDEN_PATTERNS = [
   '/book/:packageId',
   '/book-flight',
   '/book-consultation',
+  '/services/:serviceId/request',
 ];
 const FOOTER_COMPACT_PATTERNS = [
   '/login',
@@ -102,6 +104,7 @@ function AppFrame() {
             <Route path="/book/:packageId" element={<BookingForm />} />
             <Route path="/book-consultation" element={<PrivateConsultationBooking />} />
             <Route path="/book-flight" element={<FlightBookingForm />} />
+            <Route path="/services/:serviceId/request" element={<ServiceInquiryForm />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />

@@ -1339,7 +1339,7 @@ Frontend:
 ## Phase 10: Guided Digital Request Flows and Service Deepening
 
 Status:
-- Planned
+- Completed
 
 ### Objective
 
@@ -1426,6 +1426,30 @@ Possible backend work:
 
 - WhatsApp remains a continuation channel, not the first serious part of the customer experience.
 - Success states should confirm what the customer submitted and what happens next.
+
+### Completed Work
+
+- Rebuilt the public package-request page into a focused route experience with:
+  - selected-package context
+  - clearer traveler and travel-planning sections
+  - optional document details handled in a calmer way
+  - a live request summary and clearer success confirmation
+- Rebuilt the public flight-request page into a more serious workflow with:
+  - explicit trip-type selection
+  - clearer route and schedule structure
+  - request-preview support before submit
+  - stronger success-state confirmation with route, dates, cabin, and reference
+- Rebuilt service-request journeys into dedicated route pages instead of homepage modal flow:
+  - added `/services/:serviceId/request`
+  - deepened the request experience for visa, passport, document, package-support, hotel, and general travel-service cases
+  - improved service-specific guidance, request copy, and summary panels without making the pages noisy
+- Updated homepage service and package entry points so customers move into focused request pages instead of crowded popups.
+- Kept payment expectations clear across the flows:
+  - no online payment on the website
+  - any offline payment step is explained only after human review from the NuurPath team
+- Added Render-safe proxy handling on the server by enabling configurable `trust proxy` support, with a production-safe default for hosted deployments behind one proxy hop.
+- Hardened package deletion so admin now gets a clear conflict response when a package already has customer requests or reviews linked to it, instead of a generic server failure.
+- No database migration was required for this phase because the improved request depth was achieved through stronger UI structure, route design, and better use of the existing request schema.
 
 ---
 

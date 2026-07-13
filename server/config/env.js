@@ -48,6 +48,39 @@ function parseAllowedOrigins(value) {
     .filter(Boolean);
 }
 
+function parseTrustProxy(value) {
+  const normalizedValue = String(value || '').trim();
+
+  if (!normalizedValue) {
+    return isProduction ? 1 : false;
+  }
+
+  const loweredValue = normalizedValue.toLowerCase();
+
+  if (['true', 'yes', 'on'].includes(loweredValue)) {
+    return true;
+  }
+
+  if (['false', 'no', 'off', '0'].includes(loweredValue)) {
+    return false;
+  }
+
+  if (/^\d+$/.test(loweredValue)) {
+    return Number.parseInt(loweredValue, 10);
+  }
+
+  const trustedHops = normalizedValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (trustedHops.length === 1) {
+    return trustedHops[0];
+  }
+
+  return trustedHops;
+}
+
 const configuredAllowedOrigins = parseAllowedOrigins(
   process.env.ALLOWED_ORIGINS
     || (isProduction
@@ -81,6 +114,7 @@ const env = {
   ADMIN_EMAIL: optionalEnv('ADMIN_EMAIL', ''),
   ADMIN_SETUP_TOKEN: optionalEnv('ADMIN_SETUP_TOKEN', ''),
   GOOGLE_CLIENT_ID: optionalEnv('GOOGLE_CLIENT_ID', ''),
+  TRUST_PROXY: parseTrustProxy(process.env.TRUST_PROXY),
 };
 
 if (isProduction) {
