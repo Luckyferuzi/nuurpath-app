@@ -7,7 +7,7 @@ const {
 const { toTrimmedString } = require('./validation');
 
 const AUDIENCE_TYPES = ['USERS', 'SUBSCRIBERS', 'BOTH'];
-const MESSAGE_TYPES = ['PROFESSIONAL_UPDATE', 'CAMPAIGN', 'OFFER'];
+const MESSAGE_TYPES = ['PROFESSIONAL_UPDATE', 'CAMPAIGN', 'OFFER', 'PILGRIMAGE_GUIDANCE'];
 const GREETING_STYLES = ['DEAR', 'HELLO', 'WARM'];
 const CAMPAIGN_STATUS = {
     DRAFT: 'Draft',
@@ -179,6 +179,7 @@ function getMessageTypeLabel(messageType) {
         PROFESSIONAL_UPDATE: 'Professional Update',
         CAMPAIGN: 'Campaign',
         OFFER: 'Offer',
+        PILGRIMAGE_GUIDANCE: 'Pilgrimage Guidance',
     };
 
     return labels[messageType] || 'Campaign';
@@ -215,6 +216,15 @@ function getDeliveryTypeLabel(deliveryType) {
 }
 
 function getMessageTypeTheme(messageType) {
+    if (messageType === 'PILGRIMAGE_GUIDANCE') {
+        return {
+            accentColor: '#6f5c2b',
+            accentSoft: '#f7f2e2',
+            headerBackground: 'linear-gradient(135deg, #fffdf5 0%, #f5eedc 55%, #ede3c8 100%)',
+            buttonBackground: '#35624d',
+        };
+    }
+
     if (messageType === 'OFFER') {
         return {
             accentColor: '#8a7443',

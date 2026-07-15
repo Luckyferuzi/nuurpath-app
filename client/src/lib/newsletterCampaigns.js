@@ -22,6 +22,11 @@ export const CAMPAIGN_MESSAGE_TYPES = [
     label: 'Professional Update',
     eyebrow: 'Operational clarity',
     description: 'For thoughtful travel guidance, service changes, and polished operational updates.',
+    bestFor: [
+      'Practical travel guidance and timing updates',
+      'Polished service communication for customers',
+      'Clear next-step notes that should stay professional',
+    ],
     defaults: {
       internalName: 'Travel Update Draft',
       subject: 'A calm update from NuurPath',
@@ -40,6 +45,11 @@ export const CAMPAIGN_MESSAGE_TYPES = [
     label: 'Campaign',
     eyebrow: 'Structured announcement',
     description: 'For planned communication that needs a stronger headline and a guided next step.',
+    bestFor: [
+      'Announcements that need one strong message',
+      'Service launches or wider audience communication',
+      'Campaign notes with a guided call to action',
+    ],
     defaults: {
       internalName: 'Campaign Draft',
       subject: 'A new update from NuurPath',
@@ -58,6 +68,11 @@ export const CAMPAIGN_MESSAGE_TYPES = [
     label: 'Offer',
     eyebrow: 'Offer spotlight',
     description: 'For package offers, limited highlights, and campaign-style invitation emails.',
+    bestFor: [
+      'Package promotions and selected offers',
+      'Limited highlights that need gentle urgency',
+      'Invitation-style emails with a clear opportunity',
+    ],
     defaults: {
       internalName: 'Offer Draft',
       subject: 'A special NuurPath offer for {firstName}',
@@ -66,6 +81,29 @@ export const CAMPAIGN_MESSAGE_TYPES = [
       body: 'We wanted to share a selected offer from the NuurPath team.\n\nKeep the message calm, direct, and useful so the offer feels professional rather than noisy.',
       highlightTitle: 'Offer highlight',
       highlightBody: 'Summarize the strongest part of the offer here, such as destination, timing, price direction, or a limited availability note.',
+      ctaLabel: '',
+      ctaUrl: '',
+      signature: 'NuurPath International\nTravel Support Team',
+    },
+  },
+  {
+    value: 'PILGRIMAGE_GUIDANCE',
+    label: 'Pilgrimage Guidance',
+    eyebrow: 'Sacred journey note',
+    description: 'For Umrah, Hajj, and spiritually respectful preparation messages that should feel calm, helpful, and well guided.',
+    bestFor: [
+      'Umrah or Hajj preparation reminders',
+      'Departure, document, and readiness guidance',
+      'Spiritually respectful communication for sacred travel',
+    ],
+    defaults: {
+      internalName: 'Pilgrimage Guidance Draft',
+      subject: 'A preparation note for your upcoming journey',
+      title: 'A calm guidance note for your sacred journey',
+      preheader: 'Use this template for respectful preparation, readiness reminders, and meaningful travel guidance.',
+      body: 'We are sharing a thoughtful preparation note from the NuurPath team.\n\nUse this space for journey reminders, document readiness, departure guidance, or spiritually respectful advice that helps the traveler feel calm and prepared.',
+      highlightTitle: 'Preparation focus',
+      highlightBody: 'Add the most important readiness point here, such as document timing, meeting guidance, departure preparation, or a respectful spiritual reminder for the journey ahead.',
       ctaLabel: '',
       ctaUrl: '',
       signature: 'NuurPath International\nTravel Support Team',

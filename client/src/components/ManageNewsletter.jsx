@@ -760,32 +760,54 @@ const ManageNewsletter = () => {
               </div>
 
               <div className="mt-6">
-                <div className="mb-3 text-sm font-semibold text-gray-700">Message type</div>
-                <div className="grid gap-3 lg:grid-cols-3">
-                  {CAMPAIGN_MESSAGE_TYPES.map((typeOption) => {
-                    const isSelected = campaignForm.messageType === typeOption.value;
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Message template</span>
+                  <select
+                    value={campaignForm.messageType}
+                    onChange={(event) => handleMessageTypeChange(event.target.value)}
+                    className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                  >
+                    {CAMPAIGN_MESSAGE_TYPES.map((typeOption) => (
+                      <option key={typeOption.value} value={typeOption.value}>
+                        {typeOption.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-                    return (
-                      <button
-                        key={typeOption.value}
-                        type="button"
-                        onClick={() => handleMessageTypeChange(typeOption.value)}
-                        className={`rounded-[1.4rem] border px-4 py-4 text-left transition ${
-                          isSelected
-                            ? 'border-[#101c2d] bg-[#101c2d] text-white shadow-sm'
-                            : 'border-[#e7dfcf] bg-white hover:border-[#c9b48a]'
-                        }`}
+                <div className="mt-4 rounded-[1.5rem] border border-[#e7dfcf] bg-[#fbfaf7] px-5 py-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="max-w-3xl">
+                      <div className="text-[11px] font-black uppercase tracking-[0.2em] text-[#8a7443]">
+                        {selectedMessageType.eyebrow}
+                      </div>
+                      <div className="mt-2 text-lg font-black text-[#101c2d]">{selectedMessageType.label}</div>
+                      <p className="mt-2 text-sm leading-6 text-[#67707e]">{selectedMessageType.description}</p>
+                    </div>
+                    <StaffInfoPill tone="warm">Selected template</StaffInfoPill>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {(selectedMessageType.bestFor || []).map((item) => (
+                      <span
+                        key={item}
+                        className="rounded-full border border-[#ddd3bf] bg-white px-3 py-1.5 text-xs font-semibold text-[#5b6472]"
                       >
-                        <div className={`text-[11px] font-black uppercase tracking-[0.2em] ${isSelected ? 'text-white/70' : 'text-[#8a7443]'}`}>
-                          {typeOption.eyebrow}
-                        </div>
-                        <div className="mt-2 text-sm font-black">{typeOption.label}</div>
-                        <p className={`mt-2 text-sm leading-6 ${isSelected ? 'text-white/80' : 'text-[#67707e]'}`}>
-                          {typeOption.description}
-                        </p>
-                      </button>
-                    );
-                  })}
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <div className="rounded-2xl border border-[#ece4d2] bg-white px-4 py-3">
+                      <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Suggested subject</div>
+                      <div className="mt-2 text-sm text-[#101c2d]">{selectedMessageType.defaults.subject}</div>
+                    </div>
+                    <div className="rounded-2xl border border-[#ece4d2] bg-white px-4 py-3">
+                      <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Suggested title</div>
+                      <div className="mt-2 text-sm text-[#101c2d]">{selectedMessageType.defaults.title}</div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -962,7 +984,7 @@ const ManageNewsletter = () => {
                     onClick={() => setCampaignForm((currentForm) => applyCampaignTemplate(currentForm, currentForm.messageType))}
                     className="rounded-full border border-[#d6ccb8] bg-white px-5 py-3 text-sm font-bold text-[#101c2d] transition hover:bg-[#faf8f3]"
                   >
-                    Apply Suggested Structure
+                    Apply Selected Template
                   </button>
                   <button
                     type="button"
