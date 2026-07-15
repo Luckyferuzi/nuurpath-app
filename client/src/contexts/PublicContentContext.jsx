@@ -208,7 +208,7 @@ export const PublicContentProvider = ({ children, enabled = true }) => {
       return nextPackages;
     } catch (error) {
       console.error('Failed to refresh public packages:', error);
-      setPackagesError('Package updates are temporarily delayed. Please try again shortly.');
+      setPackagesError('Package information could not be refreshed right now. Please try again shortly.');
       return packagesRef.current;
     } finally {
       setPackagesLoading(false);
@@ -235,7 +235,7 @@ export const PublicContentProvider = ({ children, enabled = true }) => {
       return nextMediaPosts;
     } catch (error) {
       console.error('Failed to refresh public media posts:', error);
-      setMediaPostsError('Travel evidence updates are temporarily delayed. Please try again shortly.');
+      setMediaPostsError('Travel story updates could not be refreshed right now. Please try again shortly.');
       return mediaPostsRef.current;
     } finally {
       setMediaPostsLoading(false);
@@ -262,7 +262,7 @@ export const PublicContentProvider = ({ children, enabled = true }) => {
       return nextServices;
     } catch (error) {
       console.error('Failed to refresh public services:', error);
-      setServicesError('Service updates are temporarily delayed. Please try again shortly.');
+      setServicesError('Service information could not be refreshed right now. Please try again shortly.');
       return servicesRef.current;
     } finally {
       setServicesLoading(false);

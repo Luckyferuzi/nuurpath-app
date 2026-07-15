@@ -472,7 +472,7 @@ const Home = () => {
               <div className="bg-[#fcfbf8] px-8 py-10 sm:px-10">
                 <h3 className="text-lg font-black text-[#101c2d]">Newsletter Sign-Up</h3>
                 <p className="mt-3 text-sm leading-7 text-[#67707e]">
-                  Simple collection only for now. Campaign sending is not handled inside the website yet.
+                  Receive selected package highlights, travel guidance, and important announcements from the NuurPath team.
                 </p>
                 <div className="mt-6">
                   <NewsletterForm variant="panel" />

@@ -140,7 +140,7 @@ export const STAFF_PAGE_META = {
   },
   '/admin/newsletter': {
     title: 'Newsletter',
-    description: 'Shape campaign drafts, preview message quality, and keep subscribers clean before sending workflows go live.',
+    description: 'Shape campaign drafts, send polished communication, and keep subscriber records well organized.',
   },
   '/admin/users': {
     title: 'Accounts',

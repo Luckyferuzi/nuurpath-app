@@ -449,7 +449,7 @@ export default function BookingForm() {
                 />
               ) : (
                 <div className="flex h-[180px] w-full items-center justify-center rounded-[1rem] bg-[#e6dece] px-4 text-center text-sm font-semibold text-[#5f6774]">
-                  Package image coming soon
+                  Package image unavailable
                 </div>
               )}
             </div>

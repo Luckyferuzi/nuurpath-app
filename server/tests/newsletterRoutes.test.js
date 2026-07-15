@@ -286,4 +286,230 @@ describe('newsletter routes', () => {
             }),
         ]));
     });
+
+    test('campaign test-send delivers to the current admin email and records the result', async () => {
+        const { app, mockPrisma, mockSendEmail } = loadRouterWithMocks('../../routes/newsletterRoutes', '/newsletter');
+
+        mockPrisma.emailCampaign.findUnique.mockResolvedValue({
+            id: 12,
+            internalName: 'Offer Draft',
+            subject: 'A selected offer for {firstName}',
+            audienceType: 'BOTH',
+            messageType: 'OFFER',
+            greetingStyle: 'DEAR',
+            title: 'A selected offer from NuurPath',
+            preheader: 'A short preview line.',
+            body: 'Peace be upon you {fullName}.\n\nThis is a test delivery.',
+            highlightTitle: 'Offer highlight',
+            highlightBody: 'A short note.',
+            ctaLabel: 'View Offer',
+            ctaUrl: 'https://example.com/offers/selected',
+            signature: 'NuurPath International\nTravel Support Team',
+            status: 'Draft',
+        });
+        mockPrisma.emailCampaignRecipient.create.mockResolvedValue({
+            id: 80,
+        });
+        mockPrisma.emailCampaign.update.mockResolvedValue({
+            id: 12,
+            internalName: 'Offer Draft',
+            subject: 'A selected offer for {firstName}',
+            audienceType: 'BOTH',
+            messageType: 'OFFER',
+            greetingStyle: 'DEAR',
+            title: 'A selected offer from NuurPath',
+            preheader: 'A short preview line.',
+            body: 'Peace be upon you {fullName}.\n\nThis is a test delivery.',
+            highlightTitle: 'Offer highlight',
+            highlightBody: 'A short note.',
+            ctaLabel: 'View Offer',
+            ctaUrl: 'https://example.com/offers/selected',
+            signature: 'NuurPath International\nTravel Support Team',
+            status: 'Draft',
+            recipientCount: 0,
+            sentCount: 0,
+            failedCount: 0,
+            lastSentAt: null,
+            lastTestSentAt: new Date('2026-07-15T08:00:00.000Z'),
+            lastError: null,
+            createdAt: new Date('2026-07-15T00:00:00.000Z'),
+            updatedAt: new Date('2026-07-15T08:00:00.000Z'),
+            recipients: [{
+                id: 80,
+                email: 'admin@example.com',
+                name: 'Admin User',
+                source: 'admin_test',
+                deliveryType: 'TEST',
+                status: 'Sent',
+                errorMessage: null,
+                sentAt: new Date('2026-07-15T08:00:00.000Z'),
+                createdAt: new Date('2026-07-15T08:00:00.000Z'),
+            }],
+            createdBy: null,
+            updatedBy: {
+                id: 91,
+                name: 'Admin User',
+                email: 'admin@example.com',
+            },
+        });
+
+        const response = await request(app)
+            .post('/newsletter/campaigns/12/test-send')
+            .set('x-test-user-id', '91')
+            .set('x-test-user-role', 'admin')
+            .set('x-test-user-name', 'Admin User')
+            .set('x-test-user-email', 'admin@example.com');
+
+        expect(response.status).toBe(200);
+        expect(response.body.message).toBe('Test email sent to admin@example.com.');
+        expect(mockSendEmail).toHaveBeenCalledWith(expect.objectContaining({
+            to: 'admin@example.com',
+        }));
+        expect(mockPrisma.emailCampaignRecipient.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({
+                campaignId: 12,
+                email: 'admin@example.com',
+                source: 'admin_test',
+                deliveryType: 'TEST',
+                status: 'Sent',
+            }),
+        });
+    });
+
+    test('campaign send delivers to the resolved audience and stores delivery counts', async () => {
+        const { app, mockPrisma, mockSendEmail } = loadRouterWithMocks('../../routes/newsletterRoutes', '/newsletter');
+
+        mockPrisma.emailCampaign.findUnique.mockResolvedValue({
+            id: 18,
+            internalName: 'Campaign Draft',
+            subject: 'A clear campaign update',
+            audienceType: 'BOTH',
+            messageType: 'CAMPAIGN',
+            greetingStyle: 'HELLO',
+            title: 'A focused message for your selected audience',
+            preheader: 'A short preview line.',
+            body: 'Hello {firstName},\n\nA clean campaign message.',
+            highlightTitle: 'Why this matters',
+            highlightBody: 'A short reason block.',
+            ctaLabel: 'Learn More',
+            ctaUrl: 'https://example.com/campaign',
+            signature: 'NuurPath International\nTravel Support Team',
+            status: 'Draft',
+        });
+        mockPrisma.newsletterSubscriber.findMany.mockResolvedValue([
+            { name: 'Asha Ali', email: 'shared@example.com' },
+            { name: 'Subscriber Only', email: 'subscriber@example.com' },
+        ]);
+        mockPrisma.user.findMany.mockResolvedValue([
+            { name: 'Asha Ali', email: 'shared@example.com' },
+            { name: 'User Only', email: 'user@example.com' },
+        ]);
+        mockPrisma.emailSuppression.findMany.mockResolvedValue([
+            { email: 'blocked@example.com' },
+        ]);
+        mockPrisma.emailCampaign.update
+            .mockResolvedValueOnce({
+                id: 18,
+                status: 'Sending',
+            })
+            .mockResolvedValueOnce({
+                id: 18,
+                internalName: 'Campaign Draft',
+                subject: 'A clear campaign update',
+                audienceType: 'BOTH',
+                messageType: 'CAMPAIGN',
+                greetingStyle: 'HELLO',
+                title: 'A focused message for your selected audience',
+                preheader: 'A short preview line.',
+                body: 'Hello {firstName},\n\nA clean campaign message.',
+                highlightTitle: 'Why this matters',
+                highlightBody: 'A short reason block.',
+                ctaLabel: 'Learn More',
+                ctaUrl: 'https://example.com/campaign',
+                signature: 'NuurPath International\nTravel Support Team',
+                status: 'Sent',
+                recipientCount: 3,
+                sentCount: 3,
+                failedCount: 0,
+                lastSentAt: new Date('2026-07-15T09:00:00.000Z'),
+                lastTestSentAt: null,
+                lastError: null,
+                createdAt: new Date('2026-07-15T00:00:00.000Z'),
+                updatedAt: new Date('2026-07-15T09:00:00.000Z'),
+                recipients: [{
+                    id: 100,
+                    email: 'user@example.com',
+                    name: 'User Only',
+                    source: 'user',
+                    deliveryType: 'LIVE',
+                    status: 'Sent',
+                    errorMessage: null,
+                    sentAt: new Date('2026-07-15T09:00:00.000Z'),
+                    createdAt: new Date('2026-07-15T09:00:00.000Z'),
+                }],
+                createdBy: null,
+                updatedBy: {
+                    id: 91,
+                    name: 'Admin User',
+                    email: 'admin@example.com',
+                },
+            });
+        mockPrisma.emailCampaignRecipient.create.mockResolvedValue({
+            id: 100,
+        });
+
+        const response = await request(app)
+            .post('/newsletter/campaigns/18/send')
+            .set('x-test-user-id', '91')
+            .set('x-test-user-role', 'admin')
+            .set('x-test-user-name', 'Admin User')
+            .set('x-test-user-email', 'admin@example.com');
+
+        expect(response.status).toBe(200);
+        expect(response.body.campaign.status).toBe('Sent');
+        expect(response.body.campaign.sentCount).toBe(3);
+        expect(response.body.campaign.failedCount).toBe(0);
+        expect(mockSendEmail).toHaveBeenCalledTimes(3);
+        expect(mockPrisma.emailCampaign.update).toHaveBeenNthCalledWith(1, {
+            where: { id: 18 },
+            data: expect.objectContaining({
+                status: 'Sending',
+                recipientCount: 3,
+            }),
+        });
+        expect(mockPrisma.emailCampaignRecipient.create).toHaveBeenCalledTimes(3);
+    });
+
+    test('sent campaigns cannot be updated as drafts', async () => {
+        const { app, mockPrisma } = loadRouterWithMocks('../../routes/newsletterRoutes', '/newsletter');
+
+        mockPrisma.emailCampaign.findUnique.mockResolvedValue({
+            id: 12,
+            status: 'Sent',
+        });
+
+        const response = await request(app)
+            .put('/newsletter/campaigns/12')
+            .set('x-test-user-id', '91')
+            .set('x-test-user-role', 'admin')
+            .set('x-test-user-email', 'admin@example.com')
+            .send({
+                internalName: 'Campaign Draft',
+                subject: 'A clear campaign update',
+                audienceType: 'BOTH',
+                messageType: 'CAMPAIGN',
+                greetingStyle: 'HELLO',
+                title: 'A focused message for your selected audience',
+                preheader: 'A short preview line.',
+                body: 'Hello {firstName},\n\nA clean campaign message.',
+                highlightTitle: 'Why this matters',
+                highlightBody: 'A short reason block.',
+                ctaLabel: 'Learn More',
+                ctaUrl: 'https://example.com/campaign',
+                signature: 'NuurPath International\nTravel Support Team',
+            });
+
+        expect(response.status).toBe(409);
+        expect(response.body.msg).toBe('Only draft campaigns can be updated.');
+    });
 });

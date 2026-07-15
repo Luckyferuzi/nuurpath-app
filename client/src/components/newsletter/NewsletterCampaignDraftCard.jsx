@@ -27,14 +27,15 @@ const NewsletterCampaignDraftCard = ({
         </div>
         <div className="flex flex-wrap gap-2">
           <StaffInfoPill tone="dark">{campaign.status}</StaffInfoPill>
-          <StaffInfoPill tone="info">{campaign.messageType.replace(/_/g, ' ')}</StaffInfoPill>
+          <StaffInfoPill tone="info">{campaign.messageTypeLabel || campaign.messageType.replace(/_/g, ' ')}</StaffInfoPill>
+          {campaign.lastTestSentAt ? <StaffInfoPill tone="accent">Tested</StaffInfoPill> : null}
         </div>
       </div>
 
       <p className="mt-4 text-sm leading-6 text-[#67707e]">{helperLine}</p>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <StaffInfoPill tone="warm">{campaign.audienceType.replace(/_/g, ' ')}</StaffInfoPill>
+        <StaffInfoPill tone="warm">{campaign.audienceLabel || campaign.audienceType.replace(/_/g, ' ')}</StaffInfoPill>
         {campaign.updatedBy?.name ? <StaffInfoPill tone="neutral">Saved by {campaign.updatedBy.name}</StaffInfoPill> : null}
       </div>
 

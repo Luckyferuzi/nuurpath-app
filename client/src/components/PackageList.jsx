@@ -342,7 +342,7 @@ const PackageList = () => {
 
       {packagesError && packages.length > 0 && (
         <div className="mb-6 mt-8 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Live updates are temporarily delayed, but the current package list is still available.
+          Some live details could not be refreshed, but the current package list remains available.
         </div>
       )}
 

@@ -10,6 +10,9 @@ const MESSAGE_TYPES = ['PROFESSIONAL_UPDATE', 'CAMPAIGN', 'OFFER'];
 const GREETING_STYLES = ['DEAR', 'HELLO', 'WARM'];
 const CAMPAIGN_STATUS = {
     DRAFT: 'Draft',
+    SENDING: 'Sending',
+    SENT: 'Sent',
+    FAILED: 'Failed',
 };
 
 function normalizeSingleLine(value) {
@@ -190,6 +193,26 @@ function getAudienceLabel(audienceType) {
     return labels[audienceType] || 'Selected audience';
 }
 
+function getRecipientSourceLabel(source) {
+    const labels = {
+        user: 'Registered user',
+        subscriber: 'Subscriber',
+        both: 'Both audiences',
+        admin_test: 'Admin test',
+    };
+
+    return labels[source] || 'Audience contact';
+}
+
+function getDeliveryTypeLabel(deliveryType) {
+    const labels = {
+        LIVE: 'Campaign send',
+        TEST: 'Test send',
+    };
+
+    return labels[deliveryType] || 'Delivery';
+}
+
 function renderCampaignPreview(campaignPayload, previewRecipient = {}) {
     const recipient = normalizePreviewRecipient(previewRecipient);
     const greeting = buildGreeting(campaignPayload.greetingStyle, recipient);
@@ -293,8 +316,31 @@ function serializeEmailCampaign(campaign) {
         ctaUrl: campaign.ctaUrl || '',
         signature: campaign.signature,
         status: campaign.status,
+        recipientCount: campaign.recipientCount || 0,
+        sentCount: campaign.sentCount || 0,
+        failedCount: campaign.failedCount || 0,
+        lastSentAt: campaign.lastSentAt || null,
+        lastTestSentAt: campaign.lastTestSentAt || null,
+        lastError: campaign.lastError || '',
+        audienceLabel: getAudienceLabel(campaign.audienceType),
+        messageTypeLabel: getMessageTypeLabel(campaign.messageType),
         createdAt: campaign.createdAt,
         updatedAt: campaign.updatedAt,
+        deliveryLogs: Array.isArray(campaign.recipients)
+            ? campaign.recipients.map((recipient) => ({
+                id: recipient.id,
+                email: recipient.email,
+                name: recipient.name || '',
+                source: recipient.source,
+                sourceLabel: getRecipientSourceLabel(recipient.source),
+                deliveryType: recipient.deliveryType,
+                deliveryTypeLabel: getDeliveryTypeLabel(recipient.deliveryType),
+                status: recipient.status,
+                errorMessage: recipient.errorMessage || '',
+                sentAt: recipient.sentAt || null,
+                createdAt: recipient.createdAt,
+            }))
+            : [],
         createdBy: campaign.createdBy ? {
             id: campaign.createdBy.id,
             name: campaign.createdBy.name,
@@ -313,6 +359,8 @@ module.exports = {
     CAMPAIGN_STATUS,
     GREETING_STYLES,
     MESSAGE_TYPES,
+    getAudienceLabel,
+    getMessageTypeLabel,
     normalizeCampaignPayload,
     normalizePreviewRecipient,
     renderCampaignPreview,

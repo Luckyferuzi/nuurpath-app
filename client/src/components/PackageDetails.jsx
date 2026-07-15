@@ -310,7 +310,7 @@ const PackageDetails = () => {
                   />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center bg-[#d9d1c2] text-sm font-semibold text-[#4d5562]">
-                    Package image coming soon
+                    Package image unavailable
                   </div>
                 )}
               </div>
@@ -637,7 +637,7 @@ const PackageDetails = () => {
                         onError={(e) => { e.target.style.display = 'none'; }}
                       />
                     ) : (
-                      <span className="px-3 text-center text-xs font-semibold text-[#6a7280]">Image coming soon</span>
+                      <span className="px-3 text-center text-xs font-semibold text-[#6a7280]">Image unavailable</span>
                     )}
                   </div>
                   <div className="flex min-w-0 flex-1 flex-col justify-center transition-transform duration-300 group-hover:translate-x-1">

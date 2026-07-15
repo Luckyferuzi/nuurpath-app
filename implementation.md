@@ -19,7 +19,7 @@ Current status:
 - Phase 12 is completed.
 - Phase 13 is completed.
 - Phase 14 is completed.
-- Phase 15 is planned.
+- Phase 15 is completed.
 - Phase 16 is planned.
 - When resuming work later, read this file first and then continue from the next approved phase.
 
@@ -1945,14 +1945,14 @@ Backend:
   - reopen drafts
   - update drafts
   - delete drafts
-- Kept sending out of scope for this phase while making the authoring experience feel stable, reusable, and more professional than a bare MVP form.
+- Kept the composer focused on message quality and reusable structure while preparing the workflow for operational sending in the next phase.
 
 ---
 
 ## Phase 15: Campaign Sending and History
 
 Status:
-- Planned
+- Completed
 
 ### Objective
 
@@ -2041,6 +2041,33 @@ Backend:
 - The send workflow should remain operationally simple in the first release.
 - Basic history and counts are more important than advanced analytics at this stage.
 
+### Completed Work
+
+- Expanded the campaign data model with operational send fields so each campaign now stores:
+  - recipient count
+  - sent count
+  - failed count
+  - last send timestamp
+  - last test-send timestamp
+  - last delivery error
+- Added `EmailCampaignRecipient` logging so test sends and live sends both leave a basic internal delivery trail.
+- Added admin test-send support so a saved draft can be delivered to the current admin account before a full audience send.
+- Added full campaign sending so admins can deliver to:
+  - users only
+  - subscribers only
+  - both audiences together
+  with audience resolution happening at send time so the latest suppression state is respected.
+- Added delivery-safe audience merging so duplicate emails are removed before campaign sending.
+- Kept sent campaigns as history records instead of editable drafts, which reduces accidental post-send changes and keeps the record cleaner.
+- Added campaign history inside the newsletter workspace with:
+  - status
+  - audience size
+  - delivered count
+  - failed count
+  - recent delivery activity
+- Added a simple "use as new draft" flow so past campaign content can be reused without modifying the original history record.
+- Cleaned newsletter-related wording across the admin workspace and public website so communication reads more professionally and no longer sounds like the product is unfinished.
+
 ---
 
 ## Phase 16: Campaign Refinement and Trust Controls
@@ -2081,7 +2108,7 @@ Recommended direction:
 
 #### 4. Decide which improvements belong in future phases
 
-Examples to evaluate after the MVP exists:
+Examples to evaluate after the core flow exists:
 - richer template controls
 - stronger preference-management screens
 - limited metrics improvements

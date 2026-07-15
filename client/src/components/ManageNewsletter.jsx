@@ -22,6 +22,7 @@ import {
 } from './staff/WorkspacePrimitives.jsx';
 import NewsletterCampaignPreview from './newsletter/NewsletterCampaignPreview.jsx';
 import NewsletterCampaignDraftCard from './newsletter/NewsletterCampaignDraftCard.jsx';
+import NewsletterCampaignHistoryCard from './newsletter/NewsletterCampaignHistoryCard.jsx';
 
 const SUBSCRIBER_FILTERS = [
   { value: 'all', label: 'All subscribers' },
@@ -32,6 +33,7 @@ const SUBSCRIBER_FILTERS = [
 const NEWSLETTER_WORKSPACE_TABS = [
   { value: 'compose', label: 'Compose' },
   { value: 'drafts', label: 'Drafts' },
+  { value: 'history', label: 'History' },
   { value: 'subscribers', label: 'Subscribers' },
 ];
 
@@ -92,10 +94,14 @@ function normalizeCampaignFormData(campaign = {}) {
   };
 }
 
-function getCampaignTabOptions(campaignsCount, subscribersCount) {
+function getCampaignTabOptions(draftsCount, historyCount, subscribersCount) {
   return NEWSLETTER_WORKSPACE_TABS.map((tab) => {
     if (tab.value === 'drafts') {
-      return { ...tab, count: campaignsCount };
+      return { ...tab, count: draftsCount };
+    }
+
+    if (tab.value === 'history') {
+      return { ...tab, count: historyCount };
     }
 
     if (tab.value === 'subscribers') {
@@ -133,6 +139,8 @@ const ManageNewsletter = () => {
   const [campaignsLoading, setCampaignsLoading] = useState(true);
   const [savingCampaign, setSavingCampaign] = useState(false);
   const [deletingCampaignId, setDeletingCampaignId] = useState(null);
+  const [testingCampaignId, setTestingCampaignId] = useState(null);
+  const [sendingCampaignId, setSendingCampaignId] = useState(null);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -204,7 +212,7 @@ const ManageNewsletter = () => {
       ));
       return nextCampaigns;
     } catch (err) {
-      throw new Error(err.response?.data?.msg || err.message || 'Failed to load campaign drafts.');
+      throw new Error(err.response?.data?.msg || err.message || 'Failed to load campaigns.');
     } finally {
       setCampaignsLoading(false);
     }
@@ -264,6 +272,20 @@ const ManageNewsletter = () => {
     previewRecipients.find((recipient) => recipient.id === selectedPreviewRecipientId) || DEFAULT_PREVIEW_RECIPIENT
   ), [previewRecipients, selectedPreviewRecipientId]);
 
+  const draftCampaigns = useMemo(
+    () => campaigns.filter((campaign) => campaign.status === 'Draft'),
+    [campaigns]
+  );
+
+  const historyCampaigns = useMemo(
+    () => campaigns.filter((campaign) => campaign.status !== 'Draft'),
+    [campaigns]
+  );
+
+  const selectedDraftCampaign = useMemo(() => (
+    draftCampaigns.find((campaign) => campaign.id === selectedCampaignId) || null
+  ), [draftCampaigns, selectedCampaignId]);
+
   useEffect(() => {
     const canPreview = isCampaignReadyForPreview(campaignForm);
 
@@ -284,7 +306,7 @@ const ManageNewsletter = () => {
         });
         setPreviewData(response.data || null);
       } catch (err) {
-        setPreviewError(err.response?.data?.msg || err.message || 'Preview is temporarily unavailable.');
+        setPreviewError(err.response?.data?.msg || err.message || 'Preview is unavailable right now.');
       } finally {
         setPreviewLoading(false);
       }
@@ -301,24 +323,24 @@ const ManageNewsletter = () => {
       tone: 'accent',
     },
     {
-      label: 'Suppressed Emails',
-      value: audienceReadiness.suppressed || 0,
-      hint: 'Contacts blocked from future campaign-style delivery after opt-out handling.',
-      tone: 'warm',
+      label: 'Combined Reach',
+      value: audienceReadiness.combinedReachable || 0,
+      hint: 'Unique reachable emails after shared preferences and duplicate removal.',
+      tone: 'default',
     },
     {
       label: 'Draft Campaigns',
-      value: campaigns.length,
-      hint: 'Drafted messages waiting for refinement before sending workflows are introduced.',
+      value: draftCampaigns.length,
+      hint: 'Prepared messages that can still be refined, tested, and sent.',
       tone: 'default',
     },
     {
-      label: 'Combined Reach',
-      value: audienceReadiness.combinedReachable || 0,
-      hint: 'Unique reachable emails after combining users and subscribers.',
-      tone: 'default',
+      label: 'Campaign History',
+      value: historyCampaigns.length,
+      hint: 'Completed deliveries and outcome records kept for reference.',
+      tone: 'warm',
     },
-  ]), [audienceReadiness.combinedReachable, audienceReadiness.suppressed, campaigns.length, counts.active]);
+  ]), [audienceReadiness.combinedReachable, counts.active, draftCampaigns.length, historyCampaigns.length]);
 
   const audienceCards = useMemo(() => ([
     {
@@ -344,8 +366,8 @@ const ManageNewsletter = () => {
   ]), [audienceReadiness]);
 
   const workspaceTabs = useMemo(
-    () => getCampaignTabOptions(campaigns.length, counts.total || 0),
-    [campaigns.length, counts.total]
+    () => getCampaignTabOptions(draftCampaigns.length, historyCampaigns.length, counts.total || 0),
+    [counts.total, draftCampaigns.length, historyCampaigns.length]
   );
 
   const selectedMessageType = useMemo(
@@ -407,12 +429,16 @@ const ManageNewsletter = () => {
     }
   };
 
-  const resetComposer = useCallback(() => {
+  const clearComposer = useCallback(() => {
     setSelectedCampaignId(null);
     setCampaignForm(INITIAL_CAMPAIGN_FORM);
     setPreviewError(null);
-    setActivePanel('compose');
   }, []);
+
+  const resetComposer = useCallback(() => {
+    clearComposer();
+    setActivePanel('compose');
+  }, [clearComposer]);
 
   const handleSaveCampaign = async () => {
     setSavingCampaign(true);
@@ -456,7 +482,8 @@ const ManageNewsletter = () => {
       await fetchCampaignWorkspace();
 
       if (selectedCampaignId === campaign.id) {
-        resetComposer();
+        clearComposer();
+        setActivePanel('compose');
       }
 
       setMessage({
@@ -478,6 +505,17 @@ const ManageNewsletter = () => {
     setMessage(null);
   };
 
+  const handleUseAsNewDraft = (campaign) => {
+    setSelectedCampaignId(null);
+    setCampaignForm(normalizeCampaignFormData(campaign));
+    setPreviewError(null);
+    setActivePanel('compose');
+    setMessage({
+      type: 'success',
+      text: 'Campaign content loaded as a new draft.',
+    });
+  };
+
   const handleFieldChange = (field, value) => {
     setCampaignForm((currentForm) => ({
       ...currentForm,
@@ -487,6 +525,83 @@ const ManageNewsletter = () => {
 
   const handleMessageTypeChange = (messageType) => {
     setCampaignForm((currentForm) => applyCampaignTemplate(currentForm, messageType));
+  };
+
+  const persistSelectedDraft = async () => {
+    if (!selectedDraftCampaign) {
+      throw new Error('Save the draft before sending.');
+    }
+
+    const response = await axios.put(`/newsletter/campaigns/${selectedDraftCampaign.id}`, campaignForm);
+    const savedCampaign = response.data || {};
+    setSelectedCampaignId(savedCampaign.id || selectedDraftCampaign.id);
+    setCampaignForm(normalizeCampaignFormData(savedCampaign));
+    return savedCampaign.id || selectedDraftCampaign.id;
+  };
+
+  const handleSendTest = async () => {
+    if (!selectedDraftCampaign) {
+      setError('Save the draft before sending a test email.');
+      return;
+    }
+
+    setTestingCampaignId(selectedDraftCampaign.id);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const campaignId = await persistSelectedDraft();
+      const response = await axios.post(`/newsletter/campaigns/${campaignId}/test-send`);
+      await fetchCampaignWorkspace();
+      setMessage({
+        type: 'success',
+        text: response.data?.message || 'Test email sent.',
+      });
+    } catch (err) {
+      setError(err.response?.data?.msg || err.message || 'Failed to send the test email.');
+    } finally {
+      setTestingCampaignId(null);
+    }
+  };
+
+  const handleSendCampaign = async () => {
+    if (!selectedDraftCampaign) {
+      setError('Save the draft before sending the campaign.');
+      return;
+    }
+
+    const confirmed = window.confirm('Send this campaign to the selected audience now?');
+    if (!confirmed) {
+      return;
+    }
+
+    setSendingCampaignId(selectedDraftCampaign.id);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const campaignId = await persistSelectedDraft();
+      const response = await axios.post(`/newsletter/campaigns/${campaignId}/send`);
+      await Promise.all([
+        fetchCampaignWorkspace(),
+        fetchSubscribers({ withLoading: false }),
+      ]);
+      clearComposer();
+      setActivePanel('history');
+      setMessage({
+        type: 'success',
+        text: response.data?.message || 'Campaign sent successfully.',
+      });
+    } catch (err) {
+      setError(err.response?.data?.msg || err.message || 'Failed to send the campaign.');
+      try {
+        await fetchCampaignWorkspace();
+      } catch (refreshError) {
+        // Keep the original action error visible when the follow-up refresh also fails.
+      }
+    } finally {
+      setSendingCampaignId(null);
+    }
   };
 
   const handleCopyToken = async (token) => {
@@ -509,7 +624,7 @@ const ManageNewsletter = () => {
     <StaffPageShell
       eyebrow="Growth Operations"
       title="Newsletter"
-      description="Prepare subscriber-ready campaign drafts, preview polished communication, and keep the contact foundation clean before sending workflows go live."
+      description="Prepare polished travel communication, send with confidence, and keep audience records well organized."
       actions={(
         <>
           <button
@@ -559,7 +674,7 @@ const ManageNewsletter = () => {
             <StaffCardSection
               title="Campaign Strategy"
               description="Keep the setup clear first, then let the message body carry the detail. The composer stores drafts, applies gentle structure, and keeps the tone professional."
-              actions={selectedCampaignId ? <StaffInfoPill tone="info">Editing draft #{selectedCampaignId}</StaffInfoPill> : null}
+              actions={selectedDraftCampaign ? <StaffInfoPill tone="info">Editing draft #{selectedDraftCampaign.id}</StaffInfoPill> : null}
             >
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
@@ -614,7 +729,7 @@ const ManageNewsletter = () => {
                 <div className="mt-4 rounded-[1.4rem] border border-[#ece4d2] bg-[#fbfaf7] px-4 py-4">
                   <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Audience Snapshot</div>
                   <p className="mt-2 text-sm leading-6 text-[#67707e]">
-                    This selection currently resolves to <span className="font-bold text-[#101c2d]">{selectedAudienceCount}</span> reachable contact{selectedAudienceCount === 1 ? '' : 's'} using the Phase 13 audience foundation and suppression rules.
+                    This selection currently resolves to <span className="font-bold text-[#101c2d]">{selectedAudienceCount}</span> reachable contact{selectedAudienceCount === 1 ? '' : 's'} after applying active audience rules, shared preferences, and duplicate removal.
                   </p>
                 </div>
               </div>
@@ -778,8 +893,8 @@ const ManageNewsletter = () => {
             </StaffCardSection>
 
             <StaffCardSection
-              title="Token Guide and Draft Actions"
-              description="Use lightweight personalization in the subject, preheader, body, highlight, or signature. The system keeps the fallback greeting safe when a name is missing."
+              title="Personalization and Delivery"
+              description="Use lightweight personalization in the subject, preheader, body, highlight, or signature, then move from draft to test send and full delivery with the same calm workflow."
               actions={copiedToken ? <StaffInfoPill tone="accent">{copiedToken} copied</StaffInfoPill> : null}
             >
               <div className="space-y-5">
@@ -797,10 +912,15 @@ const ManageNewsletter = () => {
                 </div>
 
                 <div className="rounded-[1.4rem] border border-[#ece4d2] bg-[#fbfaf7] px-4 py-4">
-                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Draft Guidance</div>
+                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Delivery Guidance</div>
                   <p className="mt-2 text-sm leading-6 text-[#67707e]">
-                    This phase is about composing well. You can save, reopen, and refine drafts here, while sending and delivery history remain part of the next phase.
+                    Save the draft first, send a test copy to your admin inbox, then deliver to the selected audience when the message is ready. Audience eligibility is checked again at send time.
                   </p>
+                  {selectedDraftCampaign?.lastTestSentAt ? (
+                    <p className="mt-2 text-sm leading-6 text-[#101c2d]">
+                      Last test sent {formatAdminDate(selectedDraftCampaign.lastTestSentAt, 'recently')}.
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="flex flex-wrap gap-3">
@@ -819,6 +939,22 @@ const ManageNewsletter = () => {
                   >
                     Apply Suggested Structure
                   </button>
+                  <button
+                    type="button"
+                    onClick={handleSendTest}
+                    disabled={!selectedDraftCampaign || savingCampaign || testingCampaignId === selectedDraftCampaign.id || sendingCampaignId === selectedDraftCampaign.id}
+                    className="rounded-full border border-[#d6ccb8] bg-white px-5 py-3 text-sm font-bold text-[#101c2d] transition hover:bg-[#faf8f3] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {testingCampaignId === selectedDraftCampaign?.id ? 'Sending Test...' : 'Send Test Email'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSendCampaign}
+                    disabled={!selectedDraftCampaign || savingCampaign || sendingCampaignId === selectedDraftCampaign.id || testingCampaignId === selectedDraftCampaign.id}
+                    className="rounded-full bg-[#8a7443] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#735f37] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {sendingCampaignId === selectedDraftCampaign?.id ? 'Sending Campaign...' : 'Send Campaign'}
+                  </button>
                   {selectedCampaignId ? (
                     <button
                       type="button"
@@ -836,7 +972,7 @@ const ManageNewsletter = () => {
           <div className="space-y-6">
             <StaffCardSection
               title="Preview Recipient"
-              description="Switch between a neutral fallback and real sample contacts from the current audience foundation to check how personalization lands."
+              description="Switch between a neutral fallback and real sample contacts from the current audience list to check how personalization lands."
               actions={campaignsLoading ? <StaffInfoPill tone="neutral">Loading samples</StaffInfoPill> : null}
             >
               <label className="block">
@@ -869,10 +1005,10 @@ const ManageNewsletter = () => {
       {activePanel === 'drafts' && (
         <StaffCardSection
           title="Draft Library"
-          description="Keep message work clean by saving drafts here first. Open any draft to continue refining the subject, structure, and preview before send workflows are introduced."
-          actions={campaignsLoading ? <StaffInfoPill tone="neutral">Refreshing drafts</StaffInfoPill> : <StaffInfoPill tone="info">{campaigns.length} draft{campaigns.length === 1 ? '' : 's'}</StaffInfoPill>}
+          description="Keep message work clean by saving drafts here first. Open any draft to refine the message, preview it, and send when ready."
+          actions={campaignsLoading ? <StaffInfoPill tone="neutral">Refreshing drafts</StaffInfoPill> : <StaffInfoPill tone="info">{draftCampaigns.length} draft{draftCampaigns.length === 1 ? '' : 's'}</StaffInfoPill>}
         >
-          {campaigns.length === 0 ? (
+          {draftCampaigns.length === 0 ? (
             <StaffEmptyState
               title="No campaign drafts yet"
               description="Start in the composer tab, shape the message quietly, and save the draft when the structure feels right."
@@ -888,7 +1024,7 @@ const ManageNewsletter = () => {
             />
           ) : (
             <div className="grid gap-4 xl:grid-cols-2">
-              {campaigns.map((campaign) => (
+              {draftCampaigns.map((campaign) => (
                 <NewsletterCampaignDraftCard
                   key={campaign.id}
                   campaign={campaign}
@@ -903,11 +1039,36 @@ const ManageNewsletter = () => {
         </StaffCardSection>
       )}
 
+      {activePanel === 'history' && (
+        <StaffCardSection
+          title="Campaign History"
+          description="Review completed delivery records, audience size, and any delivery issues. Past campaigns stay preserved as history, and any message can be reused as a fresh draft."
+          actions={campaignsLoading ? <StaffInfoPill tone="neutral">Refreshing history</StaffInfoPill> : <StaffInfoPill tone="warm">{historyCampaigns.length} record{historyCampaigns.length === 1 ? '' : 's'}</StaffInfoPill>}
+        >
+          {historyCampaigns.length === 0 ? (
+            <StaffEmptyState
+              title="No campaign history yet"
+              description="Sent campaigns and delivery results will appear here once the first campaign is delivered."
+            />
+          ) : (
+            <div className="grid gap-4 xl:grid-cols-2">
+              {historyCampaigns.map((campaign) => (
+                <NewsletterCampaignHistoryCard
+                  key={campaign.id}
+                  campaign={campaign}
+                  onReuse={() => handleUseAsNewDraft(campaign)}
+                />
+              ))}
+            </div>
+          )}
+        </StaffCardSection>
+      )}
+
       {activePanel === 'subscribers' && (
         <>
           <StaffCardSection
             title="Audience Foundation"
-            description="Phase 13 keeps subscriber identity, registered-user reach, and shared opt-out behavior aligned so later campaign sending can stay trustworthy and deduplicated."
+            description="Subscriber identity, registered-user reach, and shared opt-out behavior stay aligned here so campaign delivery remains trustworthy and well organized."
           >
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {audienceCards.map((card) => (
@@ -945,7 +1106,7 @@ const ManageNewsletter = () => {
 
           <StaffCardSection
             title="Subscriber List"
-            description={`Showing ${filteredTotal} subscriber${filteredTotal === 1 ? '' : 's'} in the current view. Sending remains out of scope here; this section is for clean audience preparation, visibility, and export.`}
+            description={`Showing ${filteredTotal} subscriber${filteredTotal === 1 ? '' : 's'} in the current view. Use this section for clean audience preparation, visibility, and export.`}
           >
             {subscribers.length === 0 ? (
               <StaffEmptyState

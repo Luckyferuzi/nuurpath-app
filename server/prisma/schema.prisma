@@ -290,6 +290,12 @@ model EmailCampaign {
   ctaUrl          String?
   signature       String
   status          String   @default("Draft")
+  recipientCount  Int      @default(0)
+  sentCount       Int      @default(0)
+  failedCount     Int      @default(0)
+  lastSentAt      DateTime?
+  lastTestSentAt  DateTime?
+  lastError       String?
   createdByUserId Int?
   updatedByUserId Int?
   createdAt       DateTime @default(now())
@@ -297,10 +303,31 @@ model EmailCampaign {
 
   createdBy User? @relation("EmailCampaignCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   updatedBy User? @relation("EmailCampaignUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  recipients EmailCampaignRecipient[]
 
   @@index([status, updatedAt])
   @@index([createdByUserId])
   @@index([updatedByUserId])
+}
+
+model EmailCampaignRecipient {
+  id           Int      @id @default(autoincrement())
+  campaignId   Int
+  email        String
+  name         String?
+  source       String
+  deliveryType String   @default("LIVE")
+  status       String   @default("Pending")
+  errorMessage String?
+  sentAt       DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  campaign EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, createdAt])
+  @@index([campaignId, deliveryType, status])
+  @@index([email])
 }
 
 model MediaPost {

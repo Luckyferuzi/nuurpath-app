@@ -69,6 +69,29 @@ function getEmailConfig() {
     };
 }
 
+function getEmailServiceAvailability() {
+    try {
+        const config = getEmailConfig();
+
+        if (!config) {
+            return {
+                configured: false,
+                reason: 'Email delivery is unavailable until the mail service is configured.',
+            };
+        }
+
+        return {
+            configured: true,
+        };
+    } catch (error) {
+        return {
+            configured: false,
+            reason: error.message || 'Email delivery is unavailable until the mail service is configured.',
+            missing: error.missing || [],
+        };
+    }
+}
+
 function createTransporter(config) {
     return nodemailer.createTransport({
         host: config.host,
@@ -216,5 +239,6 @@ async function sendBookingConfirmationEmail(booking, pdfBuffer) {
 module.exports = sendEmail;
 module.exports.sendEmail = sendEmail;
 module.exports.sendBookingConfirmationEmail = sendBookingConfirmationEmail;
+module.exports.getEmailServiceAvailability = getEmailServiceAvailability;
 module.exports.escapeHtml = escapeHtml;
 module.exports.formatPlainTextForHtml = formatPlainTextForHtml;

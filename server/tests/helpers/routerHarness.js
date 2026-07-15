@@ -22,6 +22,7 @@ function createMockPrisma() {
         newsletterSubscriber: createModelMock(),
         emailSuppression: createModelMock(),
         emailCampaign: createModelMock(),
+        emailCampaignRecipient: createModelMock(),
         package: createModelMock(),
         packageBooking: createModelMock(),
         flightBooking: createModelMock(),
@@ -88,6 +89,7 @@ function loadRouterWithMocks(routerModulePath, basePath, options = {}) {
     const mockPrisma = createMockPrisma();
     const mockSendEmail = jest.fn().mockResolvedValue({ skipped: false });
     const mockSendBookingConfirmationEmail = jest.fn().mockResolvedValue(undefined);
+    const mockGetEmailServiceAvailability = jest.fn().mockReturnValue({ configured: true });
     const mockNotifyAdmins = jest.fn().mockResolvedValue(undefined);
     const mockSendNotification = jest.fn().mockImplementation(async (app, payload) => ({
         id: 999,
@@ -121,6 +123,7 @@ function loadRouterWithMocks(routerModulePath, basePath, options = {}) {
     jest.doMock('../../utils/emailService', () => ({
         sendEmail: mockSendEmail,
         sendBookingConfirmationEmail: mockSendBookingConfirmationEmail,
+        getEmailServiceAvailability: mockGetEmailServiceAvailability,
     }));
     jest.doMock('../../utils/adminNotifier', () => ({
         notifyAdmins: mockNotifyAdmins,
@@ -227,6 +230,7 @@ function loadRouterWithMocks(routerModulePath, basePath, options = {}) {
         app,
         mockJwtSign,
         mockNotifyAdmins,
+        mockGetEmailServiceAvailability,
         mockPrisma,
         mockSendBookingConfirmationEmail,
         mockSendEmail,

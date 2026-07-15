@@ -304,7 +304,7 @@ export default function FlightBookingForm() {
             <section className="rounded-[1.55rem] border border-[#ece4d6] bg-white p-5 shadow-sm">
               <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8a7240]">Payment note</p>
               <p className="mt-3 text-sm leading-7 text-[#5f6774]">
-                Flight payment is not handled on the website. NuurPath first confirms the route and options, then explains the offline payment step if the customer is ready to continue.
+                NuurPath first confirms the route and available options, then shares the payment steps directly with the traveler after review.
               </p>
             </section>
 

@@ -14,7 +14,7 @@ const NewsletterCampaignPreview = ({
         <div>
           <h2 className="text-xl font-black text-[#101c2d]">Live Preview</h2>
           <p className="mt-2 text-sm leading-6 text-[#67707e]">
-            The composer keeps the message structured while the preview shows how the greeting, headline, and optional offer block will land.
+            The composer keeps the message structured while the preview shows how the greeting, headline, and optional highlight block will land.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

@@ -1,6 +1,10 @@
 const prisma = require('../db');
 const AppError = require('../utils/AppError');
 const {
+    sendEmail,
+    getEmailServiceAvailability,
+} = require('../utils/emailService');
+const {
     isValidEmail,
     normalizeBoolean,
     toPositiveInteger,
@@ -12,6 +16,16 @@ const {
     renderCampaignPreview,
     serializeEmailCampaign,
 } = require('../utils/emailCampaigns');
+
+const DELIVERY_TYPES = {
+    LIVE: 'LIVE',
+    TEST: 'TEST',
+};
+
+const DELIVERY_STATUS = {
+    SENT: 'Sent',
+    FAILED: 'Failed',
+};
 
 function normalizeEmail(email) {
     return toTrimmedString(email).toLowerCase();
@@ -189,6 +203,51 @@ function buildPreviewRecipients({ activeSubscribers, optedInUsers, suppressedEma
         }));
 }
 
+function buildCampaignRecipients(audienceType, { activeSubscribers, optedInUsers, suppressedEmails }) {
+    const suppressedSet = buildReachableEmailSet(suppressedEmails, new Set());
+    const mergedRecipients = new Map();
+
+    const addRecipient = (record, source) => {
+        const email = normalizeEmail(record?.email);
+
+        if (!email || suppressedSet.has(email)) {
+            return;
+        }
+
+        const existing = mergedRecipients.get(email);
+        const normalizedName = normalizeSubscriberName(record?.name);
+
+        if (!existing) {
+            mergedRecipients.set(email, {
+                name: normalizedName,
+                email,
+                source,
+            });
+            return;
+        }
+
+        mergedRecipients.set(email, {
+            ...existing,
+            name: existing.name || normalizedName,
+            source: existing.source === source ? existing.source : 'both',
+        });
+    };
+
+    if (audienceType === 'SUBSCRIBERS' || audienceType === 'BOTH') {
+        (Array.isArray(activeSubscribers) ? activeSubscribers : []).forEach((record) => addRecipient(record, 'subscriber'));
+    }
+
+    if (audienceType === 'USERS' || audienceType === 'BOTH') {
+        (Array.isArray(optedInUsers) ? optedInUsers : []).forEach((record) => addRecipient(record, 'user'));
+    }
+
+    return Array.from(mergedRecipients.values()).sort((firstRecipient, secondRecipient) => {
+        const firstLabel = (firstRecipient.name || firstRecipient.email).toLowerCase();
+        const secondLabel = (secondRecipient.name || secondRecipient.email).toLowerCase();
+        return firstLabel.localeCompare(secondLabel);
+    });
+}
+
 async function loadCampaignAudienceContext() {
     const [activeSubscribers, optedInUsers, suppressedEmails] = await prisma.$transaction([
         prisma.newsletterSubscriber.findMany({
@@ -224,8 +283,8 @@ async function loadCampaignAudienceContext() {
     };
 }
 
-function getCampaignInclude() {
-    return {
+function getCampaignInclude({ withDeliveryLogs = false } = {}) {
+    const include = {
         createdBy: {
             select: {
                 id: true,
@@ -241,6 +300,85 @@ function getCampaignInclude() {
             },
         },
     };
+
+    if (withDeliveryLogs) {
+        include.recipients = {
+            orderBy: [
+                { createdAt: 'desc' },
+                { id: 'desc' },
+            ],
+            take: 8,
+        };
+    }
+
+    return include;
+}
+
+function buildCampaignLastErrorMessage(failedCount) {
+    if (!failedCount) {
+        return null;
+    }
+
+    return failedCount === 1
+        ? '1 delivery could not be completed.'
+        : `${failedCount} deliveries could not be completed.`;
+}
+
+function normalizeDeliveryError(error) {
+    const rawMessage = toTrimmedString(error?.message) || 'Email delivery could not be completed.';
+    return rawMessage.length > 240 ? `${rawMessage.slice(0, 237)}...` : rawMessage;
+}
+
+function validateEmailService() {
+    const availability = getEmailServiceAvailability();
+
+    if (!availability.configured) {
+        throw new AppError(
+            availability.reason || 'Email delivery is unavailable until the mail service is configured.',
+            503
+        );
+    }
+}
+
+async function sendCampaignMessage(campaign, recipient) {
+    const preview = renderCampaignPreview(campaign, recipient);
+    const result = await sendEmail({
+        to: recipient.email,
+        subject: preview.subject,
+        text: preview.text,
+        html: preview.html,
+    });
+
+    if (result?.skipped) {
+        const error = new Error(result.reason || 'Email delivery is unavailable until the mail service is configured.');
+        error.code = 'EMAIL_SKIPPED';
+        throw error;
+    }
+
+    return preview;
+}
+
+function buildRecipientLog(campaignId, recipient, deliveryType, status, details = {}) {
+    return {
+        campaignId,
+        email: recipient.email,
+        name: recipient.name || null,
+        source: recipient.source,
+        deliveryType,
+        status,
+        errorMessage: details.errorMessage || null,
+        sentAt: details.sentAt || null,
+    };
+}
+
+function requireDraftCampaign(campaign, actionLabel) {
+    if (!campaign) {
+        throw new AppError('Campaign draft not found.', 404);
+    }
+
+    if (campaign.status !== CAMPAIGN_STATUS.DRAFT) {
+        throw new AppError(`Only draft campaigns can be ${actionLabel}.`, 409);
+    }
 }
 
 exports.subscribe = async (req, res, next) => {
@@ -542,13 +680,10 @@ exports.updateSubscriberStatus = async (req, res, next) => {
     }
 };
 
-exports.getCampaignDrafts = async (req, res, next) => {
+exports.getCampaigns = async (req, res, next) => {
     try {
         const campaigns = await prisma.emailCampaign.findMany({
-            where: {
-                status: CAMPAIGN_STATUS.DRAFT,
-            },
-            include: getCampaignInclude(),
+            include: getCampaignInclude({ withDeliveryLogs: true }),
             orderBy: [
                 { updatedAt: 'desc' },
                 { createdAt: 'desc' },
@@ -560,7 +695,7 @@ exports.getCampaignDrafts = async (req, res, next) => {
         });
     } catch (err) {
         console.error(err.message);
-        return next(new AppError('Server error fetching campaign drafts.', 500));
+        return next(new AppError('Server error fetching campaigns.', 500));
     }
 };
 
@@ -635,10 +770,7 @@ exports.updateCampaignDraft = async (req, res, next) => {
         const existingCampaign = await prisma.emailCampaign.findUnique({
             where: { id: campaignId },
         });
-
-        if (!existingCampaign) {
-            return next(new AppError('Campaign draft not found.', 404));
-        }
+        requireDraftCampaign(existingCampaign, 'updated');
 
         let payload;
         try {
@@ -661,6 +793,10 @@ exports.updateCampaignDraft = async (req, res, next) => {
 
         return res.json(serializeEmailCampaign(updatedCampaign));
     } catch (err) {
+        if (err instanceof AppError) {
+            return next(err);
+        }
+
         console.error(err.message);
         return next(new AppError('Server error updating campaign draft.', 500));
     }
@@ -677,12 +813,10 @@ exports.deleteCampaignDraft = async (req, res, next) => {
             where: { id: campaignId },
             select: {
                 id: true,
+                status: true,
             },
         });
-
-        if (!existingCampaign) {
-            return next(new AppError('Campaign draft not found.', 404));
-        }
+        requireDraftCampaign(existingCampaign, 'deleted');
 
         await prisma.emailCampaign.delete({
             where: { id: campaignId },
@@ -694,7 +828,233 @@ exports.deleteCampaignDraft = async (req, res, next) => {
             msg: 'Campaign draft deleted.',
         });
     } catch (err) {
+        if (err instanceof AppError) {
+            return next(err);
+        }
+
         console.error(err.message);
         return next(new AppError('Server error deleting campaign draft.', 500));
     }
 };
+
+exports.sendCampaignTest = async (req, res, next) => {
+    try {
+        const campaignId = toPositiveInteger(req.params.id);
+        if (campaignId === null) {
+            return next(new AppError('Invalid campaign id.', 400));
+        }
+
+        const campaign = await prisma.emailCampaign.findUnique({
+            where: { id: campaignId },
+        });
+        requireDraftCampaign(campaign, 'tested');
+        validateEmailService();
+
+        const adminEmail = normalizeEmail(req.user?.email);
+        if (!isValidEmail(adminEmail)) {
+            return next(new AppError('The current admin account does not have a valid email address.', 400));
+        }
+
+        const adminName = normalizeSubscriberName(req.user?.name) || 'NuurPath Team';
+        const userId = toPositiveInteger(req.user?.id);
+        const recipient = {
+            name: adminName,
+            email: adminEmail,
+            source: 'admin_test',
+        };
+
+        try {
+            await sendCampaignMessage(campaign, recipient);
+            const sentAt = new Date();
+
+            const [, updatedCampaign] = await prisma.$transaction([
+                prisma.emailCampaignRecipient.create({
+                    data: buildRecipientLog(
+                        campaign.id,
+                        recipient,
+                        DELIVERY_TYPES.TEST,
+                        DELIVERY_STATUS.SENT,
+                        { sentAt }
+                    ),
+                }),
+                prisma.emailCampaign.update({
+                    where: { id: campaign.id },
+                    data: {
+                        updatedByUserId: userId,
+                        lastTestSentAt: sentAt,
+                        lastError: null,
+                    },
+                    include: getCampaignInclude({ withDeliveryLogs: true }),
+                }),
+            ]);
+
+            return res.json({
+                success: true,
+                message: `Test email sent to ${adminEmail}.`,
+                campaign: serializeEmailCampaign(updatedCampaign),
+            });
+        } catch (sendError) {
+            const errorMessage = normalizeDeliveryError(sendError);
+
+            await prisma.$transaction([
+                prisma.emailCampaignRecipient.create({
+                    data: buildRecipientLog(
+                        campaign.id,
+                        recipient,
+                        DELIVERY_TYPES.TEST,
+                        DELIVERY_STATUS.FAILED,
+                        { errorMessage }
+                    ),
+                }),
+                prisma.emailCampaign.update({
+                    where: { id: campaign.id },
+                    data: {
+                        updatedByUserId: userId,
+                        lastError: errorMessage,
+                    },
+                }),
+            ]);
+
+            return next(new AppError(errorMessage, sendError?.code === 'EMAIL_SKIPPED' ? 503 : 500));
+        }
+    } catch (err) {
+        if (err instanceof AppError) {
+            return next(err);
+        }
+
+        console.error(err.message);
+        return next(new AppError('Server error sending campaign test email.', 500));
+    }
+};
+
+exports.sendCampaign = async (req, res, next) => {
+    const campaignId = toPositiveInteger(req.params.id);
+    if (campaignId === null) {
+        return next(new AppError('Invalid campaign id.', 400));
+    }
+
+    const userId = toPositiveInteger(req.user?.id);
+    let recipientCount = 0;
+    let sentCount = 0;
+    let failedCount = 0;
+
+    try {
+        const campaign = await prisma.emailCampaign.findUnique({
+            where: { id: campaignId },
+        });
+        requireDraftCampaign(campaign, 'sent');
+        validateEmailService();
+
+        const audienceContext = await loadCampaignAudienceContext();
+        const recipients = buildCampaignRecipients(campaign.audienceType, audienceContext);
+
+        if (recipients.length === 0) {
+            return next(new AppError('No reachable recipients are available for this audience.', 400));
+        }
+
+        recipientCount = recipients.length;
+
+        await prisma.emailCampaign.update({
+            where: { id: campaign.id },
+            data: {
+                status: CAMPAIGN_STATUS.SENDING,
+                recipientCount,
+                sentCount: 0,
+                failedCount: 0,
+                lastError: null,
+                updatedByUserId: userId,
+            },
+        });
+
+        for (const recipient of recipients) {
+            try {
+                await sendCampaignMessage(campaign, recipient);
+                const sentAt = new Date();
+                sentCount += 1;
+
+                await prisma.emailCampaignRecipient.create({
+                    data: buildRecipientLog(
+                        campaign.id,
+                        recipient,
+                        DELIVERY_TYPES.LIVE,
+                        DELIVERY_STATUS.SENT,
+                        { sentAt }
+                    ),
+                });
+            } catch (sendError) {
+                failedCount += 1;
+
+                await prisma.emailCampaignRecipient.create({
+                    data: buildRecipientLog(
+                        campaign.id,
+                        recipient,
+                        DELIVERY_TYPES.LIVE,
+                        DELIVERY_STATUS.FAILED,
+                        { errorMessage: normalizeDeliveryError(sendError) }
+                    ),
+                });
+            }
+        }
+
+        const finalStatus = failedCount > 0 ? CAMPAIGN_STATUS.FAILED : CAMPAIGN_STATUS.SENT;
+        const lastSentAt = new Date();
+        const updatedCampaign = await prisma.emailCampaign.update({
+            where: { id: campaign.id },
+            data: {
+                status: finalStatus,
+                recipientCount,
+                sentCount,
+                failedCount,
+                lastSentAt,
+                lastError: buildCampaignLastErrorMessage(failedCount),
+                updatedByUserId: userId,
+            },
+            include: getCampaignInclude({ withDeliveryLogs: true }),
+        });
+
+        return res.json({
+            success: true,
+            message: failedCount > 0
+                ? `Campaign send completed with ${failedCount} delivery issue${failedCount === 1 ? '' : 's'}.`
+                : `Campaign sent to ${sentCount} recipient${sentCount === 1 ? '' : 's'}.`,
+            campaign: serializeEmailCampaign(updatedCampaign),
+        });
+    } catch (err) {
+        if (err instanceof AppError) {
+            return next(err);
+        }
+
+        const errorMessage = normalizeDeliveryError(err);
+        console.error(err.message);
+
+        try {
+            const existingCampaign = await prisma.emailCampaign.findUnique({
+                where: { id: campaignId },
+                select: {
+                    id: true,
+                },
+            });
+
+            if (existingCampaign?.id) {
+                await prisma.emailCampaign.update({
+                    where: { id: campaignId },
+                    data: {
+                        status: CAMPAIGN_STATUS.FAILED,
+                        recipientCount,
+                        sentCount,
+                        failedCount,
+                        lastSentAt: recipientCount > 0 ? new Date() : null,
+                        lastError: errorMessage,
+                        updatedByUserId: userId,
+                    },
+                });
+            }
+        } catch (updateError) {
+            console.error(updateError.message);
+        }
+
+        return next(new AppError(errorMessage, err?.code === 'EMAIL_SKIPPED' ? 503 : 500));
+    }
+};
+
+exports.getCampaignDrafts = exports.getCampaigns;
