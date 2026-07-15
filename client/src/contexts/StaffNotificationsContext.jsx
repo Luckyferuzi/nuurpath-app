@@ -7,7 +7,7 @@ import { resolveNotificationDestination } from '../lib/staffNotifications.js';
 const StaffNotificationsContext = createContext(null);
 
 const SOUND_STORAGE_KEY = 'nuurpath.staff.notifications.sound-enabled';
-const MAX_NOTIFICATION_CACHE = 20;
+const MAX_NOTIFICATION_CACHE = 24;
 
 function getNotificationPermissionState() {
   if (typeof Notification === 'undefined') {
@@ -116,7 +116,6 @@ export function StaffNotificationsProvider({ children }) {
   const updateNotificationState = useCallback((nextNotifications) => {
     notificationsRef.current = nextNotifications;
     setNotifications(nextNotifications);
-    setUnreadCount(nextNotifications.filter((notification) => !notification.read).length);
   }, []);
 
   const playNotificationTone = useCallback(async () => {
@@ -201,6 +200,7 @@ export function StaffNotificationsProvider({ children }) {
       setPushConfigured(false);
       setPushPublicKey('');
       setPushEnabled(false);
+      setUnreadCount(0);
       return;
     }
 
@@ -223,13 +223,17 @@ export function StaffNotificationsProvider({ children }) {
   const refreshNotifications = useCallback(async () => {
     if (!isStaffUser) {
       updateNotificationState([]);
+      setUnreadCount(0);
       return;
     }
 
     try {
-      const response = await axios.get('/notifications?limit=10');
+      const response = await axios.get('/notifications?limit=24');
       const nextNotifications = mergeNotifications([], response.data?.notifications || []);
       updateNotificationState(nextNotifications);
+      setUnreadCount(Number.isInteger(response.data?.unreadCount)
+        ? response.data.unreadCount
+        : nextNotifications.filter((notification) => !notification.read).length);
       setError('');
     } catch (requestError) {
       console.error('Failed to load staff notifications:', requestError);
@@ -250,6 +254,7 @@ export function StaffNotificationsProvider({ children }) {
       setPushConfigured(false);
       setPushPublicKey('');
       setPushEnabled(false);
+      setUnreadCount(0);
       return undefined;
     }
 
@@ -318,9 +323,18 @@ export function StaffNotificationsProvider({ children }) {
     socketRef.current = socket;
 
     socket.on('receive_notification', async (incomingNotification) => {
-      const alreadyKnown = notificationsRef.current.some((notification) => notification.id === incomingNotification.id);
+      const existingNotification = notificationsRef.current.find((notification) => notification.id === incomingNotification.id) || null;
+      const alreadyKnown = Boolean(existingNotification);
       const nextNotifications = mergeNotifications(notificationsRef.current, [incomingNotification]);
       updateNotificationState(nextNotifications);
+
+      if (!alreadyKnown && !incomingNotification.read) {
+        setUnreadCount((currentCount) => currentCount + 1);
+      } else if (existingNotification?.read && !incomingNotification.read) {
+        setUnreadCount((currentCount) => currentCount + 1);
+      } else if (!existingNotification?.read && incomingNotification.read) {
+        setUnreadCount((currentCount) => Math.max(0, currentCount - 1));
+      }
 
       if (alreadyKnown || incomingNotification.read) {
         return;
@@ -449,10 +463,14 @@ export function StaffNotificationsProvider({ children }) {
   }, [playNotificationTone]);
 
   const markNotificationAsRead = useCallback(async (notificationId) => {
+    const wasUnread = notificationsRef.current.some((notification) => notification.id === notificationId && !notification.read);
     const nextNotifications = notificationsRef.current.map((notification) => (
       notification.id === notificationId ? { ...notification, read: true } : notification
     ));
     updateNotificationState(nextNotifications);
+    if (wasUnread) {
+      setUnreadCount((currentCount) => Math.max(0, currentCount - 1));
+    }
 
     try {
       await axios.put(`/notifications/${notificationId}/read`);
@@ -467,6 +485,7 @@ export function StaffNotificationsProvider({ children }) {
   const markAllNotificationsAsRead = useCallback(async () => {
     const nextNotifications = notificationsRef.current.map((notification) => ({ ...notification, read: true }));
     updateNotificationState(nextNotifications);
+    setUnreadCount(0);
 
     try {
       await axios.put('/notifications/read-all');

@@ -9,6 +9,12 @@ export const STAFF_WORKSPACE_SECTIONS = [
         description: 'Requests, workload, and daily focus.',
         roles: ['admin', 'manager'],
       },
+      {
+        to: '/admin/notifications',
+        label: 'Notifications',
+        description: 'Unread alerts and recent inbox activity.',
+        roles: ['admin', 'manager'],
+      },
     ],
   },
   {
@@ -105,6 +111,10 @@ export const STAFF_PAGE_META = {
   '/admin/package-bookings': {
     title: 'Package Requests',
     description: 'Review package requests, passport details, and next-step follow-up in one place.',
+  },
+  '/admin/notifications': {
+    title: 'Notifications',
+    description: 'Review every staff alert in one clean inbox and open the right queue quickly.',
   },
   '/admin/flight-bookings': {
     title: 'Flight Requests',

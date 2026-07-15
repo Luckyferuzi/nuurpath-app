@@ -26,6 +26,7 @@ import ManagePackages from './components/ManagePackages.jsx';
 import ManageReviews from './components/ManageReviews.jsx';
 import ManageMediaPosts from './components/ManageMediaPosts.jsx';
 import ManageNewsletter from './components/ManageNewsletter.jsx';
+import StaffNotificationsPage from './components/StaffNotificationsPage.jsx';
 import Login from './components/Login.jsx';
 import StaffLogin from './components/StaffLogin.jsx';
 import AdminSetup from './components/AdminSetup.jsx';
@@ -140,6 +141,7 @@ function AppFrame() {
             <Route element={<AdminRoute allowedRoles={['admin', 'manager']} />}>
               <Route path="/admin" element={<StaffNotificationsProvider><StaffWorkspaceLayout /></StaffNotificationsProvider>}>
                 <Route index element={<AdminDashboard />} />
+                <Route path="notifications" element={<StaffNotificationsPage />} />
                 <Route path="consultations" element={<PrivateConsultationsAdmin />} />
                 <Route path="package-bookings" element={<PackageBookingsAdmin />} />
                 <Route path="flight-bookings" element={<FlightBookingsAdmin />} />
