@@ -302,8 +302,8 @@ router.post('/inquiries', serviceInquiryLimiter, softAuth, async (req, res) => {
         });
 
         await notifyAdmins(req.app, {
-            title: 'New Service Inquiry',
-            message: `New service inquiry #${inquiry.id} received from ${inquiry.contactName} for ${inquiry.service?.title || inquiry.serviceType}`,
+            title: 'Service Inquiry Received',
+            message: `${inquiry.contactName} submitted service inquiry #${inquiry.id} for ${inquiry.service?.title || inquiry.serviceType}.`,
             type: 'NEW_SERVICE_INQUIRY',
             bookingId: inquiry.id,
         });

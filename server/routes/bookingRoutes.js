@@ -234,8 +234,8 @@ router.post('/', packageRequestLimiter, softAuth, async (req, res) => {
         }
 
         await notifyAdmins(req.app, {
-            title: 'New Package Request',
-            message: `New package request #${booking.id} received from ${booking.contactName} for ${selectedPackage.title}`,
+            title: 'Package Request Received',
+            message: `${booking.contactName} submitted package request #${booking.id} for ${selectedPackage.title}.`,
             type: 'NEW_BOOKING',
             bookingId: booking.id,
         });

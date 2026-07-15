@@ -159,8 +159,8 @@ router.post('/private', privateConsultationLimiter, softAuth, async (req, res) =
         });
 
         await notifyAdmins(req.app, {
-            title: 'New Consultation Request',
-            message: `New private consultation requested by ${name} for ${date} at ${time}`,
+            title: 'Consultation Request Received',
+            message: `${name} requested a private consultation for ${date} at ${time}.`,
             type: 'NEW_CONSULTATION',
         });
 

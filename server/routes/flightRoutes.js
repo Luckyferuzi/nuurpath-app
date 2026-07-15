@@ -178,8 +178,8 @@ router.post('/', flightRequestLimiter, softAuth, async (req, res) => {
         });
 
         await notifyAdmins(req.app, {
-            title: 'New Flight Request',
-            message: `New flight request #${booking.id} from ${contactName} (${from} to ${to})`,
+            title: 'Flight Request Received',
+            message: `${contactName} submitted flight request #${booking.id} for travel from ${from} to ${to}.`,
             type: 'NEW_FLIGHT_REQUEST',
             bookingId: booking.id,
         });

@@ -504,10 +504,13 @@ export function StaffNotificationsProvider({ children }) {
 
   const sidebarNotifications = useMemo(() => {
     const unreadNotifications = notifications.filter((notification) => !notification.read);
-    return (unreadNotifications.length > 0 ? unreadNotifications : notifications).slice(0, 2);
+    return unreadNotifications.slice(0, 2);
   }, [notifications]);
 
-  const dashboardNotifications = useMemo(() => notifications.slice(0, 4), [notifications]);
+  const dashboardNotifications = useMemo(
+    () => notifications.filter((notification) => !notification.read).slice(0, 4),
+    [notifications]
+  );
 
   const value = useMemo(() => ({
     notifications,

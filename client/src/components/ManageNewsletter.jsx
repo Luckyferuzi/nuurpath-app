@@ -44,7 +44,43 @@ const DEFAULT_PREVIEW_RECIPIENT = {
   sourceLabel: 'Neutral preview',
 };
 
-const INITIAL_CAMPAIGN_FORM = applyCampaignTemplate({ ...EMPTY_CAMPAIGN_FORM }, EMPTY_CAMPAIGN_FORM.messageType);
+const INITIAL_CAMPAIGN_FORM = { ...EMPTY_CAMPAIGN_FORM };
+
+function normalizeComposerText(value) {
+  return String(value || '').trim();
+}
+
+function buildCampaignSubmissionPayload(formData = {}) {
+  const normalizedSubject = normalizeComposerText(formData.subject);
+  const normalizedTitle = normalizeComposerText(formData.title) || normalizedSubject || 'Message from NuurPath';
+  const normalizedInternalName = normalizeComposerText(formData.internalName) || normalizedSubject || normalizedTitle || 'Newsletter Draft';
+  const normalizedSignature = normalizeComposerText(formData.signature) || INITIAL_CAMPAIGN_FORM.signature;
+
+  return {
+    ...formData,
+    internalName: normalizedInternalName,
+    title: normalizedTitle,
+    signature: normalizedSignature,
+  };
+}
+
+function shouldOpenAdvancedComposer(formData = {}) {
+  const normalizedSubject = normalizeComposerText(formData.subject);
+  const normalizedSignature = normalizeComposerText(formData.signature);
+
+  return Boolean(
+    (normalizeComposerText(formData.internalName) && normalizeComposerText(formData.internalName) !== normalizedSubject)
+    || (normalizeComposerText(formData.title) && normalizeComposerText(formData.title) !== normalizedSubject)
+    || normalizeComposerText(formData.preheader)
+    || normalizeComposerText(formData.highlightTitle)
+    || normalizeComposerText(formData.highlightBody)
+    || normalizeComposerText(formData.ctaLabel)
+    || normalizeComposerText(formData.ctaUrl)
+    || formData.greetingStyle === 'HELLO'
+    || formData.greetingStyle === 'WARM'
+    || (normalizedSignature && normalizedSignature !== normalizeComposerText(INITIAL_CAMPAIGN_FORM.signature))
+  );
+}
 
 function buildQueryString({ currentPage, statusFilter, searchTerm }) {
   const params = new URLSearchParams();
@@ -151,6 +187,8 @@ const ManageNewsletter = () => {
   const [actionSubscriberId, setActionSubscriberId] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [copiedToken, setCopiedToken] = useState('');
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [showAdvancedComposer, setShowAdvancedComposer] = useState(false);
 
   const fetchSubscribers = useCallback(async ({ withLoading = true } = {}) => {
     if (withLoading) {
@@ -286,9 +324,14 @@ const ManageNewsletter = () => {
     draftCampaigns.find((campaign) => campaign.id === selectedCampaignId) || null
   ), [draftCampaigns, selectedCampaignId]);
 
-  const campaignReadyForPreview = useMemo(
-    () => isCampaignReadyForPreview(campaignForm),
+  const preparedCampaignForm = useMemo(
+    () => buildCampaignSubmissionPayload(campaignForm),
     [campaignForm]
+  );
+
+  const campaignReadyForPreview = useMemo(
+    () => isCampaignReadyForPreview(preparedCampaignForm),
+    [preparedCampaignForm]
   );
 
   useEffect(() => {
@@ -304,7 +347,7 @@ const ManageNewsletter = () => {
 
       try {
         const response = await axios.post('/newsletter/campaigns/preview', {
-          ...campaignForm,
+          ...preparedCampaignForm,
           previewRecipient: selectedPreviewRecipient,
         });
         setPreviewData(response.data || null);
@@ -316,7 +359,7 @@ const ManageNewsletter = () => {
     }, 250);
 
     return () => window.clearTimeout(timeoutId);
-  }, [campaignForm, campaignReadyForPreview, selectedPreviewRecipient]);
+  }, [campaignReadyForPreview, preparedCampaignForm, selectedPreviewRecipient]);
 
   const metrics = useMemo(() => ([
     {
@@ -458,6 +501,8 @@ const ManageNewsletter = () => {
     setSelectedCampaignId(null);
     setCampaignForm(INITIAL_CAMPAIGN_FORM);
     setPreviewError(null);
+    setShowTemplatePicker(false);
+    setShowAdvancedComposer(false);
   }, []);
 
   const resetComposer = useCallback(() => {
@@ -472,8 +517,8 @@ const ManageNewsletter = () => {
 
     try {
       const response = selectedCampaignId
-        ? await axios.put(`/newsletter/campaigns/${selectedCampaignId}`, campaignForm)
-        : await axios.post('/newsletter/campaigns', campaignForm);
+        ? await axios.put(`/newsletter/campaigns/${selectedCampaignId}`, preparedCampaignForm)
+        : await axios.post('/newsletter/campaigns', preparedCampaignForm);
 
       const savedCampaign = response.data || {};
       setSelectedCampaignId(savedCampaign.id || null);
@@ -526,6 +571,8 @@ const ManageNewsletter = () => {
     setSelectedCampaignId(campaign.id);
     setCampaignForm(normalizeCampaignFormData(campaign));
     setPreviewError(null);
+    setShowTemplatePicker(campaign.messageType !== 'PROFESSIONAL_UPDATE');
+    setShowAdvancedComposer(shouldOpenAdvancedComposer(campaign));
     setActivePanel('compose');
     setMessage(null);
   };
@@ -534,6 +581,8 @@ const ManageNewsletter = () => {
     setSelectedCampaignId(null);
     setCampaignForm(normalizeCampaignFormData(campaign));
     setPreviewError(null);
+    setShowTemplatePicker(campaign.messageType !== 'PROFESSIONAL_UPDATE');
+    setShowAdvancedComposer(shouldOpenAdvancedComposer(campaign));
     setActivePanel('compose');
     setMessage({
       type: 'success',
@@ -557,7 +606,7 @@ const ManageNewsletter = () => {
       throw new Error('Save the draft before sending.');
     }
 
-    const response = await axios.put(`/newsletter/campaigns/${selectedDraftCampaign.id}`, campaignForm);
+    const response = await axios.put(`/newsletter/campaigns/${selectedDraftCampaign.id}`, preparedCampaignForm);
     const savedCampaign = response.data || {};
     setSelectedCampaignId(savedCampaign.id || selectedDraftCampaign.id);
     setCampaignForm(normalizeCampaignFormData(savedCampaign));
@@ -697,34 +746,11 @@ const ManageNewsletter = () => {
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
           <div className="space-y-6">
             <StaffCardSection
-              title="Campaign Strategy"
-              description="Keep the setup clear first, then let the message body carry the detail. The composer stores drafts, applies gentle structure, and keeps the tone professional."
+              title="Send Message"
+              description="Choose the audience, write the subject and message, then open templates or professional options only if you need them."
               actions={selectedDraftCampaign ? <StaffInfoPill tone="info">Editing draft #{selectedDraftCampaign.id}</StaffInfoPill> : null}
             >
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-gray-700">Campaign name</span>
-                  <input
-                    type="text"
-                    value={campaignForm.internalName}
-                    onChange={(event) => handleFieldChange('internalName', event.target.value)}
-                    placeholder="Internal draft name"
-                    className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-gray-700">Email subject</span>
-                  <input
-                    type="text"
-                    value={campaignForm.subject}
-                    onChange={(event) => handleFieldChange('subject', event.target.value)}
-                    placeholder="What the reader will see in the inbox"
-                    className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
-                  />
-                </label>
-              </div>
-
-              <div className="mt-6">
+              <div>
                 <div className="mb-3 text-sm font-semibold text-gray-700">Audience</div>
                 <div className="grid gap-3 lg:grid-cols-3">
                   {CAMPAIGN_AUDIENCE_OPTIONS.map((option) => {
@@ -759,111 +785,19 @@ const ManageNewsletter = () => {
                 </div>
               </div>
 
-              <div className="mt-6">
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-gray-700">Message template</span>
-                  <select
-                    value={campaignForm.messageType}
-                    onChange={(event) => handleMessageTypeChange(event.target.value)}
-                    className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
-                  >
-                    {CAMPAIGN_MESSAGE_TYPES.map((typeOption) => (
-                      <option key={typeOption.value} value={typeOption.value}>
-                        {typeOption.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <div className="mt-4 rounded-[1.5rem] border border-[#e7dfcf] bg-[#fbfaf7] px-5 py-5">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="max-w-3xl">
-                      <div className="text-[11px] font-black uppercase tracking-[0.2em] text-[#8a7443]">
-                        {selectedMessageType.eyebrow}
-                      </div>
-                      <div className="mt-2 text-lg font-black text-[#101c2d]">{selectedMessageType.label}</div>
-                      <p className="mt-2 text-sm leading-6 text-[#67707e]">{selectedMessageType.description}</p>
-                    </div>
-                    <StaffInfoPill tone="warm">Selected template</StaffInfoPill>
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {(selectedMessageType.bestFor || []).map((item) => (
-                      <span
-                        key={item}
-                        className="rounded-full border border-[#ddd3bf] bg-white px-3 py-1.5 text-xs font-semibold text-[#5b6472]"
-                      >
-                        {item}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    <div className="rounded-2xl border border-[#ece4d2] bg-white px-4 py-3">
-                      <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Suggested subject</div>
-                      <div className="mt-2 text-sm text-[#101c2d]">{selectedMessageType.defaults.subject}</div>
-                    </div>
-                    <div className="rounded-2xl border border-[#ece4d2] bg-white px-4 py-3">
-                      <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Suggested title</div>
-                      <div className="mt-2 text-sm text-[#101c2d]">{selectedMessageType.defaults.title}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6">
-                <div className="mb-3 text-sm font-semibold text-gray-700">Greeting style</div>
-                <div className="flex flex-wrap gap-2">
-                  {CAMPAIGN_GREETING_STYLES.map((style) => {
-                    const isSelected = campaignForm.greetingStyle === style.value;
-
-                    return (
-                      <button
-                        key={style.value}
-                        type="button"
-                        onClick={() => handleFieldChange('greetingStyle', style.value)}
-                        className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                          isSelected
-                            ? 'bg-[#101c2d] text-white shadow-sm'
-                            : 'border border-[#ddd3bf] bg-white text-[#4f5763] hover:border-[#bca77a] hover:text-[#101c2d]'
-                        }`}
-                        title={style.description}
-                      >
-                        {style.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </StaffCardSection>
-
-            <StaffCardSection
-              title="Message Content"
-              description="Keep the subject sharp, the heading calm, and the body easy to scan. The selected message type already gives you a cleaner starting structure."
-            >
               <div className="space-y-4">
                 <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-gray-700">Message title</span>
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Email subject</span>
                   <input
                     type="text"
-                    value={campaignForm.title}
-                    onChange={(event) => handleFieldChange('title', event.target.value)}
-                    placeholder={selectedMessageType.defaults.title}
+                    value={campaignForm.subject}
+                    onChange={(event) => handleFieldChange('subject', event.target.value)}
+                    placeholder="What the reader will see in the inbox"
                     className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
                   />
                 </label>
                 <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-gray-700">Preheader</span>
-                  <input
-                    type="text"
-                    value={campaignForm.preheader}
-                    onChange={(event) => handleFieldChange('preheader', event.target.value)}
-                    placeholder={selectedMessageType.defaults.preheader}
-                    className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-gray-700">Main message</span>
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Message</span>
                   <textarea
                     value={campaignForm.body}
                     onChange={(event) => handleFieldChange('body', event.target.value)}
@@ -872,16 +806,156 @@ const ManageNewsletter = () => {
                     className="w-full rounded-[1.5rem] border border-gray-300 bg-[#fcfbf8] px-4 py-4 text-sm leading-7 text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
                   />
                 </label>
+                <p className="text-sm leading-6 text-[#67707e]">
+                  The subject will also be used as the message heading unless you open professional options and change it.
+                </p>
+
+                <div className="flex flex-wrap gap-3 border-t border-[#ece4d2] pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowTemplatePicker((currentValue) => !currentValue)}
+                    className="rounded-full border border-[#d6ccb8] bg-white px-4 py-2 text-sm font-semibold text-[#101c2d] transition hover:bg-[#faf8f3]"
+                  >
+                    {showTemplatePicker ? 'Hide templates' : 'Choose template'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedComposer((currentValue) => !currentValue)}
+                    className="rounded-full border border-[#d6ccb8] bg-white px-4 py-2 text-sm font-semibold text-[#101c2d] transition hover:bg-[#faf8f3]"
+                  >
+                    {showAdvancedComposer ? 'Hide professional options' : 'Professional options'}
+                  </button>
+                  <StaffInfoPill tone={campaignForm.messageType === 'PROFESSIONAL_UPDATE' ? 'neutral' : 'warm'}>
+                    {selectedMessageType.label}
+                  </StaffInfoPill>
+                </div>
+
+                {showTemplatePicker && (
+                  <div className="rounded-[1.5rem] border border-[#e7dfcf] bg-[#fbfaf7] px-5 py-5">
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-semibold text-gray-700">Message template</span>
+                      <select
+                        value={campaignForm.messageType}
+                        onChange={(event) => handleMessageTypeChange(event.target.value)}
+                        className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                      >
+                        {CAMPAIGN_MESSAGE_TYPES.map((typeOption) => (
+                          <option key={typeOption.value} value={typeOption.value}>
+                            {typeOption.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
+                      <div className="max-w-3xl">
+                        <div className="text-[11px] font-black uppercase tracking-[0.2em] text-[#8a7443]">
+                          {selectedMessageType.eyebrow}
+                        </div>
+                        <div className="mt-2 text-lg font-black text-[#101c2d]">{selectedMessageType.label}</div>
+                        <p className="mt-2 text-sm leading-6 text-[#67707e]">{selectedMessageType.description}</p>
+                      </div>
+                      <StaffInfoPill tone="warm">Selected template</StaffInfoPill>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {(selectedMessageType.bestFor || []).map((item) => (
+                        <span
+                          key={item}
+                          className="rounded-full border border-[#ddd3bf] bg-white px-3 py-1.5 text-xs font-semibold text-[#5b6472]"
+                        >
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <div className="rounded-2xl border border-[#ece4d2] bg-white px-4 py-3">
+                        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Suggested subject</div>
+                        <div className="mt-2 text-sm text-[#101c2d]">{selectedMessageType.defaults.subject}</div>
+                      </div>
+                      <div className="rounded-2xl border border-[#ece4d2] bg-white px-4 py-3">
+                        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Suggested title</div>
+                        <div className="mt-2 text-sm text-[#101c2d]">{selectedMessageType.defaults.title}</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </StaffCardSection>
 
-            <StaffCardSection
-              title="Highlight, CTA, and Signature"
-              description="Use the optional highlight when a message needs one strong focus. Keep the CTA and signature clean so the email still feels calm."
-              actions={campaignForm.highlightTitle || campaignForm.highlightBody ? <StaffInfoPill tone="warm">Highlight included</StaffInfoPill> : null}
-            >
-              <div className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
+            {showAdvancedComposer && (
+              <StaffCardSection
+                title="Professional Options"
+                description="Use these fields only when the message needs a more structured presentation."
+              >
+                <div className="space-y-4">
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-gray-700">Campaign name</span>
+                    <input
+                      type="text"
+                      value={campaignForm.internalName}
+                      onChange={(event) => handleFieldChange('internalName', event.target.value)}
+                      placeholder="Internal draft name"
+                      className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-gray-700">Message title</span>
+                    <input
+                      type="text"
+                      value={campaignForm.title}
+                      onChange={(event) => handleFieldChange('title', event.target.value)}
+                      placeholder={selectedMessageType.defaults.title}
+                      className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-gray-700">Preheader</span>
+                    <input
+                      type="text"
+                      value={campaignForm.preheader}
+                      onChange={(event) => handleFieldChange('preheader', event.target.value)}
+                      placeholder={selectedMessageType.defaults.preheader}
+                      className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                    />
+                  </label>
+                  <div>
+                    <div className="mb-3 text-sm font-semibold text-gray-700">Greeting style</div>
+                    <div className="flex flex-wrap gap-2">
+                      {CAMPAIGN_GREETING_STYLES.map((style) => {
+                        const isSelected = campaignForm.greetingStyle === style.value;
+
+                        return (
+                          <button
+                            key={style.value}
+                            type="button"
+                            onClick={() => handleFieldChange('greetingStyle', style.value)}
+                            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                              isSelected
+                                ? 'bg-[#101c2d] text-white shadow-sm'
+                                : 'border border-[#ddd3bf] bg-white text-[#4f5763] hover:border-[#bca77a] hover:text-[#101c2d]'
+                            }`}
+                            title={style.description}
+                          >
+                            {style.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </StaffCardSection>
+            )}
+
+            {showAdvancedComposer && (
+              <StaffCardSection
+                title="Highlight, CTA, and Signature"
+                description="Use the optional highlight when a message needs one strong focus. Keep the CTA and signature clean so the email still feels calm."
+                actions={campaignForm.highlightTitle || campaignForm.highlightBody ? <StaffInfoPill tone="warm">Highlight included</StaffInfoPill> : null}
+              >
+                <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
                   <label className="block">
                     <span className="mb-2 block text-sm font-semibold text-gray-700">Highlight title</span>
                     <input
@@ -935,9 +1009,10 @@ const ManageNewsletter = () => {
                       className="w-full rounded-[1.5rem] border border-gray-300 bg-[#fcfbf8] px-4 py-4 text-sm leading-7 text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
                     />
                   </label>
+                  </div>
                 </div>
-              </div>
-            </StaffCardSection>
+              </StaffCardSection>
+            )}
 
             <StaffCardSection
               title="Personalization and Delivery"
