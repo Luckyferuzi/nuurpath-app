@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useStaffNotifications } from '../../contexts/StaffNotificationsContext.jsx';
 import { formatNotificationTime, resolveNotificationDestination } from '../../lib/staffNotifications.js';
@@ -42,6 +42,61 @@ function SoundIcon({ muted }) {
   );
 }
 
+function CloseIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m6 6 12 12" />
+      <path d="M18 6 6 18" />
+    </svg>
+  );
+}
+
+function compactInboxMessage(message) {
+  const normalizedMessage = String(message || '').replace(/\s+/g, ' ').trim();
+
+  if (!normalizedMessage) {
+    return '';
+  }
+
+  if (normalizedMessage === 'Browser popups are enabled while this site is open. Add push keys on the server for full background alerts.') {
+    return 'Browser popups are on for this session. Server push keys are still needed for background alerts.';
+  }
+
+  if (normalizedMessage === 'Device notifications are enabled for this browser and phone-ready where supported.') {
+    return 'Device alerts are enabled for this browser.';
+  }
+
+  if (normalizedMessage === 'Background push alerts were turned off for this browser.') {
+    return 'Background alerts were turned off for this browser.';
+  }
+
+  return normalizedMessage.length > 108
+    ? `${normalizedMessage.slice(0, 105).trim()}...`
+    : normalizedMessage;
+}
+
+function compactNotificationMessage(message) {
+  const normalizedMessage = String(message || '').replace(/\s+/g, ' ').trim();
+
+  if (!normalizedMessage) {
+    return 'Open the queue for the full request details.';
+  }
+
+  const packageRequestMatch = normalizedMessage.match(/request\s+#?(\d+)\s+received\s+from\s+(.+?)\s+for\s+(.+)$/i);
+  if (packageRequestMatch) {
+    return `#${packageRequestMatch[1]} / ${packageRequestMatch[2]} / ${packageRequestMatch[3]}`;
+  }
+
+  const genericReceivedMatch = normalizedMessage.match(/received\s+from\s+(.+?)\s+for\s+(.+)$/i);
+  if (genericReceivedMatch) {
+    return `${genericReceivedMatch[1]} / ${genericReceivedMatch[2]}`;
+  }
+
+  return normalizedMessage.length > 88
+    ? `${normalizedMessage.slice(0, 85).trim()}...`
+    : normalizedMessage;
+}
+
 const StaffNotificationInbox = () => {
   const {
     unreadCount,
@@ -54,28 +109,53 @@ const StaffNotificationInbox = () => {
     soundEnabled,
     sidebarNotifications,
     deviceAlertMessage,
+    clearInboxMessage,
     requestDeviceAlerts,
     disableBackgroundAlerts,
     toggleSound,
     markNotificationAsRead,
     markAllNotificationsAsRead,
   } = useStaffNotifications();
+  const [dismissedNotificationIds, setDismissedNotificationIds] = useState([]);
+
+  useEffect(() => {
+    setDismissedNotificationIds((currentIds) => (
+      currentIds.filter((id) => sidebarNotifications.some((notification) => notification.id === id))
+    ));
+  }, [sidebarNotifications]);
+
+  const visibleSidebarNotifications = useMemo(
+    () => sidebarNotifications.filter((notification) => !dismissedNotificationIds.includes(notification.id)),
+    [dismissedNotificationIds, sidebarNotifications]
+  );
 
   const deviceAlertStatusLabel = pushEnabled
-    ? 'Background alerts on'
+    ? 'Background on'
     : notificationPermission === 'granted'
-      ? (pushConfigured ? 'Foreground alerts on' : 'Popup alerts on')
+      ? (pushConfigured ? 'Foreground on' : 'Popup on')
       : notificationPermission === 'denied'
         ? 'Alerts blocked'
         : 'Enable alerts';
 
+  const handleDismissNotification = (notification) => {
+    setDismissedNotificationIds((currentIds) => (
+      currentIds.includes(notification.id)
+        ? currentIds
+        : [...currentIds, notification.id]
+    ));
+
+    if (!notification.read) {
+      markNotificationAsRead(notification.id);
+    }
+  };
+
   return (
-    <div className="border-b border-white/10 px-5 py-5">
+    <div className="border-b border-white/10 px-4 py-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-xs font-black uppercase tracking-[0.24em] text-white/45">Staff alerts</div>
-          <div className="mt-2 flex items-center gap-3">
-            <div className="relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/6 text-[#d8c79a]">
+          <div className="mt-2 flex items-center gap-2.5">
+            <div className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/6 text-[#d8c79a]">
               <BellIcon />
               {unreadCount > 0 && (
                 <span className="absolute -right-1.5 -top-1.5 inline-flex min-w-[1.4rem] items-center justify-center rounded-full bg-[#d8c79a] px-1.5 py-0.5 text-[10px] font-black text-[#101c2d]">
@@ -84,10 +164,10 @@ const StaffNotificationInbox = () => {
               )}
             </div>
             <div className="min-w-0">
-              <div className="text-lg font-black text-white">
-                {loading ? 'Loading alerts...' : unreadCount > 0 ? `${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}` : 'No unread notifications'}
+              <div className="text-sm font-black text-white sm:text-[15px]">
+                {loading ? 'Loading alerts...' : unreadCount > 0 ? `${unreadCount} unread` : 'Inbox clear'}
               </div>
-              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/50">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/50">
                 {role === 'manager' ? 'Manager inbox' : 'Admin inbox'}
               </div>
             </div>
@@ -98,7 +178,7 @@ const StaffNotificationInbox = () => {
           <button
             type="button"
             onClick={pushEnabled ? disableBackgroundAlerts : requestDeviceAlerts}
-            className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border transition ${
+            className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border transition ${
               pushEnabled
                 ? 'border-[#d8c79a]/40 bg-[#d8c79a]/15 text-[#f4df9c] hover:bg-[#d8c79a]/25'
                 : notificationPermission === 'denied'
@@ -113,7 +193,7 @@ const StaffNotificationInbox = () => {
           <button
             type="button"
             onClick={toggleSound}
-            className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border transition ${
+            className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border transition ${
               soundEnabled
                 ? 'border-white/10 bg-white/6 text-white/85 hover:bg-white/10 hover:text-white'
                 : 'border-white/10 bg-transparent text-white/45 hover:bg-white/6 hover:text-white/75'
@@ -126,13 +206,13 @@ const StaffNotificationInbox = () => {
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] ${
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${
           pushEnabled ? 'bg-[#d8c79a]/20 text-[#f4df9c]' : 'bg-white/8 text-white/65'
         }`}>
           {deviceAlertStatusLabel}
         </span>
-        <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] ${
+        <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${
           soundEnabled ? 'bg-white/8 text-white/70' : 'bg-white/5 text-white/45'
         }`}>
           {soundEnabled ? 'Sound on' : 'Sound off'}
@@ -141,33 +221,44 @@ const StaffNotificationInbox = () => {
           <button
             type="button"
             onClick={markAllNotificationsAsRead}
-            className="inline-flex rounded-full border border-white/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-white/75 transition hover:bg-white/8 hover:text-white"
+            className="inline-flex rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-white/75 transition hover:bg-white/8 hover:text-white"
           >
-            Mark all read
+            Read all
           </button>
         )}
       </div>
 
       {(deviceAlertMessage || error) && (
-        <div className={`mt-4 rounded-[1.2rem] border px-4 py-3 text-sm leading-6 ${
+        <div className={`mt-3 rounded-[1rem] border px-3 py-2.5 text-[11px] leading-5 ${
           error
             ? 'border-red-400/20 bg-red-500/10 text-red-100'
             : 'border-white/10 bg-white/6 text-white/75'
         }`}>
-          {error || deviceAlertMessage}
+          <div className="flex items-start justify-between gap-3">
+            <p className="min-w-0">{compactInboxMessage(error || deviceAlertMessage)}</p>
+            <button
+              type="button"
+              onClick={clearInboxMessage}
+              className="shrink-0 rounded-full p-1 text-white/55 transition hover:bg-white/8 hover:text-white"
+              aria-label="Close inbox message"
+              title="Close inbox message"
+            >
+              <CloseIcon />
+            </button>
+          </div>
         </div>
       )}
 
-      <div className="mt-4 space-y-3">
-        {sidebarNotifications.length === 0 ? (
-          <div className="rounded-[1.25rem] border border-dashed border-white/12 bg-white/5 px-4 py-4 text-sm leading-6 text-white/55">
+      <div className="mt-3 space-y-2">
+        {visibleSidebarNotifications.length === 0 ? (
+          <div className="rounded-[1rem] border border-dashed border-white/12 bg-white/5 px-3 py-3 text-xs leading-5 text-white/55">
             New package, flight, service, and consultation alerts will appear here automatically.
           </div>
         ) : (
-          sidebarNotifications.map((notification) => (
+          visibleSidebarNotifications.map((notification) => (
             <div
               key={notification.id}
-              className={`rounded-[1.25rem] border px-4 py-4 ${
+              className={`rounded-[1rem] border px-3 py-3 ${
                 notification.read
                   ? 'border-white/8 bg-white/5'
                   : 'border-[#d8c79a]/30 bg-[#d8c79a]/10'
@@ -177,27 +268,38 @@ const StaffNotificationInbox = () => {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     {!notification.read && <span className="h-2 w-2 rounded-full bg-[#f4df9c]" />}
-                    <h3 className="truncate text-sm font-black text-white">{notification.title || 'Staff notification'}</h3>
+                    <h3 className="truncate text-[13px] font-black text-white">{notification.title || 'Staff notification'}</h3>
                   </div>
-                  <p className="mt-2 text-sm leading-6 text-white/70">
-                    {notification.message}
+                  <p className="mt-1.5 text-[11px] leading-5 text-white/68" title={notification.message}>
+                    {compactNotificationMessage(notification.message)}
                   </p>
                 </div>
-                {!notification.read && (
+                <div className="flex shrink-0 items-center gap-1">
+                  {!notification.read && (
+                    <button
+                      type="button"
+                      onClick={() => markNotificationAsRead(notification.id)}
+                      className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-white/70 transition hover:bg-white/8 hover:text-white"
+                    >
+                      Read
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => markNotificationAsRead(notification.id)}
-                    className="shrink-0 rounded-full border border-white/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-white/70 transition hover:bg-white/8 hover:text-white"
+                    onClick={() => handleDismissNotification(notification)}
+                    className="rounded-full p-1 text-white/55 transition hover:bg-white/8 hover:text-white"
+                    aria-label="Close notification"
+                    title="Close notification"
                   >
-                    Read
+                    <CloseIcon />
                   </button>
-                )}
+                </div>
               </div>
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <span className="text-xs text-white/45">{formatNotificationTime(notification.createdAt)}</span>
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <span className="text-[11px] text-white/45">{formatNotificationTime(notification.createdAt)}</span>
                 <Link
                   to={resolveNotificationDestination(notification, role)}
-                  className="text-xs font-black uppercase tracking-[0.16em] text-[#f4df9c] transition hover:text-white"
+                  className="text-[11px] font-black uppercase tracking-[0.14em] text-[#f4df9c] transition hover:text-white"
                   onClick={() => {
                     if (!notification.read) {
                       markNotificationAsRead(notification.id);

@@ -478,6 +478,11 @@ export function StaffNotificationsProvider({ children }) {
     }
   }, [refreshNotifications, updateNotificationState]);
 
+  const clearInboxMessage = useCallback(() => {
+    setError('');
+    setDeviceAlertMessage('');
+  }, []);
+
   const sidebarNotifications = useMemo(() => {
     const unreadNotifications = notifications.filter((notification) => !notification.read);
     return (unreadNotifications.length > 0 ? unreadNotifications : notifications).slice(0, 2);
@@ -498,6 +503,7 @@ export function StaffNotificationsProvider({ children }) {
     sidebarNotifications,
     dashboardNotifications,
     deviceAlertMessage,
+    clearInboxMessage,
     refreshNotifications,
     requestDeviceAlerts,
     disableBackgroundAlerts,
@@ -506,6 +512,7 @@ export function StaffNotificationsProvider({ children }) {
     markAllNotificationsAsRead,
   }), [
     dashboardNotifications,
+    clearInboxMessage,
     deviceAlertMessage,
     error,
     loading,
