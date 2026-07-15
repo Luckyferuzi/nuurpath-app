@@ -1,3 +1,4 @@
+const env = require('../config/env');
 const {
     escapeHtml,
     formatPlainTextForHtml,
@@ -213,6 +214,51 @@ function getDeliveryTypeLabel(deliveryType) {
     return labels[deliveryType] || 'Delivery';
 }
 
+function getMessageTypeTheme(messageType) {
+    if (messageType === 'OFFER') {
+        return {
+            accentColor: '#8a7443',
+            accentSoft: '#f5efe2',
+            headerBackground: 'linear-gradient(135deg, #fffaf1 0%, #f4ead5 55%, #ece1c6 100%)',
+            buttonBackground: '#8a7443',
+        };
+    }
+
+    if (messageType === 'CAMPAIGN') {
+        return {
+            accentColor: '#0B1C3E',
+            accentSoft: '#eef2f9',
+            headerBackground: 'linear-gradient(135deg, #f7f8fc 0%, #eef2f9 55%, #e7ebf4 100%)',
+            buttonBackground: '#0B1C3E',
+        };
+    }
+
+    return {
+        accentColor: '#35624d',
+        accentSoft: '#edf4ef',
+        headerBackground: 'linear-gradient(135deg, #f7fbf8 0%, #edf4ef 55%, #e4efe8 100%)',
+        buttonBackground: '#35624d',
+    };
+}
+
+function normalizeOrigin(value) {
+    return toTrimmedString(value).replace(/\/+$/, '');
+}
+
+function buildPreferencesUrl(recipient) {
+    const clientUrl = normalizeOrigin(env.CLIENT_URL);
+
+    if (!clientUrl || !recipient?.email) {
+        return '';
+    }
+
+    return `${clientUrl}/newsletter/preferences?email=${encodeURIComponent(recipient.email)}`;
+}
+
+function buildTrustNote() {
+    return 'You are receiving this update because you requested NuurPath travel updates or you still allow email communication for your NuurPath account.';
+}
+
 function renderCampaignPreview(campaignPayload, previewRecipient = {}) {
     const recipient = normalizePreviewRecipient(previewRecipient);
     const greeting = buildGreeting(campaignPayload.greetingStyle, recipient);
@@ -230,33 +276,41 @@ function renderCampaignPreview(campaignPayload, previewRecipient = {}) {
     const safeTitle = escapeHtml(title);
     const safePreheader = escapeHtml(preheader);
     const safeSignature = formatPlainTextForHtml(signature);
+    const theme = getMessageTypeTheme(campaignPayload.messageType);
+    const preferencesUrl = buildPreferencesUrl(recipient);
+    const trustNote = buildTrustNote();
     const bodyHtml = bodyParagraphs.map((paragraph) => `<p style="margin: 0 0 16px; line-height: 1.7; color: #425063;">${formatPlainTextForHtml(paragraph)}</p>`).join('');
     const highlightHtml = highlightParagraphs.map((paragraph) => `<p style="margin: 0 0 12px; line-height: 1.7; color: #425063;">${formatPlainTextForHtml(paragraph)}</p>`).join('');
-    const accentColor = campaignPayload.messageType === 'OFFER' ? '#8a7443' : campaignPayload.messageType === 'CAMPAIGN' ? '#0B1C3E' : '#35624d';
     const html = `
         <div style="background: #f5f1e7; margin: 0; padding: 32px 16px; font-family: Arial, sans-serif;">
-            <div style="max-width: 680px; margin: 0 auto; background: #ffffff; border: 1px solid #e9dfcd; border-radius: 28px; overflow: hidden; box-shadow: 0 18px 46px rgba(16, 28, 45, 0.08);">
-                <div style="padding: 28px 32px; background: linear-gradient(135deg, #fcfbf8 0%, #f5f1e7 100%); border-bottom: 1px solid #efe8d8;">
-                    <div style="font-size: 11px; letter-spacing: 0.24em; font-weight: 700; text-transform: uppercase; color: ${accentColor};">${escapeHtml(getMessageTypeLabel(campaignPayload.messageType))}</div>
-                    <h1 style="margin: 14px 0 0; font-size: 30px; line-height: 1.15; color: #101c2d;">${safeTitle}</h1>
-                    ${safePreheader ? `<p style="margin: 14px 0 0; font-size: 15px; line-height: 1.7; color: #5b6472;">${safePreheader}</p>` : ''}
+            <div style="max-width: 680px; margin: 0 auto; background: #ffffff; border: 1px solid #e9dfcd; border-radius: 32px; overflow: hidden; box-shadow: 0 18px 46px rgba(16, 28, 45, 0.08);">
+                <div style="padding: 30px 32px; background: ${theme.headerBackground}; border-bottom: 1px solid #efe8d8;">
+                    <div style="display: inline-block; padding: 7px 14px; border-radius: 999px; background: rgba(255,255,255,0.75); color: #101c2d; font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase;">NuurPath Travels</div>
+                    <div style="margin-top: 18px; font-size: 11px; letter-spacing: 0.24em; font-weight: 700; text-transform: uppercase; color: ${theme.accentColor};">${escapeHtml(getMessageTypeLabel(campaignPayload.messageType))}</div>
+                    <h1 style="margin: 14px 0 0; font-size: 32px; line-height: 1.14; color: #101c2d;">${safeTitle}</h1>
+                    ${safePreheader ? `<p style="margin: 14px 0 0; max-width: 540px; font-size: 15px; line-height: 1.7; color: #5b6472;">${safePreheader}</p>` : ''}
                 </div>
-                <div style="padding: 32px;">
+                <div style="padding: 34px 32px;">
                     <p style="margin: 0 0 20px; font-size: 16px; font-weight: 700; color: #101c2d;">${safeGreeting}</p>
                     ${bodyHtml || '<p style="margin: 0; color: #425063;">Add your message body to preview the campaign.</p>'}
                     ${highlightTitle || highlightHtml ? `
-                        <div style="margin-top: 28px; padding: 22px; border-radius: 22px; background: #fbfaf7; border: 1px solid #ece4d2;">
+                        <div style="margin-top: 28px; padding: 22px; border-radius: 24px; background: ${theme.accentSoft}; border: 1px solid #ece4d2;">
                             ${highlightTitle ? `<div style="margin-bottom: 10px; font-size: 18px; font-weight: 700; color: #101c2d;">${escapeHtml(highlightTitle)}</div>` : ''}
                             ${highlightHtml || ''}
                         </div>
                     ` : ''}
                     ${ctaLabel && campaignPayload.ctaUrl ? `
                         <div style="margin-top: 28px;">
-                            <a href="${escapeHtml(campaignPayload.ctaUrl)}" style="display: inline-block; padding: 14px 22px; border-radius: 999px; background: #101c2d; color: #ffffff; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none;">${escapeHtml(ctaLabel)}</a>
+                            <a href="${escapeHtml(campaignPayload.ctaUrl)}" style="display: inline-block; padding: 14px 22px; border-radius: 999px; background: ${theme.buttonBackground}; color: #ffffff; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none;">${escapeHtml(ctaLabel)}</a>
                         </div>
                     ` : ''}
                     <div style="margin-top: 32px; padding-top: 22px; border-top: 1px solid #efe8d8; color: #425063; line-height: 1.7;">
                         ${safeSignature}
+                    </div>
+                    <div style="margin-top: 26px; border-radius: 24px; background: #fbfaf7; border: 1px solid #ece4d2; padding: 18px 20px;">
+                        <div style="font-size: 11px; letter-spacing: 0.18em; font-weight: 700; text-transform: uppercase; color: ${theme.accentColor};">Preference and trust note</div>
+                        <p style="margin: 10px 0 0; font-size: 13px; line-height: 1.7; color: #5b6472;">${escapeHtml(trustNote)}</p>
+                        ${preferencesUrl ? `<p style="margin: 12px 0 0; font-size: 13px; line-height: 1.7; color: #5b6472;">If you would prefer not to receive future updates, you can <a href="${escapeHtml(preferencesUrl)}" style="color: ${theme.accentColor}; font-weight: 700; text-decoration: none;">manage your email preference here</a>.</p>` : ''}
                     </div>
                 </div>
             </div>
@@ -279,6 +333,8 @@ function renderCampaignPreview(campaignPayload, previewRecipient = {}) {
         ctaLabel,
         ctaUrl: campaignPayload.ctaUrl,
         signature,
+        preferencesUrl,
+        trustNote,
         html,
         text: [
             subject,
@@ -291,6 +347,9 @@ function renderCampaignPreview(campaignPayload, previewRecipient = {}) {
             ...(ctaLabel && campaignPayload.ctaUrl ? ['', `${ctaLabel}: ${campaignPayload.ctaUrl}`] : []),
             '',
             signature,
+            '',
+            trustNote,
+            ...(preferencesUrl ? ['', `Manage your email preference: ${preferencesUrl}`] : []),
         ].join('\n'),
     };
 }

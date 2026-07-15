@@ -13,6 +13,7 @@ import {
 } from '../lib/servicePresentation.js';
 import { usePublicContent } from '../contexts/PublicContentContext.jsx';
 import GlobalSupport from './GlobalSupport';
+import HomepageNewsletterReminder from './HomepageNewsletterReminder.jsx';
 import MemoriesGallery from './MemoriesGallery';
 import NewsletterForm from './NewsletterForm';
 import { PublicPageShell, PublicSectionHeading } from './PublicPageShell.jsx';
@@ -482,6 +483,8 @@ const Home = () => {
           </div>
         </div>
       </section>
+
+      <HomepageNewsletterReminder />
 
       <GlobalSupport />
     </div>

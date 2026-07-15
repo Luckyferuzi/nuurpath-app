@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import axios from '../lib/api';
+import { markNewsletterSubscribed } from '../lib/newsletterPreferences.js';
 
-const NewsletterForm = ({ variant = 'footer' }) => {
+const NewsletterForm = ({ variant = 'footer', onSuccess = null }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
 
   const isPanelVariant = variant === 'panel';
+  const isReminderVariant = variant === 'reminder';
 
   const handleSubscribe = async (event) => {
     event.preventDefault();
@@ -28,6 +30,13 @@ const NewsletterForm = ({ variant = 'footer' }) => {
       });
       setStatus('success');
       setMessage(response.data?.message || 'Subscribed successfully!');
+      markNewsletterSubscribed();
+      if (typeof onSuccess === 'function') {
+        onSuccess({
+          name: trimmedName,
+          email: trimmedEmail,
+        });
+      }
       setName('');
       setEmail('');
     } catch (err) {
@@ -76,6 +85,48 @@ const NewsletterForm = ({ variant = 'footer' }) => {
             {message}
           </p>
         )}
+      </form>
+    );
+  }
+
+  if (isReminderVariant) {
+    return (
+      <form onSubmit={handleSubscribe} className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <input
+            type="text"
+            required
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Your name"
+            className="w-full rounded-2xl border border-[#ddd3bf] bg-white px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d]"
+          />
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="Email address"
+            className="w-full rounded-2xl border border-[#ddd3bf] bg-white px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d]"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="submit"
+            disabled={status === 'loading'}
+            className="rounded-full bg-[#101c2d] px-5 py-3 text-sm font-black uppercase tracking-[0.16em] text-white transition hover:bg-[#16263b] disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {status === 'loading' ? 'Joining...' : 'Join Newsletter'}
+          </button>
+          <p className="text-xs leading-6 text-[#6b7280]">
+            Occasional updates only. Your details help us keep the message personal and respectful.
+          </p>
+        </div>
+        {message ? (
+          <p className={`text-sm ${status === 'success' ? 'text-green-700' : 'text-red-600'}`}>
+            {message}
+          </p>
+        ) : null}
       </form>
     );
   }

@@ -286,10 +286,13 @@ const ManageNewsletter = () => {
     draftCampaigns.find((campaign) => campaign.id === selectedCampaignId) || null
   ), [draftCampaigns, selectedCampaignId]);
 
-  useEffect(() => {
-    const canPreview = isCampaignReadyForPreview(campaignForm);
+  const campaignReadyForPreview = useMemo(
+    () => isCampaignReadyForPreview(campaignForm),
+    [campaignForm]
+  );
 
-    if (!canPreview) {
+  useEffect(() => {
+    if (!campaignReadyForPreview) {
       setPreviewData(null);
       setPreviewError(null);
       return undefined;
@@ -313,7 +316,7 @@ const ManageNewsletter = () => {
     }, 250);
 
     return () => window.clearTimeout(timeoutId);
-  }, [campaignForm, selectedPreviewRecipient]);
+  }, [campaignForm, campaignReadyForPreview, selectedPreviewRecipient]);
 
   const metrics = useMemo(() => ([
     {
@@ -379,6 +382,28 @@ const ManageNewsletter = () => {
     () => getAudienceCountForSelection(campaignForm.audienceType, audienceReadiness),
     [audienceReadiness, campaignForm.audienceType]
   );
+
+  const deliveryReadinessItems = useMemo(() => ([
+    {
+      label: 'Draft saved',
+      value: Boolean(selectedDraftCampaign),
+      detail: selectedDraftCampaign ? `Draft #${selectedDraftCampaign.id} is ready for testing and delivery.` : 'Save this message as a draft to unlock test send and campaign delivery.',
+    },
+    {
+      label: 'Audience ready',
+      value: selectedAudienceCount > 0,
+      detail: selectedAudienceCount > 0
+        ? `${selectedAudienceCount} reachable contact${selectedAudienceCount === 1 ? '' : 's'} are currently eligible for this audience.`
+        : 'There are no reachable contacts in the selected audience right now.',
+    },
+    {
+      label: 'Test completed',
+      value: Boolean(selectedDraftCampaign?.lastTestSentAt),
+      detail: selectedDraftCampaign?.lastTestSentAt
+        ? `Last test sent ${formatAdminDate(selectedDraftCampaign.lastTestSentAt, 'recently')}.`
+        : 'A test send is recommended before a full audience delivery.',
+    },
+  ]), [selectedAudienceCount, selectedDraftCampaign]);
 
   const handleStatusChange = async (subscriber, isActive) => {
     setActionSubscriberId(subscriber.id);
@@ -942,7 +967,7 @@ const ManageNewsletter = () => {
                   <button
                     type="button"
                     onClick={handleSendTest}
-                    disabled={!selectedDraftCampaign || savingCampaign || testingCampaignId === selectedDraftCampaign.id || sendingCampaignId === selectedDraftCampaign.id}
+                    disabled={!selectedDraftCampaign || !campaignReadyForPreview || savingCampaign || testingCampaignId === selectedDraftCampaign.id || sendingCampaignId === selectedDraftCampaign.id}
                     className="rounded-full border border-[#d6ccb8] bg-white px-5 py-3 text-sm font-bold text-[#101c2d] transition hover:bg-[#faf8f3] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {testingCampaignId === selectedDraftCampaign?.id ? 'Sending Test...' : 'Send Test Email'}
@@ -950,7 +975,7 @@ const ManageNewsletter = () => {
                   <button
                     type="button"
                     onClick={handleSendCampaign}
-                    disabled={!selectedDraftCampaign || savingCampaign || sendingCampaignId === selectedDraftCampaign.id || testingCampaignId === selectedDraftCampaign.id}
+                    disabled={!selectedDraftCampaign || !campaignReadyForPreview || savingCampaign || sendingCampaignId === selectedDraftCampaign.id || testingCampaignId === selectedDraftCampaign.id}
                     className="rounded-full bg-[#8a7443] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#735f37] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {sendingCampaignId === selectedDraftCampaign?.id ? 'Sending Campaign...' : 'Send Campaign'}
@@ -970,6 +995,39 @@ const ManageNewsletter = () => {
           </div>
 
           <div className="space-y-6">
+            <StaffCardSection
+              title="Delivery Readiness"
+              description="A quiet checklist before testing or sending so the audience, preferences, and message quality stay aligned."
+              actions={selectedDraftCampaign?.lastError ? <StaffInfoPill tone="warm">Needs review</StaffInfoPill> : null}
+            >
+              <div className="space-y-3">
+                {deliveryReadinessItems.map((item) => (
+                  <div key={item.label} className="rounded-[1.35rem] border border-[#ece4d2] bg-[#fbfaf7] px-4 py-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="text-sm font-black text-[#101c2d]">{item.label}</div>
+                      <StaffInfoPill tone={item.value ? 'accent' : 'neutral'}>
+                        {item.value ? 'Ready' : 'Pending'}
+                      </StaffInfoPill>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-[#67707e]">{item.detail}</p>
+                  </div>
+                ))}
+
+                <div className="rounded-[1.35rem] border border-[#ece4d2] bg-white px-4 py-4">
+                  <div className="text-sm font-black text-[#101c2d]">Preference footer</div>
+                  <p className="mt-2 text-sm leading-6 text-[#67707e]">
+                    The email preview now includes a trust note and a direct preference link so recipients can manage future updates more confidently.
+                  </p>
+                </div>
+
+                {selectedDraftCampaign?.lastError ? (
+                  <div className="rounded-[1.35rem] border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-800">
+                    {selectedDraftCampaign.lastError}
+                  </div>
+                ) : null}
+              </div>
+            </StaffCardSection>
+
             <StaffCardSection
               title="Preview Recipient"
               description="Switch between a neutral fallback and real sample contacts from the current audience list to check how personalization lands."
@@ -996,7 +1054,7 @@ const ManageNewsletter = () => {
               previewLoading={previewLoading}
               previewError={previewError}
               selectedRecipientLabel={`${selectedPreviewRecipient.name || selectedPreviewRecipient.email} (${selectedPreviewRecipient.email}) - ${selectedPreviewRecipient.sourceLabel}`}
-              isReady={isCampaignReadyForPreview(campaignForm)}
+              isReady={campaignReadyForPreview}
             />
           </div>
         </div>

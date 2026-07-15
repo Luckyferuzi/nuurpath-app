@@ -87,6 +87,12 @@ const NewsletterCampaignHistoryCard = ({ campaign, onReuse }) => {
         </div>
       ) : null}
 
+      {campaign.lastError ? (
+        <div className="mt-5 rounded-[1.35rem] border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-800">
+          {campaign.lastError}
+        </div>
+      ) : null}
+
       <div className="mt-5 flex flex-wrap gap-3">
         <button
           type="button"

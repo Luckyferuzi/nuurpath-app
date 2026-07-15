@@ -38,6 +38,7 @@ import UserDashboard from './components/UserDashboard.jsx';
 import UserProfile from './components/UserProfile.jsx';
 import TermsAndConditions from './components/TermsAndConditions.jsx';
 import PrivacyPolicy from './components/PrivacyPolicy.jsx';
+import NewsletterPreferencesPage from './components/NewsletterPreferencesPage.jsx';
 import Footer from './components/Footer.jsx';
 import Home from './components/Home.jsx';
 import WhatsAppButton from './components/WhatsAppButton.jsx';
@@ -72,6 +73,7 @@ const FOOTER_COMPACT_PATTERNS = [
   '/verify-email/:token',
   '/terms',
   '/privacy',
+  '/newsletter/preferences',
   '/dashboard',
   '/wishlist',
   '/profile',
@@ -122,6 +124,7 @@ function AppFrame() {
             <Route path="/contact" element={<ContactUs />} />
             <Route path="/terms" element={<TermsAndConditions />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/newsletter/preferences" element={<NewsletterPreferencesPage />} />
             <Route path="/team" element={<Team />} />
             <Route path="/verify-email/:token" element={<VerifyEmail />} />
             <Route path="/staff/login" element={<StaffLogin />} />

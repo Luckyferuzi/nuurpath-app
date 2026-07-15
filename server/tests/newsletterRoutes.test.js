@@ -179,6 +179,8 @@ describe('newsletter routes', () => {
         expect(response.body.greeting).toBe('Dear Asha Ali,');
         expect(response.body.html).toContain('View Offer');
         expect(response.body.html).toContain('asha@example.com');
+        expect(response.body.preferencesUrl).toContain('/newsletter/preferences?email=asha%40example.com');
+        expect(response.body.html).toContain('manage your email preference here');
     });
 
     test('create campaign draft stores structured composer fields', async () => {

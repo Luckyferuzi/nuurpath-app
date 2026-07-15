@@ -20,7 +20,7 @@ Current status:
 - Phase 13 is completed.
 - Phase 14 is completed.
 - Phase 15 is completed.
-- Phase 16 is planned.
+- Phase 16 is completed.
 - When resuming work later, read this file first and then continue from the next approved phase.
 
 ## How To Use This Document
@@ -2073,7 +2073,7 @@ Backend:
 ## Phase 16: Campaign Refinement and Trust Controls
 
 Status:
-- Planned
+- Completed
 
 ### Objective
 
@@ -2118,6 +2118,31 @@ Examples to evaluate after the core flow exists:
 - campaign templates look more polished and consistent
 - the admin workflow becomes easier to understand after real usage feedback
 - trust and suppression behavior are easier to audit and maintain
+
+### Completed Work
+
+- Refined the campaign email layout so previews and sends now feel more polished, with:
+  - a clearer branded header
+  - calmer message-type styling
+  - a more complete trust footer
+- Added a direct public email-preferences page so recipients can stop future newsletter and campaign-style updates without needing staff intervention first.
+- Added a trust footer to campaign emails with:
+  - a brief reason for the message
+  - a direct preference-management link
+- Improved the newsletter admin composer with a calmer delivery-readiness panel that now helps staff confirm:
+  - whether the draft is saved
+  - whether the selected audience is reachable
+  - whether a test send has already been completed
+- Improved preview guidance so staff can clearly see that the trust footer and preference link are part of the final message.
+- Refined campaign history cards so delivery issues are easier to notice and review.
+- Added a gentle homepage newsletter reminder card that:
+  - appears after healthy engagement instead of immediately
+  - disappears when the user reaches the main newsletter section
+  - respects dismissals and local preference signals so it does not become noisy
+- Updated newsletter sign-up and preference flow behavior so local reminder state now respects:
+  - successful subscription
+  - explicit opt-out
+  - reminder dismissal
 
 ### Out Of Scope For Phase 16
 

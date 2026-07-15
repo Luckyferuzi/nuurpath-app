@@ -54,6 +54,16 @@ const NewsletterCampaignPreview = ({
           </div>
         </div>
       )}
+
+      {isReady && !previewError && previewData?.preferencesUrl && (
+        <div className="mt-5 rounded-[1.5rem] border border-[#ece4d2] bg-[#fbfaf7] px-4 py-4">
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Trust Footer</div>
+          <p className="mt-2 text-sm leading-6 text-[#67707e]">
+            Recipients will see a calm trust note and a direct link to manage their email preference.
+          </p>
+          <p className="mt-2 break-all text-xs leading-6 text-[#0B1C3E]">{previewData.preferencesUrl}</p>
+        </div>
+      )}
     </section>
   );
 };
