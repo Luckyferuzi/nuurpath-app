@@ -53,6 +53,12 @@ const ManageNewsletter = () => {
     inactive: 0,
     thisMonth: 0,
   });
+  const [audienceReadiness, setAudienceReadiness] = useState({
+    subscribersReachable: 0,
+    usersReachable: 0,
+    combinedReachable: 0,
+    suppressed: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
@@ -78,6 +84,12 @@ const ManageNewsletter = () => {
         active: 0,
         inactive: 0,
         thisMonth: 0,
+      });
+      setAudienceReadiness(data.audienceReadiness || {
+        subscribersReachable: 0,
+        usersReachable: 0,
+        combinedReachable: 0,
+        suppressed: 0,
       });
       setCurrentPage(data.currentPage || 1);
       setTotalPages(data.totalPages || 1);
@@ -124,6 +136,29 @@ const ManageNewsletter = () => {
       tone: 'default',
     },
   ]), [counts.active, counts.inactive, counts.thisMonth, filteredTotal]);
+
+  const audienceCards = useMemo(() => ([
+    {
+      label: 'Subscribers Only',
+      value: audienceReadiness.subscribersReachable || 0,
+      description: 'Active subscriber emails currently reachable for future campaign delivery.',
+    },
+    {
+      label: 'Users Only',
+      value: audienceReadiness.usersReachable || 0,
+      description: 'Registered customer accounts still open to future offer emails.',
+    },
+    {
+      label: 'Both Together',
+      value: audienceReadiness.combinedReachable || 0,
+      description: 'Unique reachable emails after removing duplicates across users and subscribers.',
+    },
+    {
+      label: 'Suppressed',
+      value: audienceReadiness.suppressed || 0,
+      description: 'Emails blocked from future campaign-style delivery after opt-out handling.',
+    },
+  ]), [audienceReadiness.combinedReachable, audienceReadiness.suppressed, audienceReadiness.subscribersReachable, audienceReadiness.usersReachable]);
 
   const handleStatusChange = async (subscriber, isActive) => {
     setActionSubscriberId(subscriber.id);
@@ -179,7 +214,7 @@ const ManageNewsletter = () => {
     <StaffPageShell
       eyebrow="Growth Operations"
       title="Newsletter"
-      description="Track subscriber growth, export active contacts, and manage simple subscribe or unsubscribe status without building a full campaign engine."
+      description="Track subscriber growth, keep name capture clean, and prepare the audience foundation before campaign tools go live."
       actions={(
         <button
           type="button"
@@ -209,8 +244,23 @@ const ManageNewsletter = () => {
       </div>
 
       <StaffCardSection
+        title="Audience Foundation"
+        description="Phase 13 keeps subscriber identity, registered-user reach, and shared opt-out behavior aligned before campaign sending is introduced."
+      >
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {audienceCards.map((card) => (
+            <article key={card.label} className="rounded-[1.5rem] border border-[#ece4d2] bg-white px-5 py-5 shadow-sm">
+              <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#8a7443]">{card.label}</div>
+              <div className="mt-3 text-3xl font-black text-[#101c2d]">{card.value}</div>
+              <p className="mt-3 text-sm leading-6 text-[#67707e]">{card.description}</p>
+            </article>
+          ))}
+        </div>
+      </StaffCardSection>
+
+      <StaffCardSection
         title="Filter and Search"
-        description="Search by email or switch between active and unsubscribed contacts before exporting the list."
+        description="Search by name or email, then switch between active and unsubscribed contacts before exporting the list."
       >
         <div className="space-y-4">
           <StaffFilterPills
@@ -219,7 +269,7 @@ const ManageNewsletter = () => {
             onChange={setStatusFilter}
           />
           <label className="block">
-            <span className="mb-2 block text-sm font-semibold text-gray-700">Search by email</span>
+            <span className="mb-2 block text-sm font-semibold text-gray-700">Search by name or email</span>
             <input
               type="text"
               value={searchTerm}
@@ -233,7 +283,7 @@ const ManageNewsletter = () => {
 
       <StaffCardSection
         title="Subscriber List"
-        description="This is the lightweight operational list for collection and export. Campaign sending remains out of scope for this release."
+        description={`Showing ${filteredTotal} subscriber${filteredTotal === 1 ? '' : 's'} in the current view. This remains the clean operational list while campaign authoring and sending stay out of scope for this release.`}
       >
         {subscribers.length === 0 ? (
           <StaffEmptyState
@@ -249,7 +299,10 @@ const ManageNewsletter = () => {
                     <div className="text-xs font-black uppercase tracking-[0.2em] text-[#8a7443]">
                       Joined {formatAdminDate(subscriber.createdAt, 'Recently')}
                     </div>
-                    <h3 className="mt-2 text-xl font-black text-[#101c2d]">{subscriber.email}</h3>
+                    <h3 className="mt-2 text-xl font-black text-[#101c2d]">{subscriber.name || subscriber.email}</h3>
+                    <p className={`mt-1 text-sm ${subscriber.name ? 'text-[#67707e]' : 'text-[#8a7443]'}`}>
+                      {subscriber.name ? subscriber.email : 'Name not saved yet'}
+                    </p>
                   </div>
                   <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${subscriber.isActive ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
                     {subscriber.isActive ? 'Active' : 'Unsubscribed'}
@@ -258,8 +311,19 @@ const ManageNewsletter = () => {
 
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   <div className="rounded-2xl border border-[#ece4d2] bg-white px-4 py-3">
+                    <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a828f]">Email</div>
+                    <div className="mt-2 break-all text-sm text-[#101c2d]">{subscriber.email}</div>
+                  </div>
+                  <div className="rounded-2xl border border-[#ece4d2] bg-white px-4 py-3">
                     <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a828f]">Subscribed</div>
                     <div className="mt-2 text-sm text-[#101c2d]">{formatAdminDate(subscriber.createdAt)}</div>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <div className="rounded-2xl border border-[#ece4d2] bg-white px-4 py-3">
+                    <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a828f]">Stored Name</div>
+                    <div className="mt-2 text-sm text-[#101c2d]">{subscriber.name || 'No name saved yet'}</div>
                   </div>
                   <div className="rounded-2xl border border-[#ece4d2] bg-white px-4 py-3">
                     <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a828f]">Unsubscribed</div>

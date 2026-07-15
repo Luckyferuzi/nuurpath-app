@@ -58,6 +58,11 @@ const FOOTER_HIDDEN_PATTERNS = [
   '/book-flight',
   '/book-consultation',
   '/services/:serviceId/request',
+  '/contact',
+  '/stories',
+  '/stories/:id',
+  '/packages',
+  '/packages/:id',
 ];
 const FOOTER_COMPACT_PATTERNS = [
   '/login',

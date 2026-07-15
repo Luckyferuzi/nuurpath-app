@@ -11,15 +11,29 @@ function normalizeEmail(email) {
     return toTrimmedString(email).toLowerCase();
 }
 
+function normalizeSubscriberName(name) {
+    return toTrimmedString(name).replace(/\s+/g, ' ');
+}
+
 function buildSubscriberWhereClause({ search, status }) {
     const where = {};
     const normalizedSearch = toTrimmedString(search);
 
     if (normalizedSearch) {
-        where.email = {
-            contains: normalizedSearch,
-            mode: 'insensitive',
-        };
+        where.OR = [
+            {
+                email: {
+                    contains: normalizedSearch,
+                    mode: 'insensitive',
+                },
+            },
+            {
+                name: {
+                    contains: normalizedSearch,
+                    mode: 'insensitive',
+                },
+            },
+        ];
     }
 
     if (status === 'active') {
@@ -32,9 +46,10 @@ function buildSubscriberWhereClause({ search, status }) {
 }
 
 function buildSubscribersCsv(subscribers) {
-    const headers = ['Email', 'Status', 'Subscribed Date', 'Unsubscribed Date'];
+    const headers = ['Name', 'Email', 'Status', 'Subscribed Date', 'Unsubscribed Date'];
     const lines = subscribers.map((subscriber) => {
         const cells = [
+            subscriber.name || '',
             subscriber.email || '',
             subscriber.isActive ? 'Active' : 'Unsubscribed',
             subscriber.createdAt ? new Date(subscriber.createdAt).toISOString() : '',
@@ -45,6 +60,68 @@ function buildSubscribersCsv(subscribers) {
     });
 
     return [headers.join(','), ...lines].join('\n');
+}
+
+function createAudienceSyncOperations(email, { suppress, reason = null, source = null }) {
+    const operations = [
+        prisma.user.updateMany({
+            where: { email },
+            data: { emailSubscriptions: !suppress },
+        }),
+    ];
+
+    if (suppress) {
+        operations.push(
+            prisma.emailSuppression.upsert({
+                where: { email },
+                update: {
+                    reason,
+                    source,
+                },
+                create: {
+                    email,
+                    reason,
+                    source,
+                },
+            })
+        );
+    } else {
+        operations.push(
+            prisma.emailSuppression.deleteMany({
+                where: { email },
+            })
+        );
+    }
+
+    return operations;
+}
+
+function buildReachableEmailSet(records, suppressedSet) {
+    const emailSet = new Set();
+
+    (Array.isArray(records) ? records : []).forEach((record) => {
+        const email = normalizeEmail(record?.email);
+
+        if (email && !suppressedSet.has(email)) {
+            emailSet.add(email);
+        }
+    });
+
+    return emailSet;
+}
+
+function buildAudienceReadiness({ activeSubscribers, optedInUsers, suppressedEmails }) {
+    const suppressedSet = buildReachableEmailSet(suppressedEmails, new Set());
+    const subscriberSet = buildReachableEmailSet(activeSubscribers, suppressedSet);
+    const userSet = buildReachableEmailSet(optedInUsers, suppressedSet);
+    const combinedSet = new Set([...subscriberSet, ...userSet]);
+
+    return {
+        subscribersReachable: subscriberSet.size,
+        usersReachable: userSet.size,
+        combinedReachable: combinedSet.size,
+        suppressed: suppressedSet.size,
+    };
 }
 
 exports.subscribe = async (req, res, next) => {
@@ -58,26 +135,67 @@ exports.subscribe = async (req, res, next) => {
         const existingSubscriber = await prisma.newsletterSubscriber.findUnique({
             where: { email },
         });
+        const incomingName = normalizeSubscriberName(req.body?.name);
+        const resolvedName = incomingName || normalizeSubscriberName(existingSubscriber?.name);
 
-        if (existingSubscriber?.isActive) {
-            return res.json({ message: 'You are already subscribed!' });
+        if (!resolvedName) {
+            return next(new AppError('Your name is required to subscribe.', 400));
         }
 
-        if (existingSubscriber) {
-            await prisma.newsletterSubscriber.update({
+        if (existingSubscriber?.isActive) {
+            const operations = createAudienceSyncOperations(email, {
+                suppress: false,
+                source: 'newsletter_subscribe',
+            });
+            const shouldUpdateName = normalizeSubscriberName(existingSubscriber.name) !== resolvedName;
+
+            if (shouldUpdateName) {
+                operations.unshift(
+                    prisma.newsletterSubscriber.update({
+                        where: { id: existingSubscriber.id },
+                        data: {
+                            name: resolvedName,
+                        },
+                    })
+                );
+            }
+
+            await prisma.$transaction(operations);
+
+            return res.json({
+                message: shouldUpdateName
+                    ? 'You are already subscribed and your details were updated.'
+                    : 'You are already subscribed!',
+            });
+        }
+
+        const subscriberOperation = existingSubscriber
+            ? prisma.newsletterSubscriber.update({
                 where: { id: existingSubscriber.id },
                 data: {
+                    name: resolvedName,
                     isActive: true,
                     unsubscribedAt: null,
                 },
+            })
+            : prisma.newsletterSubscriber.create({
+                data: {
+                    email,
+                    name: resolvedName,
+                },
             });
 
+        await prisma.$transaction([
+            subscriberOperation,
+            ...createAudienceSyncOperations(email, {
+                suppress: false,
+                source: 'newsletter_subscribe',
+            }),
+        ]);
+
+        if (existingSubscriber) {
             return res.status(200).json({ message: 'Your newsletter subscription has been reactivated.' });
         }
-
-        await prisma.newsletterSubscriber.create({
-            data: { email },
-        });
 
         return res.status(201).json({ message: 'Subscribed successfully!' });
     } catch (err) {
@@ -94,23 +212,57 @@ exports.unsubscribe = async (req, res, next) => {
     }
 
     try {
-        const existingSubscriber = await prisma.newsletterSubscriber.findUnique({
-            where: { email },
-        });
+        const [existingSubscriber, existingUser, existingSuppression] = await Promise.all([
+            prisma.newsletterSubscriber.findUnique({
+                where: { email },
+            }),
+            prisma.user.findUnique({
+                where: { email },
+                select: {
+                    id: true,
+                    emailSubscriptions: true,
+                },
+            }),
+            prisma.emailSuppression.findUnique({
+                where: { email },
+            }),
+        ]);
 
-        if (!existingSubscriber || !existingSubscriber.isActive) {
-            return res.json({ message: 'This email is already unsubscribed.' });
+        const operations = [];
+
+        if (existingSubscriber?.isActive) {
+            operations.push(
+                prisma.newsletterSubscriber.update({
+                    where: { id: existingSubscriber.id },
+                    data: {
+                        isActive: false,
+                        unsubscribedAt: new Date(),
+                    },
+                })
+            );
         }
 
-        await prisma.newsletterSubscriber.update({
-            where: { id: existingSubscriber.id },
-            data: {
-                isActive: false,
-                unsubscribedAt: new Date(),
-            },
-        });
+        operations.push(
+            ...createAudienceSyncOperations(email, {
+                suppress: true,
+                reason: 'campaign_opt_out',
+                source: 'newsletter_unsubscribe',
+            })
+        );
 
-        return res.json({ message: 'You have been unsubscribed successfully.' });
+        await prisma.$transaction(operations);
+
+        const hadReachableAudience = Boolean(
+            existingSubscriber?.isActive
+            || (existingUser && existingUser.emailSubscriptions !== false)
+            || !existingSuppression
+        );
+
+        return res.json({
+            message: hadReachableAudience
+                ? 'You have been unsubscribed successfully.'
+                : 'This email is already unsubscribed.',
+        });
     } catch (err) {
         console.error(err.message);
         return next(new AppError('Server error unsubscribing from newsletter.', 500));
@@ -137,6 +289,9 @@ exports.getSubscribers = async (req, res, next) => {
             active,
             inactive,
             thisMonth,
+            activeAudienceSubscribers,
+            optedInUsers,
+            suppressedEmails,
         ] = await prisma.$transaction([
             prisma.newsletterSubscriber.findMany({
                 where,
@@ -155,7 +310,32 @@ exports.getSubscribers = async (req, res, next) => {
                     },
                 },
             }),
+            prisma.newsletterSubscriber.findMany({
+                where: { isActive: true },
+                select: {
+                    email: true,
+                },
+            }),
+            prisma.user.findMany({
+                where: {
+                    role: 'user',
+                    emailSubscriptions: true,
+                },
+                select: {
+                    email: true,
+                },
+            }),
+            prisma.emailSuppression.findMany({
+                select: {
+                    email: true,
+                },
+            }),
         ]);
+        const audienceReadiness = buildAudienceReadiness({
+            activeSubscribers: activeAudienceSubscribers,
+            optedInUsers,
+            suppressedEmails,
+        });
 
         return res.json({
             subscribers,
@@ -169,6 +349,7 @@ exports.getSubscribers = async (req, res, next) => {
                 inactive,
                 thisMonth,
             },
+            audienceReadiness,
         });
     } catch (err) {
         console.error(err.message);
@@ -220,13 +401,20 @@ exports.updateSubscriberStatus = async (req, res, next) => {
             return next(new AppError('Subscriber not found.', 404));
         }
 
-        const updatedSubscriber = await prisma.newsletterSubscriber.update({
-            where: { id: subscriberId },
-            data: {
-                isActive,
-                unsubscribedAt: isActive ? null : new Date(),
-            },
-        });
+        const [updatedSubscriber] = await prisma.$transaction([
+            prisma.newsletterSubscriber.update({
+                where: { id: subscriberId },
+                data: {
+                    isActive,
+                    unsubscribedAt: isActive ? null : new Date(),
+                },
+            }),
+            ...createAudienceSyncOperations(existingSubscriber.email, {
+                suppress: !isActive,
+                reason: isActive ? null : 'campaign_opt_out',
+                source: 'newsletter_admin_status',
+            }),
+        ]);
 
         return res.json(updatedSubscriber);
     } catch (err) {

@@ -19,6 +19,8 @@ function createModelMock() {
 function createMockPrisma() {
     return {
         user: createModelMock(),
+        newsletterSubscriber: createModelMock(),
+        emailSuppression: createModelMock(),
         package: createModelMock(),
         packageBooking: createModelMock(),
         flightBooking: createModelMock(),
@@ -193,6 +195,20 @@ function loadRouterWithMocks(routerModulePath, basePath, options = {}) {
     const app = express();
     app.use(express.json());
     app.use(basePath, router);
+    app.use((err, req, res, next) => {
+        if (res.headersSent) {
+            return next(err);
+        }
+
+        const statusCode = err.statusCode || err.status || 500;
+        const message = err.message || 'Server Error';
+
+        return res.status(statusCode).json({
+            success: false,
+            message,
+            msg: message,
+        });
+    });
 
     if (originalGoogleClientId === undefined) {
         delete process.env.GOOGLE_CLIENT_ID;

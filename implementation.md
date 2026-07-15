@@ -17,6 +17,10 @@ Current status:
 - Phase 10 is completed.
 - Phase 11 is completed.
 - Phase 12 is completed.
+- Phase 13 is planned.
+- Phase 14 is planned.
+- Phase 15 is planned.
+- Phase 16 is planned.
 - When resuming work later, read this file first and then continue from the next approved phase.
 
 ## How To Use This Document
@@ -125,6 +129,10 @@ Recommended implementation order:
 10. Phase 10: Guided digital request flows and service deepening
 11. Phase 11: Contact, footer, and public trust-page refinement
 12. Phase 12: Admin decluttering and workspace cleanup
+13. Phase 13: Audience and subscriber foundation
+14. Phase 14: Campaign composer MVP
+15. Phase 15: Campaign sending and history
+16. Phase 16: Campaign refinement and trust controls
 
 Why this order:
 - Phase 1 removes visible friction immediately.
@@ -139,6 +147,10 @@ Why this order:
 - Phase 10 deepens the request experience so customers complete more serious steps on the website before WhatsApp continuation.
 - Phase 11 improves supporting public trust pages and footer strategy.
 - Phase 12 then simplifies the staff experience after the public-side refinements are better defined.
+- Phase 13 establishes the data and audience rules needed for reliable communication.
+- Phase 14 adds the simple admin composer so staff can prepare messages safely.
+- Phase 15 adds actual send workflows and history after message authoring is stable.
+- Phase 16 then refines the experience, trust controls, and compliance behavior after the core campaign flow works end to end.
 
 ---
 
@@ -1677,7 +1689,371 @@ Frontend:
 
 ---
 
-## Shared Notes For Phases 8 To 12
+## Phase 13: Audience and Subscriber Foundation
+
+Status:
+- Planned
+
+### Objective
+
+Prepare the subscriber data, audience rules, and opt-out behavior needed for safe campaign delivery before introducing message authoring and sending.
+
+### Why This Phase Comes First
+
+Campaigns become much harder to trust if the contact model is still incomplete. Before admins write or send anything, the product should know who belongs to which audience, what name data exists, and which contacts must be excluded.
+
+### Main Deliverables
+
+#### 1. Expand newsletter subscription capture to include names
+
+Current issue:
+- newsletter subscribers are currently captured mostly as email-only records
+- that limits personalization and makes greetings feel generic
+
+Required outcome:
+- public newsletter signup should collect at least:
+  - full name
+  - email address
+- the admin subscriber list should show the stored name next to the email
+- existing email-only subscribers should remain valid
+- the system should fall back gracefully when a name is missing
+
+#### 2. Define campaign audiences clearly
+
+Required audience options for later phases:
+- Users only
+- Subscribers only
+- Both
+
+Definitions:
+- Users only should mean registered users who still allow marketing or offer emails
+- Subscribers only should mean active newsletter subscribers
+- Both should merge the two lists and deduplicate by normalized email address
+
+#### 3. Unify unsubscribe and suppression logic
+
+Current risk:
+- a user may unsubscribe from newsletter-style emails but still remain eligible through the registered-user path
+- without a shared suppression rule, the same person could continue receiving future offers by mistake
+
+Required outcome:
+- unsubscribe handling must work across audience types, not only inside one table
+- a contact who opts out of future campaign-style messages should be excluded whether they entered through the subscriber path, the account path, or both
+
+Recommended direction:
+- keep `User.emailSubscriptions`
+- keep newsletter active or unsubscribed status
+- add a shared suppression or unified opt-out rule used by all future campaign audience queries
+
+#### 4. Establish safe greeting rules
+
+Recommended greeting fallback order:
+- first name
+- full name
+- a safe neutral fallback such as "Valued Traveler"
+
+Important note:
+- do not guess gender from a person's name
+- do not generate "Dear him" or "Dear her" automatically
+- if gendered greetings ever become a business requirement later, they should depend on an explicit stored preference, not inference
+
+### Recommended Data-Model Direction
+
+This phase likely needs a small but deliberate schema expansion.
+
+Recommended additions:
+- enrich `NewsletterSubscriber` with a stored name
+- keep `User.emailSubscriptions` as the user-side preference
+- add a shared suppression mechanism so opt-outs are enforced consistently
+
+Possible examples:
+- `NewsletterSubscriber.name`
+- `EmailSuppression`
+
+### Likely Files To Touch
+
+Frontend:
+- `client/src/components/NewsletterForm.jsx`
+- `client/src/components/Home.jsx`
+- `client/src/components/ManageNewsletter.jsx`
+
+Backend:
+- `server/controllers/newsletterController.js`
+- `server/routes/newsletterRoutes.js`
+- `server/prisma/schema.prisma`
+- new Prisma migration
+
+### Acceptance Criteria
+
+- newsletter signup collects both name and email for new subscribers
+- existing subscribers remain usable even if only email is stored
+- campaign audiences can be defined as Users only, Subscribers only, or Both
+- duplicate email addresses can be merged reliably by normalized email
+- unsubscribe behavior is enforced consistently across users and subscribers
+
+### Implementation Notes
+
+- This phase extends the Phase 6 newsletter operations rather than replacing them.
+- Subscriber management, filtering, and export still remain useful after campaign work starts.
+- Audience-building and opt-out checks should happen on the server, not only in the client.
+
+---
+
+## Phase 14: Campaign Composer MVP
+
+Status:
+- Planned
+
+### Objective
+
+Give admins a simple, professional way to prepare outbound emails without exposing them to raw HTML, technically heavy editors, or complicated campaign tooling.
+
+### Why This Phase Comes Next
+
+Once audience rules and subscriber data are trustworthy, the next step is authoring. The product should make it easy to draft the right message before introducing actual send flows.
+
+### Main Deliverables
+
+#### 1. Add a guided campaign composer
+
+Recommended composer fields:
+- campaign name for internal reference
+- email subject
+- audience selection
+- message type
+- greeting style
+- message title
+- main body
+- optional highlight or offer block
+- call-to-action label
+- call-to-action URL
+- signature
+
+#### 2. Add simple message types
+
+Recommended message types:
+- Professional update
+- Campaign
+- Offer
+
+Important clarification:
+- these should be simple guided templates or starting layouts, not separate complicated systems
+- the goal is to help admins write faster while keeping the workspace easy to understand
+
+#### 3. Support personalized message tokens
+
+Recommended token scope for the first release:
+- `{firstName}`
+- `{fullName}`
+- `{email}`
+
+Fallback behavior:
+- if a name is missing, render a safe neutral greeting instead of exposing broken placeholders
+
+#### 4. Add preview behavior
+
+Recommended workflow:
+- live preview inside the admin composer
+- preview using a sample recipient record
+- clear indication of how the final email will look on send
+
+### Recommended Admin Experience
+
+The composer flow should feel like this:
+
+1. Open the newsletter or campaigns workspace
+2. Choose audience
+3. Choose message type
+4. Fill a short guided composer form
+5. Preview with a sample recipient
+6. Save draft for later work
+
+Important UX principle:
+- the system should do the formatting work
+- the admin should focus on message quality and audience selection
+
+### Likely Files To Touch
+
+Frontend:
+- `client/src/components/ManageNewsletter.jsx`
+- new admin campaign composer components
+- `client/src/lib/staffWorkspace.js`
+
+Backend:
+- `server/routes/newsletterRoutes.js`
+- `server/controllers/newsletterController.js`
+- new campaign draft service or controller files
+- `server/prisma/schema.prisma`
+
+### Acceptance Criteria
+
+- admins can create a draft campaign without writing raw HTML
+- admins can choose message type and audience inside the composer
+- personalization tokens render safely in preview
+- the admin preview reflects the intended email layout clearly
+
+### Implementation Notes
+
+- The composer should prioritize safe structured inputs over a free-form rich-text system in the first release.
+- The default email layout should be professional, mobile-friendly, and reusable across campaign types so admins do not redesign each message from scratch.
+
+---
+
+## Phase 15: Campaign Sending and History
+
+Status:
+- Planned
+
+### Objective
+
+Turn drafted campaigns into an operational send workflow with test delivery, full send, and a basic internal history of what happened.
+
+### Why This Phase Comes After Composer Work
+
+Sending should only come after audience rules and message authoring are stable enough to trust. This keeps the highest-risk part of the feature behind earlier structural work.
+
+### Main Deliverables
+
+#### 1. Add test-send workflow
+
+Required outcome:
+- admins should be able to send a test email to the current admin account before a full campaign send
+
+Reason:
+- campaign mistakes are much more expensive than form mistakes
+- test-send is one of the simplest safeguards without making the workflow too heavy
+
+#### 2. Add full campaign send workflow
+
+Required outcome:
+- admins can send a prepared campaign to:
+  - Users only
+  - Subscribers only
+  - Both
+- final audience selection should happen at send time so the latest opt-out state is respected
+
+#### 3. Create campaign records and send history
+
+Admins should be able to view:
+- draft campaigns
+- sent campaigns
+- recipient count
+- sent count
+- failed count
+- send timestamp
+- audience selection used
+
+Recommended first-release statuses:
+- Draft
+- Sending
+- Sent
+- Failed
+
+#### 4. Add delivery-safe logging
+
+Required behavior:
+- the product should record what happened during a send operation without pretending to be a full enterprise email platform
+- basic recipient and result tracking should exist for operational confidence and troubleshooting
+
+### Recommended Data-Model Direction
+
+Recommended additions:
+- a campaign entity for saved drafts and sent messages
+- a campaign-recipient or send-log entity for delivery tracking
+
+Possible examples:
+- `EmailCampaign`
+- `EmailCampaignRecipient`
+
+### Likely Files To Touch
+
+Frontend:
+- `client/src/components/ManageNewsletter.jsx`
+- new admin campaign history components
+
+Backend:
+- `server/utils/emailService.js`
+- `server/routes/newsletterRoutes.js`
+- `server/controllers/newsletterController.js`
+- new campaign controller or service files
+- `server/prisma/schema.prisma`
+- new Prisma migration
+
+### Acceptance Criteria
+
+- admins can send a test email before a full campaign send
+- admins can send to Users only, Subscribers only, or Both
+- sent campaigns appear in a basic history view with counts and status
+- full sends respect audience deduplication and opt-out rules at send time
+
+### Implementation Notes
+
+- The send workflow should remain operationally simple in the first release.
+- Basic history and counts are more important than advanced analytics at this stage.
+
+---
+
+## Phase 16: Campaign Refinement and Trust Controls
+
+Status:
+- Planned
+
+### Objective
+
+Refine the campaign experience after the first complete flow works, with attention to template polish, admin usability, and stronger trust or compliance controls.
+
+### Why This Phase Comes Last
+
+Polish should follow a working end-to-end system. Once audience, composer, and sending exist, the product can refine the quality of communication without risking confusion about the foundations.
+
+### Main Deliverables
+
+#### 1. Refine email layout and template quality
+
+Required outcome:
+- campaign emails should feel consistent, professional, and aligned with the broader NuurPath tone
+- message types should look distinct enough to be useful without creating a heavy template system
+
+#### 2. Improve admin usability
+
+Possible refinements:
+- clearer helper text
+- stronger validation and warnings
+- better empty states
+- calmer draft and history browsing
+
+#### 3. Strengthen trust and preference controls
+
+Recommended direction:
+- improve subscriber and user preference visibility where appropriate
+- make opt-out behavior clearer internally
+- harden compliance checks around audience eligibility and suppression
+
+#### 4. Decide which improvements belong in future phases
+
+Examples to evaluate after the MVP exists:
+- richer template controls
+- stronger preference-management screens
+- limited metrics improvements
+
+### Acceptance Criteria
+
+- campaign templates look more polished and consistent
+- the admin workflow becomes easier to understand after real usage feedback
+- trust and suppression behavior are easier to audit and maintain
+
+### Out Of Scope For Phase 16
+
+- fully automated marketing journeys
+- behavior-based segmentation
+- delivery analytics beyond basic operational counts
+- complex template marketplaces
+- gender-based greeting logic inferred from names
+- enterprise-grade campaign orchestration
+
+---
+
+## Shared Notes For Phases 8 To 16
 
 - The redesign should preserve the NuurPath identity and current business model rather than introducing unnecessary novelty.
 - The package experience should be treated as the strongest public conversion surface in the whole product.
@@ -1686,6 +2062,7 @@ Frontend:
   - payment is not completed online through the site
   - the next operational step comes through staff follow-up
 - Focus first on helping the customer complete their intended step on the website, then use WhatsApp for continuation where needed.
+- Campaign and offer emails should feel like an extension of the same trustworthy product voice rather than a disconnected marketing layer.
 
 ---
 
@@ -1741,6 +2118,10 @@ If implementation starts now, this is the recommended working order:
 10. Phase 10
 11. Phase 11
 12. Phase 12
+13. Phase 13
+14. Phase 14
+15. Phase 15
+16. Phase 16
 
 ### Why this sequence is safe
 
@@ -1755,6 +2136,10 @@ If implementation starts now, this is the recommended working order:
 - Phase 10 makes digital request journeys more complete before WhatsApp continuation.
 - Phase 11 refines the trust and support pages that surround those journeys.
 - Phase 12 finishes this block by simplifying the staff workspace around the now clearer product structure.
+- Phase 13 establishes subscriber identity, audience rules, and opt-out safety before campaigns are authored.
+- Phase 14 introduces the admin composer only after those foundations are trustworthy.
+- Phase 15 adds send workflows and campaign history once authoring is stable.
+- Phase 16 then refines quality, compliance, and usability after the end-to-end flow exists.
 
 ## Definition Of Success
 
@@ -1764,6 +2149,8 @@ This roadmap is successful when:
 - staff can actually use the information customers submit
 - admin and manager screens become easier to understand and operate
 - the website feels more alive through quiet updates and evidence content
+- admins can communicate offers, campaigns, and professional updates to the right audience without losing trust or opt-out control
+- campaign tooling stays simple enough for everyday admin use while still supporting personalization and safe delivery
 - future work can continue cleanly from this document phase by phase
 
 ## Session Handoff Note
