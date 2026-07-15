@@ -78,7 +78,7 @@ export const STAFF_WORKSPACE_SECTIONS = [
       {
         to: '/admin/newsletter',
         label: 'Newsletter',
-        description: 'Subscribers and export.',
+        description: 'Draft campaigns and subscribers.',
         roles: ['admin'],
       },
     ],
@@ -140,7 +140,7 @@ export const STAFF_PAGE_META = {
   },
   '/admin/newsletter': {
     title: 'Newsletter',
-    description: 'Track subscribers, export contacts, and keep newsletter collection simple.',
+    description: 'Shape campaign drafts, preview message quality, and keep subscribers clean before sending workflows go live.',
   },
   '/admin/users': {
     title: 'Accounts',

@@ -6,6 +6,12 @@ const {
     toPositiveInteger,
     toTrimmedString,
 } = require('../utils/validation');
+const {
+    CAMPAIGN_STATUS,
+    normalizeCampaignPayload,
+    renderCampaignPreview,
+    serializeEmailCampaign,
+} = require('../utils/emailCampaigns');
 
 function normalizeEmail(email) {
     return toTrimmedString(email).toLowerCase();
@@ -121,6 +127,119 @@ function buildAudienceReadiness({ activeSubscribers, optedInUsers, suppressedEma
         usersReachable: userSet.size,
         combinedReachable: combinedSet.size,
         suppressed: suppressedSet.size,
+    };
+}
+
+function normalizeRecipientSource(source) {
+    if (source === 'both') {
+        return 'Both audiences';
+    }
+
+    if (source === 'user') {
+        return 'Registered user';
+    }
+
+    return 'Subscriber';
+}
+
+function buildPreviewRecipients({ activeSubscribers, optedInUsers, suppressedEmails }) {
+    const suppressedSet = buildReachableEmailSet(suppressedEmails, new Set());
+    const mergedRecipients = new Map();
+
+    const addRecipient = (record, source) => {
+        const email = normalizeEmail(record?.email);
+
+        if (!email || suppressedSet.has(email)) {
+            return;
+        }
+
+        const existing = mergedRecipients.get(email);
+        const normalizedName = normalizeSubscriberName(record?.name);
+
+        if (!existing) {
+            mergedRecipients.set(email, {
+                id: `preview-${email}`,
+                name: normalizedName,
+                email,
+                source,
+            });
+            return;
+        }
+
+        mergedRecipients.set(email, {
+            ...existing,
+            name: existing.name || normalizedName,
+            source: existing.source === source ? existing.source : 'both',
+        });
+    };
+
+    (Array.isArray(activeSubscribers) ? activeSubscribers : []).forEach((record) => addRecipient(record, 'subscriber'));
+    (Array.isArray(optedInUsers) ? optedInUsers : []).forEach((record) => addRecipient(record, 'user'));
+
+    return Array.from(mergedRecipients.values())
+        .sort((firstRecipient, secondRecipient) => {
+            const firstLabel = (firstRecipient.name || firstRecipient.email).toLowerCase();
+            const secondLabel = (secondRecipient.name || secondRecipient.email).toLowerCase();
+            return firstLabel.localeCompare(secondLabel);
+        })
+        .slice(0, 8)
+        .map((recipient) => ({
+            ...recipient,
+            sourceLabel: normalizeRecipientSource(recipient.source),
+        }));
+}
+
+async function loadCampaignAudienceContext() {
+    const [activeSubscribers, optedInUsers, suppressedEmails] = await prisma.$transaction([
+        prisma.newsletterSubscriber.findMany({
+            where: { isActive: true },
+            select: {
+                name: true,
+                email: true,
+            },
+            orderBy: { createdAt: 'desc' },
+        }),
+        prisma.user.findMany({
+            where: {
+                role: 'user',
+                emailSubscriptions: true,
+            },
+            select: {
+                name: true,
+                email: true,
+            },
+            orderBy: { createdAt: 'desc' },
+        }),
+        prisma.emailSuppression.findMany({
+            select: {
+                email: true,
+            },
+        }),
+    ]);
+
+    return {
+        activeSubscribers,
+        optedInUsers,
+        suppressedEmails,
+    };
+}
+
+function getCampaignInclude() {
+    return {
+        createdBy: {
+            select: {
+                id: true,
+                name: true,
+                email: true,
+            },
+        },
+        updatedBy: {
+            select: {
+                id: true,
+                name: true,
+                email: true,
+            },
+        },
     };
 }
 
@@ -420,5 +539,162 @@ exports.updateSubscriberStatus = async (req, res, next) => {
     } catch (err) {
         console.error(err.message);
         return next(new AppError('Server error updating subscriber status.', 500));
+    }
+};
+
+exports.getCampaignDrafts = async (req, res, next) => {
+    try {
+        const campaigns = await prisma.emailCampaign.findMany({
+            where: {
+                status: CAMPAIGN_STATUS.DRAFT,
+            },
+            include: getCampaignInclude(),
+            orderBy: [
+                { updatedAt: 'desc' },
+                { createdAt: 'desc' },
+            ],
+        });
+
+        return res.json({
+            campaigns: campaigns.map(serializeEmailCampaign),
+        });
+    } catch (err) {
+        console.error(err.message);
+        return next(new AppError('Server error fetching campaign drafts.', 500));
+    }
+};
+
+exports.getPreviewRecipients = async (req, res, next) => {
+    try {
+        const audienceContext = await loadCampaignAudienceContext();
+
+        return res.json({
+            recipients: buildPreviewRecipients(audienceContext),
+        });
+    } catch (err) {
+        console.error(err.message);
+        return next(new AppError('Server error loading preview recipients.', 500));
+    }
+};
+
+exports.previewCampaign = async (req, res, next) => {
+    let payload;
+
+    try {
+        payload = normalizeCampaignPayload(req.body);
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unable to preview campaign.';
+        return next(new AppError(message, 400));
+    }
+
+    try {
+        const preview = renderCampaignPreview(payload, req.body?.previewRecipient);
+        return res.json(preview);
+    } catch (err) {
+        console.error(err.message);
+        return next(new AppError('Server error previewing campaign.', 500));
+    }
+};
+
+exports.createCampaignDraft = async (req, res, next) => {
+    let payload;
+
+    try {
+        payload = normalizeCampaignPayload(req.body);
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Invalid campaign draft.';
+        return next(new AppError(message, 400));
+    }
+
+    try {
+        const userId = toPositiveInteger(req.user?.id);
+
+        const campaign = await prisma.emailCampaign.create({
+            data: {
+                ...payload,
+                createdByUserId: userId,
+                updatedByUserId: userId,
+            },
+            include: getCampaignInclude(),
+        });
+
+        return res.status(201).json(serializeEmailCampaign(campaign));
+    } catch (err) {
+        console.error(err.message);
+        return next(new AppError('Server error creating campaign draft.', 500));
+    }
+};
+
+exports.updateCampaignDraft = async (req, res, next) => {
+    try {
+        const campaignId = toPositiveInteger(req.params.id);
+        if (campaignId === null) {
+            return next(new AppError('Invalid campaign id.', 400));
+        }
+
+        const existingCampaign = await prisma.emailCampaign.findUnique({
+            where: { id: campaignId },
+        });
+
+        if (!existingCampaign) {
+            return next(new AppError('Campaign draft not found.', 404));
+        }
+
+        let payload;
+        try {
+            payload = normalizeCampaignPayload(req.body);
+        } catch (validationError) {
+            const message = validationError instanceof Error ? validationError.message : 'Invalid campaign draft.';
+            return next(new AppError(message, 400));
+        }
+
+        const userId = toPositiveInteger(req.user?.id);
+
+        const updatedCampaign = await prisma.emailCampaign.update({
+            where: { id: campaignId },
+            data: {
+                ...payload,
+                updatedByUserId: userId,
+            },
+            include: getCampaignInclude(),
+        });
+
+        return res.json(serializeEmailCampaign(updatedCampaign));
+    } catch (err) {
+        console.error(err.message);
+        return next(new AppError('Server error updating campaign draft.', 500));
+    }
+};
+
+exports.deleteCampaignDraft = async (req, res, next) => {
+    try {
+        const campaignId = toPositiveInteger(req.params.id);
+        if (campaignId === null) {
+            return next(new AppError('Invalid campaign id.', 400));
+        }
+
+        const existingCampaign = await prisma.emailCampaign.findUnique({
+            where: { id: campaignId },
+            select: {
+                id: true,
+            },
+        });
+
+        if (!existingCampaign) {
+            return next(new AppError('Campaign draft not found.', 404));
+        }
+
+        await prisma.emailCampaign.delete({
+            where: { id: campaignId },
+        });
+
+        return res.json({
+            success: true,
+            message: 'Campaign draft deleted.',
+            msg: 'Campaign draft deleted.',
+        });
+    } catch (err) {
+        console.error(err.message);
+        return next(new AppError('Server error deleting campaign draft.', 500));
     }
 };

@@ -48,6 +48,8 @@ model User {
   uploadedFiles        StoredFile[]
   mediaPostComments    MediaPostComment[]
   mediaPostInteractions MediaPostInteraction[]
+  createdEmailCampaigns EmailCampaign[] @relation("EmailCampaignCreatedBy")
+  updatedEmailCampaigns EmailCampaign[] @relation("EmailCampaignUpdatedBy")
 }
 
 model StoredFile {
@@ -270,6 +272,35 @@ model EmailSuppression {
   source    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model EmailCampaign {
+  id              Int      @id @default(autoincrement())
+  internalName    String
+  subject         String
+  audienceType    String
+  messageType     String
+  greetingStyle   String
+  title           String
+  preheader       String?
+  body            String
+  highlightTitle  String?
+  highlightBody   String?
+  ctaLabel        String?
+  ctaUrl          String?
+  signature       String
+  status          String   @default("Draft")
+  createdByUserId Int?
+  updatedByUserId Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  createdBy User? @relation("EmailCampaignCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("EmailCampaignUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, updatedAt])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
 }
 
 model MediaPost {

@@ -2,18 +2,47 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from '../lib/api';
 import { formatAdminDate } from '../lib/staffRequestUtils.js';
 import {
+  applyCampaignTemplate,
+  CAMPAIGN_AUDIENCE_OPTIONS,
+  CAMPAIGN_GREETING_STYLES,
+  CAMPAIGN_MESSAGE_TYPES,
+  CAMPAIGN_TOKENS,
+  EMPTY_CAMPAIGN_FORM,
+  getAudienceCountForSelection,
+  isCampaignReadyForPreview,
+} from '../lib/newsletterCampaigns.js';
+import {
   StaffCardSection,
   StaffEmptyState,
   StaffFilterPills,
+  StaffInfoPill,
   StaffMetricCard,
   StaffPageShell,
+  StaffSectionTabs,
 } from './staff/WorkspacePrimitives.jsx';
+import NewsletterCampaignPreview from './newsletter/NewsletterCampaignPreview.jsx';
+import NewsletterCampaignDraftCard from './newsletter/NewsletterCampaignDraftCard.jsx';
 
 const SUBSCRIBER_FILTERS = [
   { value: 'all', label: 'All subscribers' },
   { value: 'active', label: 'Active' },
   { value: 'inactive', label: 'Unsubscribed' },
 ];
+
+const NEWSLETTER_WORKSPACE_TABS = [
+  { value: 'compose', label: 'Compose' },
+  { value: 'drafts', label: 'Drafts' },
+  { value: 'subscribers', label: 'Subscribers' },
+];
+
+const DEFAULT_PREVIEW_RECIPIENT = {
+  id: 'neutral-preview',
+  name: 'Valued Traveler',
+  email: 'traveler@example.com',
+  sourceLabel: 'Neutral preview',
+};
+
+const INITIAL_CAMPAIGN_FORM = applyCampaignTemplate({ ...EMPTY_CAMPAIGN_FORM }, EMPTY_CAMPAIGN_FORM.messageType);
 
 function buildQueryString({ currentPage, statusFilter, searchTerm }) {
   const params = new URLSearchParams();
@@ -45,7 +74,40 @@ function getSubscriberFilterOptions(counts = {}) {
   });
 }
 
+function normalizeCampaignFormData(campaign = {}) {
+  return {
+    internalName: campaign.internalName || '',
+    subject: campaign.subject || '',
+    audienceType: campaign.audienceType || 'BOTH',
+    messageType: campaign.messageType || 'PROFESSIONAL_UPDATE',
+    greetingStyle: campaign.greetingStyle || 'DEAR',
+    title: campaign.title || '',
+    preheader: campaign.preheader || '',
+    body: campaign.body || '',
+    highlightTitle: campaign.highlightTitle || '',
+    highlightBody: campaign.highlightBody || '',
+    ctaLabel: campaign.ctaLabel || '',
+    ctaUrl: campaign.ctaUrl || '',
+    signature: campaign.signature || INITIAL_CAMPAIGN_FORM.signature,
+  };
+}
+
+function getCampaignTabOptions(campaignsCount, subscribersCount) {
+  return NEWSLETTER_WORKSPACE_TABS.map((tab) => {
+    if (tab.value === 'drafts') {
+      return { ...tab, count: campaignsCount };
+    }
+
+    if (tab.value === 'subscribers') {
+      return { ...tab, count: subscribersCount };
+    }
+
+    return tab;
+  });
+}
+
 const ManageNewsletter = () => {
+  const [activePanel, setActivePanel] = useState('compose');
   const [subscribers, setSubscribers] = useState([]);
   const [counts, setCounts] = useState({
     total: 0,
@@ -59,7 +121,18 @@ const ManageNewsletter = () => {
     combinedReachable: 0,
     suppressed: 0,
   });
+  const [campaigns, setCampaigns] = useState([]);
+  const [previewRecipients, setPreviewRecipients] = useState([DEFAULT_PREVIEW_RECIPIENT]);
+  const [campaignForm, setCampaignForm] = useState(INITIAL_CAMPAIGN_FORM);
+  const [selectedCampaignId, setSelectedCampaignId] = useState(null);
+  const [selectedPreviewRecipientId, setSelectedPreviewRecipientId] = useState(DEFAULT_PREVIEW_RECIPIENT.id);
+  const [previewData, setPreviewData] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [campaignsLoading, setCampaignsLoading] = useState(true);
+  const [savingCampaign, setSavingCampaign] = useState(false);
+  const [deletingCampaignId, setDeletingCampaignId] = useState(null);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -69,9 +142,12 @@ const ManageNewsletter = () => {
   const [filteredTotal, setFilteredTotal] = useState(0);
   const [actionSubscriberId, setActionSubscriberId] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [copiedToken, setCopiedToken] = useState('');
 
-  const fetchSubscribers = useCallback(async () => {
-    setLoading(true);
+  const fetchSubscribers = useCallback(async ({ withLoading = true } = {}) => {
+    if (withLoading) {
+      setLoading(true);
+    }
 
     try {
       const queryString = buildQueryString({ currentPage, statusFilter, searchTerm });
@@ -94,21 +170,128 @@ const ManageNewsletter = () => {
       setCurrentPage(data.currentPage || 1);
       setTotalPages(data.totalPages || 1);
       setFilteredTotal(data.filteredTotal || 0);
-      setError(null);
+      return data;
     } catch (err) {
-      setError(err.response?.data?.msg || err.message || 'Failed to load newsletter subscribers.');
+      throw new Error(err.response?.data?.msg || err.message || 'Failed to load newsletter subscribers.');
     } finally {
-      setLoading(false);
+      if (withLoading) {
+        setLoading(false);
+      }
     }
   }, [currentPage, searchTerm, statusFilter]);
 
+  const fetchCampaignWorkspace = useCallback(async () => {
+    setCampaignsLoading(true);
+
+    try {
+      const [campaignsResponse, recipientsResponse] = await Promise.all([
+        axios.get('/newsletter/campaigns'),
+        axios.get('/newsletter/preview-recipients'),
+      ]);
+
+      const nextCampaigns = Array.isArray(campaignsResponse.data?.campaigns) ? campaignsResponse.data.campaigns : [];
+      const nextRecipients = [
+        DEFAULT_PREVIEW_RECIPIENT,
+        ...(Array.isArray(recipientsResponse.data?.recipients) ? recipientsResponse.data.recipients : []),
+      ];
+
+      setCampaigns(nextCampaigns);
+      setPreviewRecipients(nextRecipients);
+      setSelectedPreviewRecipientId((currentId) => (
+        nextRecipients.some((recipient) => recipient.id === currentId)
+          ? currentId
+          : nextRecipients[0]?.id || DEFAULT_PREVIEW_RECIPIENT.id
+      ));
+      return nextCampaigns;
+    } catch (err) {
+      throw new Error(err.response?.data?.msg || err.message || 'Failed to load campaign drafts.');
+    } finally {
+      setCampaignsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    fetchSubscribers();
+    let isMounted = true;
+
+    const loadSubscribers = async () => {
+      try {
+        await fetchSubscribers();
+        if (isMounted) {
+          setError(null);
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          setError(loadError.message);
+        }
+      }
+    };
+
+    loadSubscribers();
+
+    return () => {
+      isMounted = false;
+    };
   }, [fetchSubscribers]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCampaignWorkspace = async () => {
+      try {
+        await fetchCampaignWorkspace();
+        if (isMounted) {
+          setError(null);
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          setError(loadError.message);
+        }
+      }
+    };
+
+    loadCampaignWorkspace();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [fetchCampaignWorkspace]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, statusFilter]);
+
+  const selectedPreviewRecipient = useMemo(() => (
+    previewRecipients.find((recipient) => recipient.id === selectedPreviewRecipientId) || DEFAULT_PREVIEW_RECIPIENT
+  ), [previewRecipients, selectedPreviewRecipientId]);
+
+  useEffect(() => {
+    const canPreview = isCampaignReadyForPreview(campaignForm);
+
+    if (!canPreview) {
+      setPreviewData(null);
+      setPreviewError(null);
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(async () => {
+      setPreviewLoading(true);
+      setPreviewError(null);
+
+      try {
+        const response = await axios.post('/newsletter/campaigns/preview', {
+          ...campaignForm,
+          previewRecipient: selectedPreviewRecipient,
+        });
+        setPreviewData(response.data || null);
+      } catch (err) {
+        setPreviewError(err.response?.data?.msg || err.message || 'Preview is temporarily unavailable.');
+      } finally {
+        setPreviewLoading(false);
+      }
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [campaignForm, selectedPreviewRecipient]);
 
   const metrics = useMemo(() => ([
     {
@@ -118,24 +301,24 @@ const ManageNewsletter = () => {
       tone: 'accent',
     },
     {
-      label: 'Unsubscribed',
-      value: counts.inactive || 0,
-      hint: 'Contacts who opted out and should not be treated as active newsletter leads.',
+      label: 'Suppressed Emails',
+      value: audienceReadiness.suppressed || 0,
+      hint: 'Contacts blocked from future campaign-style delivery after opt-out handling.',
       tone: 'warm',
     },
     {
-      label: 'Joined This Month',
-      value: counts.thisMonth || 0,
-      hint: 'Fresh newsletter interest during the current month.',
+      label: 'Draft Campaigns',
+      value: campaigns.length,
+      hint: 'Drafted messages waiting for refinement before sending workflows are introduced.',
       tone: 'default',
     },
     {
-      label: 'Current View',
-      value: filteredTotal,
-      hint: 'Subscribers matching the active filter and search criteria.',
+      label: 'Combined Reach',
+      value: audienceReadiness.combinedReachable || 0,
+      hint: 'Unique reachable emails after combining users and subscribers.',
       tone: 'default',
     },
-  ]), [counts.active, counts.inactive, counts.thisMonth, filteredTotal]);
+  ]), [audienceReadiness.combinedReachable, audienceReadiness.suppressed, campaigns.length, counts.active]);
 
   const audienceCards = useMemo(() => ([
     {
@@ -158,7 +341,22 @@ const ManageNewsletter = () => {
       value: audienceReadiness.suppressed || 0,
       description: 'Emails blocked from future campaign-style delivery after opt-out handling.',
     },
-  ]), [audienceReadiness.combinedReachable, audienceReadiness.suppressed, audienceReadiness.subscribersReachable, audienceReadiness.usersReachable]);
+  ]), [audienceReadiness]);
+
+  const workspaceTabs = useMemo(
+    () => getCampaignTabOptions(campaigns.length, counts.total || 0),
+    [campaigns.length, counts.total]
+  );
+
+  const selectedMessageType = useMemo(
+    () => CAMPAIGN_MESSAGE_TYPES.find((type) => type.value === campaignForm.messageType) || CAMPAIGN_MESSAGE_TYPES[0],
+    [campaignForm.messageType]
+  );
+
+  const selectedAudienceCount = useMemo(
+    () => getAudienceCountForSelection(campaignForm.audienceType, audienceReadiness),
+    [audienceReadiness, campaignForm.audienceType]
+  );
 
   const handleStatusChange = async (subscriber, isActive) => {
     setActionSubscriberId(subscriber.id);
@@ -167,7 +365,10 @@ const ManageNewsletter = () => {
 
     try {
       await axios.put(`/newsletter/${subscriber.id}/status`, { isActive });
-      await fetchSubscribers();
+      await Promise.all([
+        fetchSubscribers({ withLoading: false }),
+        fetchCampaignWorkspace(),
+      ]);
       setMessage({
         type: 'success',
         text: isActive
@@ -206,24 +407,127 @@ const ManageNewsletter = () => {
     }
   };
 
-  if (loading) {
-    return <div className="p-10 text-center text-sm text-gray-500">Loading newsletter subscribers...</div>;
+  const resetComposer = useCallback(() => {
+    setSelectedCampaignId(null);
+    setCampaignForm(INITIAL_CAMPAIGN_FORM);
+    setPreviewError(null);
+    setActivePanel('compose');
+  }, []);
+
+  const handleSaveCampaign = async () => {
+    setSavingCampaign(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = selectedCampaignId
+        ? await axios.put(`/newsletter/campaigns/${selectedCampaignId}`, campaignForm)
+        : await axios.post('/newsletter/campaigns', campaignForm);
+
+      const savedCampaign = response.data || {};
+      setSelectedCampaignId(savedCampaign.id || null);
+      setCampaignForm(normalizeCampaignFormData(savedCampaign));
+      await fetchCampaignWorkspace();
+      setMessage({
+        type: 'success',
+        text: selectedCampaignId
+          ? 'Campaign draft updated.'
+          : 'Campaign draft saved.',
+      });
+    } catch (err) {
+      setError(err.response?.data?.msg || err.message || 'Failed to save campaign draft.');
+    } finally {
+      setSavingCampaign(false);
+    }
+  };
+
+  const handleDeleteCampaign = async (campaign) => {
+    const confirmed = window.confirm(`Delete the draft "${campaign.internalName}"?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingCampaignId(campaign.id);
+    setError(null);
+    setMessage(null);
+
+    try {
+      await axios.delete(`/newsletter/campaigns/${campaign.id}`);
+      await fetchCampaignWorkspace();
+
+      if (selectedCampaignId === campaign.id) {
+        resetComposer();
+      }
+
+      setMessage({
+        type: 'success',
+        text: 'Campaign draft deleted.',
+      });
+    } catch (err) {
+      setError(err.response?.data?.msg || err.message || 'Failed to delete campaign draft.');
+    } finally {
+      setDeletingCampaignId(null);
+    }
+  };
+
+  const handleOpenCampaign = (campaign) => {
+    setSelectedCampaignId(campaign.id);
+    setCampaignForm(normalizeCampaignFormData(campaign));
+    setPreviewError(null);
+    setActivePanel('compose');
+    setMessage(null);
+  };
+
+  const handleFieldChange = (field, value) => {
+    setCampaignForm((currentForm) => ({
+      ...currentForm,
+      [field]: value,
+    }));
+  };
+
+  const handleMessageTypeChange = (messageType) => {
+    setCampaignForm((currentForm) => applyCampaignTemplate(currentForm, messageType));
+  };
+
+  const handleCopyToken = async (token) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(token);
+      }
+      setCopiedToken(token);
+      window.setTimeout(() => setCopiedToken(''), 1600);
+    } catch (copyError) {
+      setError('Token copy is unavailable in this browser. You can still type the token manually.');
+    }
+  };
+
+  if (loading && subscribers.length === 0) {
+    return <div className="p-10 text-center text-sm text-gray-500">Loading newsletter workspace...</div>;
   }
 
   return (
     <StaffPageShell
       eyebrow="Growth Operations"
       title="Newsletter"
-      description="Track subscriber growth, keep name capture clean, and prepare the audience foundation before campaign tools go live."
+      description="Prepare subscriber-ready campaign drafts, preview polished communication, and keep the contact foundation clean before sending workflows go live."
       actions={(
-        <button
-          type="button"
-          onClick={handleExport}
-          disabled={exporting}
-          className="rounded-full bg-[#101c2d] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#16263b] disabled:cursor-not-allowed disabled:opacity-70"
-        >
-          {exporting ? 'Exporting...' : 'Export CSV'}
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={resetComposer}
+            className="rounded-full border border-[#d6ccb8] bg-white px-5 py-3 text-sm font-bold text-[#101c2d] transition hover:bg-[#faf8f3]"
+          >
+            New Draft
+          </button>
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={exporting}
+            className="rounded-full bg-[#101c2d] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#16263b] disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {exporting ? 'Exporting...' : 'Export CSV'}
+          </button>
+        </>
       )}
     >
       {error && (
@@ -243,149 +547,509 @@ const ManageNewsletter = () => {
         ))}
       </div>
 
-      <StaffCardSection
-        title="Audience Foundation"
-        description="Phase 13 keeps subscriber identity, registered-user reach, and shared opt-out behavior aligned before campaign sending is introduced."
-      >
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {audienceCards.map((card) => (
-            <article key={card.label} className="rounded-[1.5rem] border border-[#ece4d2] bg-white px-5 py-5 shadow-sm">
-              <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#8a7443]">{card.label}</div>
-              <div className="mt-3 text-3xl font-black text-[#101c2d]">{card.value}</div>
-              <p className="mt-3 text-sm leading-6 text-[#67707e]">{card.description}</p>
-            </article>
-          ))}
-        </div>
-      </StaffCardSection>
+      <StaffSectionTabs
+        tabs={workspaceTabs}
+        value={activePanel}
+        onChange={setActivePanel}
+      />
 
-      <StaffCardSection
-        title="Filter and Search"
-        description="Search by name or email, then switch between active and unsubscribed contacts before exporting the list."
-      >
-        <div className="space-y-4">
-          <StaffFilterPills
-            options={getSubscriberFilterOptions(counts)}
-            value={statusFilter}
-            onChange={setStatusFilter}
-          />
-          <label className="block">
-            <span className="mb-2 block text-sm font-semibold text-gray-700">Search by name or email</span>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search subscribers..."
-              className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+      {activePanel === 'compose' && (
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
+          <div className="space-y-6">
+            <StaffCardSection
+              title="Campaign Strategy"
+              description="Keep the setup clear first, then let the message body carry the detail. The composer stores drafts, applies gentle structure, and keeps the tone professional."
+              actions={selectedCampaignId ? <StaffInfoPill tone="info">Editing draft #{selectedCampaignId}</StaffInfoPill> : null}
+            >
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Campaign name</span>
+                  <input
+                    type="text"
+                    value={campaignForm.internalName}
+                    onChange={(event) => handleFieldChange('internalName', event.target.value)}
+                    placeholder="Internal draft name"
+                    className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Email subject</span>
+                  <input
+                    type="text"
+                    value={campaignForm.subject}
+                    onChange={(event) => handleFieldChange('subject', event.target.value)}
+                    placeholder="What the reader will see in the inbox"
+                    className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-6">
+                <div className="mb-3 text-sm font-semibold text-gray-700">Audience</div>
+                <div className="grid gap-3 lg:grid-cols-3">
+                  {CAMPAIGN_AUDIENCE_OPTIONS.map((option) => {
+                    const isSelected = campaignForm.audienceType === option.value;
+                    const optionCount = getAudienceCountForSelection(option.value, audienceReadiness);
+
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => handleFieldChange('audienceType', option.value)}
+                        className={`rounded-[1.4rem] border px-4 py-4 text-left transition ${
+                          isSelected
+                            ? 'border-[#bca77a] bg-[#fffdf8] shadow-sm'
+                            : 'border-[#e7dfcf] bg-[#fbfaf7] hover:border-[#c9b48a] hover:bg-white'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="text-sm font-black text-[#101c2d]">{option.label}</div>
+                          <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-[#8a7443] shadow-sm">{optionCount}</span>
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-[#67707e]">{option.description}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 rounded-[1.4rem] border border-[#ece4d2] bg-[#fbfaf7] px-4 py-4">
+                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Audience Snapshot</div>
+                  <p className="mt-2 text-sm leading-6 text-[#67707e]">
+                    This selection currently resolves to <span className="font-bold text-[#101c2d]">{selectedAudienceCount}</span> reachable contact{selectedAudienceCount === 1 ? '' : 's'} using the Phase 13 audience foundation and suppression rules.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <div className="mb-3 text-sm font-semibold text-gray-700">Message type</div>
+                <div className="grid gap-3 lg:grid-cols-3">
+                  {CAMPAIGN_MESSAGE_TYPES.map((typeOption) => {
+                    const isSelected = campaignForm.messageType === typeOption.value;
+
+                    return (
+                      <button
+                        key={typeOption.value}
+                        type="button"
+                        onClick={() => handleMessageTypeChange(typeOption.value)}
+                        className={`rounded-[1.4rem] border px-4 py-4 text-left transition ${
+                          isSelected
+                            ? 'border-[#101c2d] bg-[#101c2d] text-white shadow-sm'
+                            : 'border-[#e7dfcf] bg-white hover:border-[#c9b48a]'
+                        }`}
+                      >
+                        <div className={`text-[11px] font-black uppercase tracking-[0.2em] ${isSelected ? 'text-white/70' : 'text-[#8a7443]'}`}>
+                          {typeOption.eyebrow}
+                        </div>
+                        <div className="mt-2 text-sm font-black">{typeOption.label}</div>
+                        <p className={`mt-2 text-sm leading-6 ${isSelected ? 'text-white/80' : 'text-[#67707e]'}`}>
+                          {typeOption.description}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <div className="mb-3 text-sm font-semibold text-gray-700">Greeting style</div>
+                <div className="flex flex-wrap gap-2">
+                  {CAMPAIGN_GREETING_STYLES.map((style) => {
+                    const isSelected = campaignForm.greetingStyle === style.value;
+
+                    return (
+                      <button
+                        key={style.value}
+                        type="button"
+                        onClick={() => handleFieldChange('greetingStyle', style.value)}
+                        className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                          isSelected
+                            ? 'bg-[#101c2d] text-white shadow-sm'
+                            : 'border border-[#ddd3bf] bg-white text-[#4f5763] hover:border-[#bca77a] hover:text-[#101c2d]'
+                        }`}
+                        title={style.description}
+                      >
+                        {style.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </StaffCardSection>
+
+            <StaffCardSection
+              title="Message Content"
+              description="Keep the subject sharp, the heading calm, and the body easy to scan. The selected message type already gives you a cleaner starting structure."
+            >
+              <div className="space-y-4">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Message title</span>
+                  <input
+                    type="text"
+                    value={campaignForm.title}
+                    onChange={(event) => handleFieldChange('title', event.target.value)}
+                    placeholder={selectedMessageType.defaults.title}
+                    className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Preheader</span>
+                  <input
+                    type="text"
+                    value={campaignForm.preheader}
+                    onChange={(event) => handleFieldChange('preheader', event.target.value)}
+                    placeholder={selectedMessageType.defaults.preheader}
+                    className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Main message</span>
+                  <textarea
+                    value={campaignForm.body}
+                    onChange={(event) => handleFieldChange('body', event.target.value)}
+                    placeholder={selectedMessageType.defaults.body}
+                    rows={10}
+                    className="w-full rounded-[1.5rem] border border-gray-300 bg-[#fcfbf8] px-4 py-4 text-sm leading-7 text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                  />
+                </label>
+              </div>
+            </StaffCardSection>
+
+            <StaffCardSection
+              title="Highlight, CTA, and Signature"
+              description="Use the optional highlight when a message needs one strong focus. Keep the CTA and signature clean so the email still feels calm."
+              actions={campaignForm.highlightTitle || campaignForm.highlightBody ? <StaffInfoPill tone="warm">Highlight included</StaffInfoPill> : null}
+            >
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-gray-700">Highlight title</span>
+                    <input
+                      type="text"
+                      value={campaignForm.highlightTitle}
+                      onChange={(event) => handleFieldChange('highlightTitle', event.target.value)}
+                      placeholder={selectedMessageType.defaults.highlightTitle}
+                      className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-gray-700">CTA label</span>
+                    <input
+                      type="text"
+                      value={campaignForm.ctaLabel}
+                      onChange={(event) => handleFieldChange('ctaLabel', event.target.value)}
+                      placeholder={selectedMessageType.defaults.ctaLabel}
+                      className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                    />
+                  </label>
+                </div>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Highlight body</span>
+                  <textarea
+                    value={campaignForm.highlightBody}
+                    onChange={(event) => handleFieldChange('highlightBody', event.target.value)}
+                    placeholder={selectedMessageType.defaults.highlightBody}
+                    rows={5}
+                    className="w-full rounded-[1.5rem] border border-gray-300 bg-[#fcfbf8] px-4 py-4 text-sm leading-7 text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                  />
+                </label>
+
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)]">
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-gray-700">CTA link</span>
+                    <input
+                      type="url"
+                      value={campaignForm.ctaUrl}
+                      onChange={(event) => handleFieldChange('ctaUrl', event.target.value)}
+                      placeholder="https://example.com/offer"
+                      className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-gray-700">Signature</span>
+                    <textarea
+                      value={campaignForm.signature}
+                      onChange={(event) => handleFieldChange('signature', event.target.value)}
+                      rows={3}
+                      className="w-full rounded-[1.5rem] border border-gray-300 bg-[#fcfbf8] px-4 py-4 text-sm leading-7 text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                    />
+                  </label>
+                </div>
+              </div>
+            </StaffCardSection>
+
+            <StaffCardSection
+              title="Token Guide and Draft Actions"
+              description="Use lightweight personalization in the subject, preheader, body, highlight, or signature. The system keeps the fallback greeting safe when a name is missing."
+              actions={copiedToken ? <StaffInfoPill tone="accent">{copiedToken} copied</StaffInfoPill> : null}
+            >
+              <div className="space-y-5">
+                <div className="flex flex-wrap gap-3">
+                  {CAMPAIGN_TOKENS.map((token) => (
+                    <button
+                      key={token.value}
+                      type="button"
+                      onClick={() => handleCopyToken(token.value)}
+                      className="rounded-full border border-[#d6ccb8] bg-white px-4 py-2 text-sm font-semibold text-[#101c2d] transition hover:bg-[#faf8f3]"
+                    >
+                      {token.label}: {token.value}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="rounded-[1.4rem] border border-[#ece4d2] bg-[#fbfaf7] px-4 py-4">
+                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Draft Guidance</div>
+                  <p className="mt-2 text-sm leading-6 text-[#67707e]">
+                    This phase is about composing well. You can save, reopen, and refine drafts here, while sending and delivery history remain part of the next phase.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleSaveCampaign}
+                    disabled={savingCampaign}
+                    className="rounded-full bg-[#101c2d] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#16263b] disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {savingCampaign ? 'Saving...' : selectedCampaignId ? 'Update Draft' : 'Save Draft'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCampaignForm((currentForm) => applyCampaignTemplate(currentForm, currentForm.messageType))}
+                    className="rounded-full border border-[#d6ccb8] bg-white px-5 py-3 text-sm font-bold text-[#101c2d] transition hover:bg-[#faf8f3]"
+                  >
+                    Apply Suggested Structure
+                  </button>
+                  {selectedCampaignId ? (
+                    <button
+                      type="button"
+                      onClick={resetComposer}
+                      className="rounded-full border border-[#d6ccb8] bg-white px-5 py-3 text-sm font-bold text-[#101c2d] transition hover:bg-[#faf8f3]"
+                    >
+                      Leave Current Draft
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </StaffCardSection>
+          </div>
+
+          <div className="space-y-6">
+            <StaffCardSection
+              title="Preview Recipient"
+              description="Switch between a neutral fallback and real sample contacts from the current audience foundation to check how personalization lands."
+              actions={campaignsLoading ? <StaffInfoPill tone="neutral">Loading samples</StaffInfoPill> : null}
+            >
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-gray-700">Recipient sample</span>
+                <select
+                  value={selectedPreviewRecipientId}
+                  onChange={(event) => setSelectedPreviewRecipientId(event.target.value)}
+                  className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                >
+                  {previewRecipients.map((recipient) => (
+                    <option key={recipient.id} value={recipient.id}>
+                      {(recipient.name || recipient.email)} - {recipient.sourceLabel}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </StaffCardSection>
+
+            <NewsletterCampaignPreview
+              previewData={previewData}
+              previewLoading={previewLoading}
+              previewError={previewError}
+              selectedRecipientLabel={`${selectedPreviewRecipient.name || selectedPreviewRecipient.email} (${selectedPreviewRecipient.email}) - ${selectedPreviewRecipient.sourceLabel}`}
+              isReady={isCampaignReadyForPreview(campaignForm)}
             />
-          </label>
+          </div>
         </div>
-      </StaffCardSection>
+      )}
 
-      <StaffCardSection
-        title="Subscriber List"
-        description={`Showing ${filteredTotal} subscriber${filteredTotal === 1 ? '' : 's'} in the current view. This remains the clean operational list while campaign authoring and sending stay out of scope for this release.`}
-      >
-        {subscribers.length === 0 ? (
-          <StaffEmptyState
-            title="No subscribers match this view"
-            description="Try another filter or search term, or wait for new newsletter signups from the public website."
-          />
-        ) : (
-          <div className="grid gap-4 xl:grid-cols-2">
-            {subscribers.map((subscriber) => (
-              <article key={subscriber.id} className="rounded-[1.5rem] border border-[#ebe4d3] bg-[#fcfbf8] p-5 shadow-sm">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="text-xs font-black uppercase tracking-[0.2em] text-[#8a7443]">
-                      Joined {formatAdminDate(subscriber.createdAt, 'Recently')}
-                    </div>
-                    <h3 className="mt-2 text-xl font-black text-[#101c2d]">{subscriber.name || subscriber.email}</h3>
-                    <p className={`mt-1 text-sm ${subscriber.name ? 'text-[#67707e]' : 'text-[#8a7443]'}`}>
-                      {subscriber.name ? subscriber.email : 'Name not saved yet'}
-                    </p>
-                  </div>
-                  <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${subscriber.isActive ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                    {subscriber.isActive ? 'Active' : 'Unsubscribed'}
-                  </span>
-                </div>
-
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  <div className="rounded-2xl border border-[#ece4d2] bg-white px-4 py-3">
-                    <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a828f]">Email</div>
-                    <div className="mt-2 break-all text-sm text-[#101c2d]">{subscriber.email}</div>
-                  </div>
-                  <div className="rounded-2xl border border-[#ece4d2] bg-white px-4 py-3">
-                    <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a828f]">Subscribed</div>
-                    <div className="mt-2 text-sm text-[#101c2d]">{formatAdminDate(subscriber.createdAt)}</div>
-                  </div>
-                </div>
-
-                <div className="mt-3 grid gap-3 md:grid-cols-2">
-                  <div className="rounded-2xl border border-[#ece4d2] bg-white px-4 py-3">
-                    <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a828f]">Stored Name</div>
-                    <div className="mt-2 text-sm text-[#101c2d]">{subscriber.name || 'No name saved yet'}</div>
-                  </div>
-                  <div className="rounded-2xl border border-[#ece4d2] bg-white px-4 py-3">
-                    <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a828f]">Unsubscribed</div>
-                    <div className="mt-2 text-sm text-[#101c2d]">
-                      {subscriber.unsubscribedAt ? formatAdminDate(subscriber.unsubscribedAt) : 'Still active'}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-5 flex flex-wrap gap-3">
-                  {subscriber.isActive ? (
-                    <button
-                      type="button"
-                      onClick={() => handleStatusChange(subscriber, false)}
-                      disabled={actionSubscriberId === subscriber.id}
-                      className="rounded-full border border-amber-200 px-4 py-2 text-sm font-bold text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Mark Unsubscribed
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleStatusChange(subscriber, true)}
-                      disabled={actionSubscriberId === subscriber.id}
-                      className="rounded-full bg-[#101c2d] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#16263b] disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Reactivate
-                    </button>
-                  )}
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </StaffCardSection>
-
-      {totalPages > 1 && (
-        <StaffCardSection title="Browse More Subscribers" description="Move between pages when the list grows so the workspace stays simple to scan.">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="text-sm text-[#67707e]">
-              Page <span className="font-bold text-[#101c2d]">{currentPage}</span> of <span className="font-bold text-[#101c2d]">{totalPages}</span>
+      {activePanel === 'drafts' && (
+        <StaffCardSection
+          title="Draft Library"
+          description="Keep message work clean by saving drafts here first. Open any draft to continue refining the subject, structure, and preview before send workflows are introduced."
+          actions={campaignsLoading ? <StaffInfoPill tone="neutral">Refreshing drafts</StaffInfoPill> : <StaffInfoPill tone="info">{campaigns.length} draft{campaigns.length === 1 ? '' : 's'}</StaffInfoPill>}
+        >
+          {campaigns.length === 0 ? (
+            <StaffEmptyState
+              title="No campaign drafts yet"
+              description="Start in the composer tab, shape the message quietly, and save the draft when the structure feels right."
+              action={(
+                <button
+                  type="button"
+                  onClick={() => setActivePanel('compose')}
+                  className="rounded-full bg-[#101c2d] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#16263b]"
+                >
+                  Open Composer
+                </button>
+              )}
+            />
+          ) : (
+            <div className="grid gap-4 xl:grid-cols-2">
+              {campaigns.map((campaign) => (
+                <NewsletterCampaignDraftCard
+                  key={campaign.id}
+                  campaign={campaign}
+                  isActive={selectedCampaignId === campaign.id}
+                  deleting={deletingCampaignId === campaign.id}
+                  onOpen={() => handleOpenCampaign(campaign)}
+                  onDelete={() => handleDeleteCampaign(campaign)}
+                />
+              ))}
             </div>
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
-                disabled={currentPage === 1}
-                className="rounded-full border border-gray-300 px-5 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="rounded-full bg-[#101c2d] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#16263b] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
-          </div>
+          )}
         </StaffCardSection>
+      )}
+
+      {activePanel === 'subscribers' && (
+        <>
+          <StaffCardSection
+            title="Audience Foundation"
+            description="Phase 13 keeps subscriber identity, registered-user reach, and shared opt-out behavior aligned so later campaign sending can stay trustworthy and deduplicated."
+          >
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {audienceCards.map((card) => (
+                <article key={card.label} className="rounded-[1.5rem] border border-[#ece4d2] bg-white px-5 py-5 shadow-sm">
+                  <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#8a7443]">{card.label}</div>
+                  <div className="mt-3 text-3xl font-black text-[#101c2d]">{card.value}</div>
+                  <p className="mt-3 text-sm leading-6 text-[#67707e]">{card.description}</p>
+                </article>
+              ))}
+            </div>
+          </StaffCardSection>
+
+          <StaffCardSection
+            title="Filter and Search"
+            description="Search by name or email, then switch between active and unsubscribed contacts before exporting the list."
+          >
+            <div className="space-y-4">
+              <StaffFilterPills
+                options={getSubscriberFilterOptions(counts)}
+                value={statusFilter}
+                onChange={setStatusFilter}
+              />
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-gray-700">Search by name or email</span>
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Search subscribers..."
+                  className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                />
+              </label>
+            </div>
+          </StaffCardSection>
+
+          <StaffCardSection
+            title="Subscriber List"
+            description={`Showing ${filteredTotal} subscriber${filteredTotal === 1 ? '' : 's'} in the current view. Sending remains out of scope here; this section is for clean audience preparation, visibility, and export.`}
+          >
+            {subscribers.length === 0 ? (
+              <StaffEmptyState
+                title="No subscribers match this view"
+                description="Try another filter or search term, or wait for new newsletter signups from the public website."
+              />
+            ) : (
+              <div className="grid gap-4 xl:grid-cols-2">
+                {subscribers.map((subscriber) => (
+                  <article key={subscriber.id} className="rounded-[1.5rem] border border-[#ebe4d3] bg-[#fcfbf8] p-5 shadow-sm">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-black uppercase tracking-[0.2em] text-[#8a7443]">
+                          Joined {formatAdminDate(subscriber.createdAt, 'Recently')}
+                        </div>
+                        <h3 className="mt-2 text-xl font-black text-[#101c2d]">{subscriber.name || subscriber.email}</h3>
+                        <p className={`mt-1 text-sm ${subscriber.name ? 'text-[#67707e]' : 'text-[#8a7443]'}`}>
+                          {subscriber.name ? subscriber.email : 'Name not saved yet'}
+                        </p>
+                      </div>
+                      <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${subscriber.isActive ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {subscriber.isActive ? 'Active' : 'Unsubscribed'}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <div className="rounded-2xl border border-[#ece4d2] bg-white px-4 py-3">
+                        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a828f]">Email</div>
+                        <div className="mt-2 break-all text-sm text-[#101c2d]">{subscriber.email}</div>
+                      </div>
+                      <div className="rounded-2xl border border-[#ece4d2] bg-white px-4 py-3">
+                        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a828f]">Subscribed</div>
+                        <div className="mt-2 text-sm text-[#101c2d]">{formatAdminDate(subscriber.createdAt)}</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <div className="rounded-2xl border border-[#ece4d2] bg-white px-4 py-3">
+                        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a828f]">Stored Name</div>
+                        <div className="mt-2 text-sm text-[#101c2d]">{subscriber.name || 'No name saved yet'}</div>
+                      </div>
+                      <div className="rounded-2xl border border-[#ece4d2] bg-white px-4 py-3">
+                        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a828f]">Unsubscribed</div>
+                        <div className="mt-2 text-sm text-[#101c2d]">
+                          {subscriber.unsubscribedAt ? formatAdminDate(subscriber.unsubscribedAt) : 'Still active'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 flex flex-wrap gap-3">
+                      {subscriber.isActive ? (
+                        <button
+                          type="button"
+                          onClick={() => handleStatusChange(subscriber, false)}
+                          disabled={actionSubscriberId === subscriber.id}
+                          className="rounded-full border border-amber-200 px-4 py-2 text-sm font-bold text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Mark Unsubscribed
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleStatusChange(subscriber, true)}
+                          disabled={actionSubscriberId === subscriber.id}
+                          className="rounded-full bg-[#101c2d] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#16263b] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Reactivate
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </StaffCardSection>
+
+          {totalPages > 1 && (
+            <StaffCardSection title="Browse More Subscribers" description="Move between pages when the list grows so the workspace stays simple to scan.">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="text-sm text-[#67707e]">
+                  Page <span className="font-bold text-[#101c2d]">{currentPage}</span> of <span className="font-bold text-[#101c2d]">{totalPages}</span>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="rounded-full border border-gray-300 px-5 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="rounded-full bg-[#101c2d] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#16263b] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </StaffCardSection>
+          )}
+        </>
       )}
     </StaffPageShell>
   );

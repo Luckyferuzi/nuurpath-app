@@ -17,8 +17,8 @@ Current status:
 - Phase 10 is completed.
 - Phase 11 is completed.
 - Phase 12 is completed.
-- Phase 13 is planned.
-- Phase 14 is planned.
+- Phase 13 is completed.
+- Phase 14 is completed.
 - Phase 15 is planned.
 - Phase 16 is planned.
 - When resuming work later, read this file first and then continue from the next approved phase.
@@ -130,7 +130,7 @@ Recommended implementation order:
 11. Phase 11: Contact, footer, and public trust-page refinement
 12. Phase 12: Admin decluttering and workspace cleanup
 13. Phase 13: Audience and subscriber foundation
-14. Phase 14: Campaign composer MVP
+14. Phase 14: Campaign composer and draft workspace
 15. Phase 15: Campaign sending and history
 16. Phase 16: Campaign refinement and trust controls
 
@@ -1692,7 +1692,7 @@ Frontend:
 ## Phase 13: Audience and Subscriber Foundation
 
 Status:
-- Planned
+- Completed
 
 ### Objective
 
@@ -1797,12 +1797,25 @@ Backend:
 - Subscriber management, filtering, and export still remain useful after campaign work starts.
 - Audience-building and opt-out checks should happen on the server, not only in the client.
 
+### Completed Work
+
+- Upgraded newsletter subscription capture so new subscribers now provide both name and email instead of only email.
+- Extended the subscriber backend and admin list so stored subscriber names are visible, searchable, and exportable alongside email addresses.
+- Added a shared `EmailSuppression` layer so newsletter unsubscribe behavior now also blocks future campaign-style delivery across audience paths instead of only inside the newsletter table.
+- Synced newsletter unsubscribe and reactivation behavior with `User.emailSubscriptions` so registered-user audience rules now align better with subscriber opt-out behavior.
+- Added audience-readiness counts in the admin newsletter workspace so the team can see:
+  - subscriber-only reach
+  - user-only reach
+  - deduplicated combined reach
+  - suppressed contacts
+- Preserved the existing export and subscriber-management workflow while preparing the audience foundation needed for future campaign authoring and sending.
+
 ---
 
-## Phase 14: Campaign Composer MVP
+## Phase 14: Campaign Composer and Draft Workspace
 
 Status:
-- Planned
+- Completed
 
 ### Objective
 
@@ -1896,6 +1909,43 @@ Backend:
 
 - The composer should prioritize safe structured inputs over a free-form rich-text system in the first release.
 - The default email layout should be professional, mobile-friendly, and reusable across campaign types so admins do not redesign each message from scratch.
+
+### Completed Work
+
+- Added a real draft-based campaign data model so the admin composer now saves structured campaign drafts instead of relying on temporary browser-only state.
+- Rebuilt the newsletter workspace into clearer tabs for:
+  - compose
+  - drafts
+  - subscribers
+- Added a cleaner campaign strategy flow so admins can choose:
+  - audience
+  - message type
+  - greeting style
+  - internal campaign name
+  - email subject
+- Added structured message authoring fields for:
+  - title
+  - preheader
+  - main body
+  - optional highlight block
+  - optional call to action
+  - signature
+- Added guided message-type structures for:
+  - professional update
+  - campaign
+  - offer
+  without turning the composer into a noisy template builder.
+- Added token guidance and safe preview support for:
+  - `{firstName}`
+  - `{fullName}`
+  - `{email}`
+- Added live preview behavior using sample recipients from the real audience foundation so admins can review how greetings, headings, and optional CTA content will appear before saving.
+- Added a draft library so admins can:
+  - save drafts
+  - reopen drafts
+  - update drafts
+  - delete drafts
+- Kept sending out of scope for this phase while making the authoring experience feel stable, reusable, and more professional than a bare MVP form.
 
 ---
 

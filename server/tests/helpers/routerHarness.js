@@ -21,6 +21,7 @@ function createMockPrisma() {
         user: createModelMock(),
         newsletterSubscriber: createModelMock(),
         emailSuppression: createModelMock(),
+        emailCampaign: createModelMock(),
         package: createModelMock(),
         packageBooking: createModelMock(),
         flightBooking: createModelMock(),
