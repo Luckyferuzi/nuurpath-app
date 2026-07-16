@@ -14,7 +14,7 @@ const NewsletterCampaignPreview = ({
         <div>
           <h2 className="text-xl font-black text-[#101c2d]">Live Preview</h2>
           <p className="mt-2 text-sm leading-6 text-[#67707e]">
-            The composer keeps the message structured while the preview shows how the greeting, headline, and optional highlight block will land.
+            This preview updates as the admin writes the subject and message.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -30,7 +30,7 @@ const NewsletterCampaignPreview = ({
 
       {!isReady ? (
         <div className="mt-5 rounded-[1.5rem] border border-dashed border-[#d8cdb7] bg-[#fbfaf7] p-8 text-center text-sm leading-6 text-[#67707e]">
-          Add the campaign name, subject, title, body, and signature to unlock the live preview.
+          Add the subject and message to see the live preview.
         </div>
       ) : previewError ? (
         <div className="mt-5 rounded-[1.5rem] border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">

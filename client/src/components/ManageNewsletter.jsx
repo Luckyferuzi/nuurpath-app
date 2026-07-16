@@ -2,10 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from '../lib/api';
 import { formatAdminDate } from '../lib/staffRequestUtils.js';
 import {
-  applyCampaignTemplate,
   CAMPAIGN_AUDIENCE_OPTIONS,
-  CAMPAIGN_GREETING_STYLES,
-  CAMPAIGN_MESSAGE_TYPES,
   CAMPAIGN_TOKENS,
   EMPTY_CAMPAIGN_FORM,
   getAudienceCountForSelection,
@@ -61,24 +58,6 @@ function buildCampaignSubmissionPayload(formData = {}) {
     title: normalizedTitle,
     signature: normalizedSignature,
   };
-}
-
-function shouldOpenAdvancedComposer(formData = {}) {
-  const normalizedSubject = normalizeComposerText(formData.subject);
-  const normalizedSignature = normalizeComposerText(formData.signature);
-
-  return Boolean(
-    (normalizeComposerText(formData.internalName) && normalizeComposerText(formData.internalName) !== normalizedSubject)
-    || (normalizeComposerText(formData.title) && normalizeComposerText(formData.title) !== normalizedSubject)
-    || normalizeComposerText(formData.preheader)
-    || normalizeComposerText(formData.highlightTitle)
-    || normalizeComposerText(formData.highlightBody)
-    || normalizeComposerText(formData.ctaLabel)
-    || normalizeComposerText(formData.ctaUrl)
-    || formData.greetingStyle === 'HELLO'
-    || formData.greetingStyle === 'WARM'
-    || (normalizedSignature && normalizedSignature !== normalizeComposerText(INITIAL_CAMPAIGN_FORM.signature))
-  );
 }
 
 function buildQueryString({ currentPage, statusFilter, searchTerm }) {
@@ -186,9 +165,6 @@ const ManageNewsletter = () => {
   const [actionSubscriberId, setActionSubscriberId] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [copiedToken, setCopiedToken] = useState('');
-  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
-  const [showAdvancedComposer, setShowAdvancedComposer] = useState(false);
-  const [showPreviewPanel, setShowPreviewPanel] = useState(false);
 
   const fetchSubscribers = useCallback(async ({ withLoading = true } = {}) => {
     if (withLoading) {
@@ -335,7 +311,7 @@ const ManageNewsletter = () => {
   );
 
   useEffect(() => {
-    if (!showPreviewPanel || !campaignReadyForPreview) {
+    if (!campaignReadyForPreview) {
       setPreviewData(null);
       setPreviewError(null);
       return undefined;
@@ -359,7 +335,7 @@ const ManageNewsletter = () => {
     }, 250);
 
     return () => window.clearTimeout(timeoutId);
-  }, [campaignReadyForPreview, preparedCampaignForm, selectedPreviewRecipient, showPreviewPanel]);
+  }, [campaignReadyForPreview, preparedCampaignForm, selectedPreviewRecipient]);
 
   const audienceCards = useMemo(() => ([
     {
@@ -389,11 +365,6 @@ const ManageNewsletter = () => {
     [counts.total, draftCampaigns.length, historyCampaigns.length]
   );
 
-  const selectedMessageType = useMemo(
-    () => CAMPAIGN_MESSAGE_TYPES.find((type) => type.value === campaignForm.messageType) || CAMPAIGN_MESSAGE_TYPES[0],
-    [campaignForm.messageType]
-  );
-
   const selectedAudienceOption = useMemo(
     () => CAMPAIGN_AUDIENCE_OPTIONS.find((option) => option.value === campaignForm.audienceType) || CAMPAIGN_AUDIENCE_OPTIONS[0],
     [campaignForm.audienceType]
@@ -402,14 +373,6 @@ const ManageNewsletter = () => {
   const selectedAudienceCount = useMemo(
     () => getAudienceCountForSelection(campaignForm.audienceType, audienceReadiness),
     [audienceReadiness, campaignForm.audienceType]
-  );
-
-  const hasCoreMessage = useMemo(
-    () => Boolean(
-      normalizeComposerText(preparedCampaignForm.subject)
-      && normalizeComposerText(preparedCampaignForm.body)
-    ),
-    [preparedCampaignForm.body, preparedCampaignForm.subject]
   );
 
   const canDeliverToAudience = campaignReadyForPreview && selectedAudienceCount > 0;
@@ -468,15 +431,30 @@ const ManageNewsletter = () => {
     setCampaignForm(INITIAL_CAMPAIGN_FORM);
     setPreviewError(null);
     setPreviewData(null);
-    setShowTemplatePicker(false);
-    setShowAdvancedComposer(false);
-    setShowPreviewPanel(false);
   }, []);
 
   const resetComposer = useCallback(() => {
     clearComposer();
     setActivePanel('compose');
   }, [clearComposer]);
+
+  const upsertCampaignInState = useCallback((campaignRecord) => {
+    if (!campaignRecord?.id) {
+      return;
+    }
+
+    setCampaigns((currentCampaigns) => {
+      const nextCampaigns = [
+        campaignRecord,
+        ...currentCampaigns.filter((campaign) => campaign.id !== campaignRecord.id),
+      ];
+
+      return nextCampaigns.sort((firstCampaign, secondCampaign) => (
+        new Date(secondCampaign.updatedAt || secondCampaign.createdAt || 0).getTime()
+        - new Date(firstCampaign.updatedAt || firstCampaign.createdAt || 0).getTime()
+      ));
+    });
+  }, []);
 
   const handleDeleteCampaign = async (campaign) => {
     const confirmed = window.confirm(`Delete the draft "${campaign.internalName}"?`);
@@ -490,7 +468,7 @@ const ManageNewsletter = () => {
 
     try {
       await axios.delete(`/newsletter/campaigns/${campaign.id}`);
-      await fetchCampaignWorkspace();
+      setCampaigns((currentCampaigns) => currentCampaigns.filter((currentCampaign) => currentCampaign.id !== campaign.id));
 
       if (selectedCampaignId === campaign.id) {
         clearComposer();
@@ -512,8 +490,6 @@ const ManageNewsletter = () => {
     setSelectedCampaignId(campaign.id);
     setCampaignForm(normalizeCampaignFormData(campaign));
     setPreviewError(null);
-    setShowTemplatePicker(campaign.messageType !== 'PROFESSIONAL_UPDATE');
-    setShowAdvancedComposer(shouldOpenAdvancedComposer(campaign));
     setActivePanel('compose');
     setMessage(null);
   };
@@ -522,8 +498,6 @@ const ManageNewsletter = () => {
     setSelectedCampaignId(null);
     setCampaignForm(normalizeCampaignFormData(campaign));
     setPreviewError(null);
-    setShowTemplatePicker(campaign.messageType !== 'PROFESSIONAL_UPDATE');
-    setShowAdvancedComposer(shouldOpenAdvancedComposer(campaign));
     setActivePanel('compose');
     setMessage({
       type: 'success',
@@ -538,10 +512,6 @@ const ManageNewsletter = () => {
     }));
   };
 
-  const handleMessageTypeChange = (messageType) => {
-    setCampaignForm((currentForm) => applyCampaignTemplate(currentForm, messageType));
-  };
-
   const persistCampaignDraft = useCallback(async () => {
     const response = selectedCampaignId
       ? await axios.put(`/newsletter/campaigns/${selectedCampaignId}`, preparedCampaignForm)
@@ -549,8 +519,9 @@ const ManageNewsletter = () => {
     const savedCampaign = response.data || {};
     setSelectedCampaignId(savedCampaign.id || selectedCampaignId || null);
     setCampaignForm(normalizeCampaignFormData(savedCampaign));
+    upsertCampaignInState(savedCampaign);
     return savedCampaign;
-  }, [preparedCampaignForm, selectedCampaignId]);
+  }, [preparedCampaignForm, selectedCampaignId, upsertCampaignInState]);
 
   const handleSaveCampaign = async () => {
     const wasEditing = Boolean(selectedCampaignId);
@@ -560,7 +531,6 @@ const ManageNewsletter = () => {
 
     try {
       await persistCampaignDraft();
-      await fetchCampaignWorkspace();
       setMessage({
         type: 'success',
         text: wasEditing ? 'Draft updated.' : 'Draft saved.',
@@ -570,37 +540,6 @@ const ManageNewsletter = () => {
     } finally {
       setSavingCampaign(false);
     }
-  };
-
-  const handleApplySelectedTemplate = () => {
-    const hasExistingContent = Boolean(
-      normalizeComposerText(campaignForm.subject)
-      || normalizeComposerText(campaignForm.body)
-      || normalizeComposerText(campaignForm.title)
-      || normalizeComposerText(campaignForm.preheader)
-    );
-
-    if (hasExistingContent) {
-      const confirmed = window.confirm('Replace the current subject and message with this template?');
-      if (!confirmed) {
-        return;
-      }
-    }
-
-    setCampaignForm((currentForm) => ({
-      ...currentForm,
-      messageType: selectedMessageType.value,
-      internalName: selectedMessageType.defaults.internalName || '',
-      subject: selectedMessageType.defaults.subject || '',
-      title: selectedMessageType.defaults.title || '',
-      preheader: selectedMessageType.defaults.preheader || '',
-      body: selectedMessageType.defaults.body || '',
-      highlightTitle: selectedMessageType.defaults.highlightTitle || '',
-      highlightBody: selectedMessageType.defaults.highlightBody || '',
-      ctaLabel: selectedMessageType.defaults.ctaLabel || '',
-      ctaUrl: selectedMessageType.defaults.ctaUrl || '',
-      signature: selectedMessageType.defaults.signature || INITIAL_CAMPAIGN_FORM.signature,
-    }));
   };
 
   const handleSendTest = async () => {
@@ -617,7 +556,7 @@ const ManageNewsletter = () => {
       const savedCampaign = await persistCampaignDraft();
       const campaignId = savedCampaign.id;
       const response = await axios.post(`/newsletter/campaigns/${campaignId}/test-send`);
-      await fetchCampaignWorkspace();
+      upsertCampaignInState(response.data?.campaign);
       setMessage({
         type: 'success',
         text: response.data?.message || 'Test email sent.',
@@ -653,10 +592,7 @@ const ManageNewsletter = () => {
       const savedCampaign = await persistCampaignDraft();
       const campaignId = savedCampaign.id;
       const response = await axios.post(`/newsletter/campaigns/${campaignId}/send`);
-      await Promise.all([
-        fetchCampaignWorkspace(),
-        fetchSubscribers({ withLoading: false }),
-      ]);
+      upsertCampaignInState(response.data?.campaign);
       clearComposer();
       setActivePanel('history');
       setMessage({
@@ -734,94 +670,49 @@ const ManageNewsletter = () => {
       />
 
       {activePanel === 'compose' && (
-        <div className="space-y-6">
-          <StaffCardSection
-            title="How to Send"
-            description="Choose the audience, write the message, then send a test or the full message. Templates and extra styling are optional."
-            actions={selectedCampaignId ? <StaffInfoPill tone="info">Draft #{selectedCampaignId}</StaffInfoPill> : <StaffInfoPill tone="neutral">New message</StaffInfoPill>}
-          >
-            <div className="grid gap-4 xl:grid-cols-3">
-              <article className="rounded-[1.45rem] border border-[#ece4d2] bg-[#fbfaf7] px-5 py-5">
-                <div className="text-xs font-black uppercase tracking-[0.2em] text-[#8a7443]">Step 1</div>
-                <h3 className="mt-2 text-lg font-black text-[#101c2d]">Write the message</h3>
-                <p className="mt-2 text-sm leading-6 text-[#67707e]">
-                  Start with your own subject and message. You can keep it simple and send without opening templates.
-                </p>
-                <div className="mt-4">
-                  <StaffInfoPill tone={hasCoreMessage ? 'accent' : 'neutral'}>
-                    {hasCoreMessage ? 'Ready' : 'Add subject and message'}
-                  </StaffInfoPill>
-                </div>
-              </article>
-              <article className="rounded-[1.45rem] border border-[#ece4d2] bg-[#fbfaf7] px-5 py-5">
-                <div className="text-xs font-black uppercase tracking-[0.2em] text-[#8a7443]">Step 2</div>
-                <h3 className="mt-2 text-lg font-black text-[#101c2d]">Send a test</h3>
-                <p className="mt-2 text-sm leading-6 text-[#67707e]">
-                  A test email goes to the admin inbox first. The latest changes are saved automatically.
-                </p>
-                <div className="mt-4">
-                  <StaffInfoPill tone={selectedDraftCampaign?.lastTestSentAt ? 'accent' : 'neutral'}>
-                    {selectedDraftCampaign?.lastTestSentAt ? 'Test sent' : 'Recommended'}
-                  </StaffInfoPill>
-                </div>
-              </article>
-              <article className="rounded-[1.45rem] border border-[#ece4d2] bg-[#fbfaf7] px-5 py-5">
-                <div className="text-xs font-black uppercase tracking-[0.2em] text-[#8a7443]">Step 3</div>
-                <h3 className="mt-2 text-lg font-black text-[#101c2d]">Send to audience</h3>
-                <p className="mt-2 text-sm leading-6 text-[#67707e]">
-                  The message will go to {selectedAudienceOption.label.toLowerCase()} and duplicate emails are removed automatically.
-                </p>
-                <div className="mt-4">
-                  <StaffInfoPill tone={canDeliverToAudience ? 'accent' : 'neutral'}>
-                    {canDeliverToAudience ? `${selectedAudienceCount} ready` : 'Audience not ready'}
-                  </StaffInfoPill>
-                </div>
-              </article>
-            </div>
-          </StaffCardSection>
-
-          <StaffCardSection
-            title="Write Message"
-            description="Choose who should receive the message, then write the subject and the message itself."
-            actions={selectedDraftCampaign ? <StaffInfoPill tone="info">Editing saved draft</StaffInfoPill> : <StaffInfoPill tone="neutral">Simple mode</StaffInfoPill>}
-          >
-            <div className="space-y-6">
-              <div>
-                <div className="mb-3 text-sm font-semibold text-gray-700">Audience</div>
-                <div className="grid gap-3 lg:grid-cols-3">
-                  {CAMPAIGN_AUDIENCE_OPTIONS.map((option) => {
-                    const isSelected = campaignForm.audienceType === option.value;
-                    const optionCount = getAudienceCountForSelection(option.value, audienceReadiness);
-
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => handleFieldChange('audienceType', option.value)}
-                        className={`rounded-[1.4rem] border px-4 py-4 text-left transition ${
-                          isSelected
-                            ? 'border-[#bca77a] bg-[#fffdf8] shadow-sm'
-                            : 'border-[#e7dfcf] bg-[#fbfaf7] hover:border-[#c9b48a] hover:bg-white'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="text-sm font-black text-[#101c2d]">{option.label}</div>
-                          <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-[#8a7443] shadow-sm">{optionCount}</span>
-                        </div>
-                        <p className="mt-2 text-sm leading-6 text-[#67707e]">{option.description}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="mt-4 rounded-[1.4rem] border border-[#ece4d2] bg-[#fbfaf7] px-4 py-4">
-                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Audience snapshot</div>
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(360px,0.85fr)]">
+          <div className="space-y-6">
+            <StaffCardSection
+              title="Send Message"
+              description="Choose the audience, write the subject and message, then send a test or send the full message."
+              actions={selectedCampaignId ? <StaffInfoPill tone="info">Draft #{selectedCampaignId}</StaffInfoPill> : <StaffInfoPill tone="neutral">New message</StaffInfoPill>}
+            >
+              <div className="space-y-5">
+                <div className="rounded-[1.35rem] border border-[#ece4d2] bg-[#fbfaf7] px-4 py-4">
+                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Simple flow</div>
                   <p className="mt-2 text-sm leading-6 text-[#67707e]">
-                    This message is currently set for <span className="font-bold text-[#101c2d]">{selectedAudienceOption.label}</span> with about <span className="font-bold text-[#101c2d]">{selectedAudienceCount}</span> reachable contact{selectedAudienceCount === 1 ? '' : 's'}.
+                    1. Choose audience. 2. Write subject and message. 3. Send test. 4. Send message.
                   </p>
                 </div>
-              </div>
 
-              <div className="space-y-4">
+                <div>
+                  <div className="mb-2 text-sm font-semibold text-gray-700">Audience</div>
+                  <div className="flex flex-wrap gap-2">
+                    {CAMPAIGN_AUDIENCE_OPTIONS.map((option) => {
+                      const isSelected = campaignForm.audienceType === option.value;
+                      const optionCount = getAudienceCountForSelection(option.value, audienceReadiness);
+
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => handleFieldChange('audienceType', option.value)}
+                          className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                            isSelected
+                              ? 'border-[#bca77a] bg-[#fff7e7] text-[#101c2d]'
+                              : 'border-[#ddd3bf] bg-white text-[#4f5763] hover:border-[#bca77a] hover:text-[#101c2d]'
+                          }`}
+                        >
+                          {option.label} ({optionCount})
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-[#67707e]">
+                    Sending to <span className="font-bold text-[#101c2d]">{selectedAudienceOption.label}</span> with <span className="font-bold text-[#101c2d]">{selectedAudienceCount}</span> reachable contact{selectedAudienceCount === 1 ? '' : 's'}.
+                  </p>
+                </div>
+
                 <label className="block">
                   <span className="mb-2 block text-sm font-semibold text-gray-700">Email subject</span>
                   <input
@@ -838,282 +729,44 @@ const ManageNewsletter = () => {
                   <textarea
                     value={campaignForm.body}
                     onChange={(event) => handleFieldChange('body', event.target.value)}
-                    placeholder="Write the message here. Example: Dear {firstName}, welcome to NuurPath..."
+                    placeholder="Example: Dear {firstName}, welcome to NuurPath..."
                     rows={10}
                     className="w-full rounded-[1.5rem] border border-gray-300 bg-[#fcfbf8] px-4 py-4 text-sm leading-7 text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
                   />
                 </label>
 
-                <div className="rounded-[1.4rem] border border-[#ece4d2] bg-[#fbfaf7] px-4 py-4">
-                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Helpful note</div>
+                <div className="rounded-[1.35rem] border border-[#ece4d2] bg-[#fbfaf7] px-4 py-4">
+                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Personalization</div>
                   <p className="mt-2 text-sm leading-6 text-[#67707e]">
-                    If you want the message to greet each person by name, use one of these tokens: <span className="font-bold text-[#101c2d]">{'{firstName}'}</span>, <span className="font-bold text-[#101c2d]">{'{fullName}'}</span>, or <span className="font-bold text-[#101c2d]">{'{email}'}</span>.
+                    If you want the email to show the person&apos;s first name, full name, or email, use these inside the message.
                   </p>
-                </div>
-
-                <div className="flex flex-wrap gap-3 border-t border-[#ece4d2] pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowTemplatePicker((currentValue) => !currentValue)}
-                    className="rounded-full border border-[#d6ccb8] bg-white px-4 py-2 text-sm font-semibold text-[#101c2d] transition hover:bg-[#faf8f3]"
-                  >
-                    {showTemplatePicker ? 'Hide templates' : 'Templates optional'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowAdvancedComposer((currentValue) => !currentValue)}
-                    className="rounded-full border border-[#d6ccb8] bg-white px-4 py-2 text-sm font-semibold text-[#101c2d] transition hover:bg-[#faf8f3]"
-                  >
-                    {showAdvancedComposer ? 'Hide more options' : 'More options'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowPreviewPanel((currentValue) => !currentValue)}
-                    className="rounded-full border border-[#d6ccb8] bg-white px-4 py-2 text-sm font-semibold text-[#101c2d] transition hover:bg-[#faf8f3]"
-                  >
-                    {showPreviewPanel ? 'Hide live preview' : 'Live preview'}
-                  </button>
-                  <StaffInfoPill tone={campaignForm.messageType === 'PROFESSIONAL_UPDATE' ? 'neutral' : 'warm'}>
-                    {selectedMessageType.label}
-                  </StaffInfoPill>
-                </div>
-
-                {showTemplatePicker && (
-                  <div className="rounded-[1.5rem] border border-[#e7dfcf] bg-[#fbfaf7] px-5 py-5">
-                    <label className="block">
-                      <span className="mb-2 block text-sm font-semibold text-gray-700">Message template</span>
-                      <select
-                        value={campaignForm.messageType}
-                        onChange={(event) => handleMessageTypeChange(event.target.value)}
-                        className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
-                      >
-                        {CAMPAIGN_MESSAGE_TYPES.map((typeOption) => (
-                          <option key={typeOption.value} value={typeOption.value}>
-                            {typeOption.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
-                      <div className="max-w-3xl">
-                        <div className="text-[11px] font-black uppercase tracking-[0.2em] text-[#8a7443]">
-                          {selectedMessageType.eyebrow}
-                        </div>
-                        <div className="mt-2 text-lg font-black text-[#101c2d]">{selectedMessageType.label}</div>
-                        <p className="mt-2 text-sm leading-6 text-[#67707e]">{selectedMessageType.description}</p>
-                      </div>
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    {CAMPAIGN_TOKENS.map((token) => (
                       <button
+                        key={token.value}
                         type="button"
-                        onClick={handleApplySelectedTemplate}
-                        className="rounded-full bg-[#101c2d] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#16263b]"
+                        onClick={() => handleCopyToken(token.value)}
+                        className="rounded-full border border-[#d6ccb8] bg-white px-4 py-2 text-sm font-semibold text-[#101c2d] transition hover:bg-[#faf8f3]"
                       >
-                        Load template text
+                        {token.label}: {token.value}
                       </button>
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {(selectedMessageType.bestFor || []).map((item) => (
-                        <span
-                          key={item}
-                          className="rounded-full border border-[#ddd3bf] bg-white px-3 py-1.5 text-xs font-semibold text-[#5b6472]"
-                        >
-                          {item}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </StaffCardSection>
-
-          {showAdvancedComposer && (
-            <StaffCardSection
-              title="More Options"
-              description="Use these fields only when the email needs a more structured design."
-            >
-              <div className="space-y-4">
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-gray-700">Campaign name</span>
-                  <input
-                    type="text"
-                    value={campaignForm.internalName}
-                    onChange={(event) => handleFieldChange('internalName', event.target.value)}
-                    placeholder="Internal draft name"
-                    className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-gray-700">Message title</span>
-                  <input
-                    type="text"
-                    value={campaignForm.title}
-                    onChange={(event) => handleFieldChange('title', event.target.value)}
-                    placeholder={selectedMessageType.defaults.title}
-                    className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-gray-700">Preheader</span>
-                  <input
-                    type="text"
-                    value={campaignForm.preheader}
-                    onChange={(event) => handleFieldChange('preheader', event.target.value)}
-                    placeholder={selectedMessageType.defaults.preheader}
-                    className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
-                  />
-                </label>
-                <div>
-                  <div className="mb-3 text-sm font-semibold text-gray-700">Greeting style</div>
-                  <div className="flex flex-wrap gap-2">
-                    {CAMPAIGN_GREETING_STYLES.map((style) => {
-                      const isSelected = campaignForm.greetingStyle === style.value;
-
-                      return (
-                        <button
-                          key={style.value}
-                          type="button"
-                          onClick={() => handleFieldChange('greetingStyle', style.value)}
-                          className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                            isSelected
-                              ? 'bg-[#101c2d] text-white shadow-sm'
-                              : 'border border-[#ddd3bf] bg-white text-[#4f5763] hover:border-[#bca77a] hover:text-[#101c2d]'
-                          }`}
-                          title={style.description}
-                        >
-                          {style.label}
-                        </button>
-                      );
-                    })}
+                    ))}
                   </div>
                 </div>
               </div>
             </StaffCardSection>
-          )}
 
-          {showAdvancedComposer && (
             <StaffCardSection
-              title="Highlight, CTA, and Signature"
-              description="Use these only when the message needs one clear highlight or a stronger action."
-              actions={campaignForm.highlightTitle || campaignForm.highlightBody ? <StaffInfoPill tone="warm">Highlight included</StaffInfoPill> : null}
+              title="Actions"
+              description="The latest changes are saved automatically before test send or full send."
+              actions={copiedToken ? <StaffInfoPill tone="accent">{copiedToken} copied</StaffInfoPill> : null}
             >
-              <div className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <label className="block">
-                    <span className="mb-2 block text-sm font-semibold text-gray-700">Highlight title</span>
-                    <input
-                      type="text"
-                      value={campaignForm.highlightTitle}
-                      onChange={(event) => handleFieldChange('highlightTitle', event.target.value)}
-                      placeholder={selectedMessageType.defaults.highlightTitle}
-                      className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="mb-2 block text-sm font-semibold text-gray-700">CTA label</span>
-                    <input
-                      type="text"
-                      value={campaignForm.ctaLabel}
-                      onChange={(event) => handleFieldChange('ctaLabel', event.target.value)}
-                      placeholder={selectedMessageType.defaults.ctaLabel}
-                      className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
-                    />
-                  </label>
-                </div>
-
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-gray-700">Highlight body</span>
-                  <textarea
-                    value={campaignForm.highlightBody}
-                    onChange={(event) => handleFieldChange('highlightBody', event.target.value)}
-                    placeholder={selectedMessageType.defaults.highlightBody}
-                    rows={5}
-                    className="w-full rounded-[1.5rem] border border-gray-300 bg-[#fcfbf8] px-4 py-4 text-sm leading-7 text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
-                  />
-                </label>
-
-                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)]">
-                  <label className="block">
-                    <span className="mb-2 block text-sm font-semibold text-gray-700">CTA link</span>
-                    <input
-                      type="url"
-                      value={campaignForm.ctaUrl}
-                      onChange={(event) => handleFieldChange('ctaUrl', event.target.value)}
-                      placeholder="https://example.com/offer"
-                      className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="mb-2 block text-sm font-semibold text-gray-700">Signature</span>
-                    <textarea
-                      value={campaignForm.signature}
-                      onChange={(event) => handleFieldChange('signature', event.target.value)}
-                      rows={3}
-                      className="w-full rounded-[1.5rem] border border-gray-300 bg-[#fcfbf8] px-4 py-4 text-sm leading-7 text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
-                    />
-                  </label>
-                </div>
-              </div>
-            </StaffCardSection>
-          )}
-
-          <StaffCardSection
-            title="Review and Send"
-            description="Testing and sending automatically save your latest changes first."
-            actions={copiedToken ? <StaffInfoPill tone="accent">{copiedToken} copied</StaffInfoPill> : null}
-          >
-            <div className="space-y-5">
-              <div className="grid gap-4 lg:grid-cols-3">
-                <article className="rounded-[1.35rem] border border-[#ece4d2] bg-[#fbfaf7] px-4 py-4">
-                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Audience</div>
-                  <div className="mt-2 text-sm font-black text-[#101c2d]">{selectedAudienceOption.label}</div>
-                  <p className="mt-2 text-sm leading-6 text-[#67707e]">
-                    {selectedAudienceCount} reachable contact{selectedAudienceCount === 1 ? '' : 's'} right now.
-                  </p>
-                </article>
-                <article className="rounded-[1.35rem] border border-[#ece4d2] bg-[#fbfaf7] px-4 py-4">
-                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Template</div>
-                  <div className="mt-2 text-sm font-black text-[#101c2d]">{selectedMessageType.label}</div>
-                  <p className="mt-2 text-sm leading-6 text-[#67707e]">
-                    {showTemplatePicker ? 'Template tools are open.' : 'Template tools are hidden until you need them.'}
-                  </p>
-                </article>
-                <article className="rounded-[1.35rem] border border-[#ece4d2] bg-[#fbfaf7] px-4 py-4">
-                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Draft status</div>
-                  <div className="mt-2 text-sm font-black text-[#101c2d]">
-                    {selectedCampaignId ? `Draft #${selectedCampaignId}` : 'Not saved yet'}
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-[#67707e]">
-                    {selectedDraftCampaign?.lastTestSentAt
-                      ? `Last test sent ${formatAdminDate(selectedDraftCampaign.lastTestSentAt, 'recently')}.`
-                      : 'You can save now, or go straight to test send and it will save automatically.'}
-                  </p>
-                </article>
-              </div>
-
-              <div className="rounded-[1.4rem] border border-[#ece4d2] bg-[#fbfaf7] px-4 py-4">
-                <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Personalization tokens</div>
-                <div className="mt-3 flex flex-wrap gap-3">
-                  {CAMPAIGN_TOKENS.map((token) => (
-                    <button
-                      key={token.value}
-                      type="button"
-                      onClick={() => handleCopyToken(token.value)}
-                      className="rounded-full border border-[#d6ccb8] bg-white px-4 py-2 text-sm font-semibold text-[#101c2d] transition hover:bg-[#faf8f3]"
-                    >
-                      {token.label}: {token.value}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid gap-4 xl:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-3">
                 <article className="rounded-[1.4rem] border border-[#ece4d2] bg-white px-5 py-5 shadow-sm">
-                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Step 1</div>
-                  <h3 className="mt-2 text-lg font-black text-[#101c2d]">Save message</h3>
+                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Save</div>
+                  <h3 className="mt-2 text-lg font-black text-[#101c2d]">Keep this draft</h3>
                   <p className="mt-2 text-sm leading-6 text-[#67707e]">
-                    Save the draft if you want to keep this message before sending.
+                    Save the message now if you want to continue later.
                   </p>
                   <button
                     type="button"
@@ -1126,10 +779,10 @@ const ManageNewsletter = () => {
                 </article>
 
                 <article className="rounded-[1.4rem] border border-[#ece4d2] bg-white px-5 py-5 shadow-sm">
-                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Step 2</div>
+                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Test</div>
                   <h3 className="mt-2 text-lg font-black text-[#101c2d]">Send test email</h3>
                   <p className="mt-2 text-sm leading-6 text-[#67707e]">
-                    Sends a test to the admin inbox and saves the latest changes automatically.
+                    Sends one test email to the current admin inbox.
                   </p>
                   <button
                     type="button"
@@ -1142,10 +795,10 @@ const ManageNewsletter = () => {
                 </article>
 
                 <article className="rounded-[1.4rem] border border-[#ece4d2] bg-white px-5 py-5 shadow-sm">
-                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Step 3</div>
-                  <h3 className="mt-2 text-lg font-black text-[#101c2d]">Send to audience</h3>
+                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8a7443]">Send</div>
+                  <h3 className="mt-2 text-lg font-black text-[#101c2d]">Send message</h3>
                   <p className="mt-2 text-sm leading-6 text-[#67707e]">
-                    Sends to the selected audience after one final automatic save.
+                    Sends to the selected audience after the final automatic save.
                   </p>
                   <button
                     type="button"
@@ -1158,8 +811,14 @@ const ManageNewsletter = () => {
                 </article>
               </div>
 
+              {selectedDraftCampaign?.lastTestSentAt ? (
+                <p className="mt-4 text-sm leading-6 text-[#67707e]">
+                  Last test sent {formatAdminDate(selectedDraftCampaign.lastTestSentAt, 'recently')}.
+                </p>
+              ) : null}
+
               {selectedDraftCampaign?.lastError ? (
-                <div className="rounded-[1.35rem] border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-800">
+                <div className="mt-4 rounded-[1.35rem] border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-800">
                   {selectedDraftCampaign.lastError}
                 </div>
               ) : null}
@@ -1168,46 +827,44 @@ const ManageNewsletter = () => {
                 <button
                   type="button"
                   onClick={resetComposer}
-                  className="rounded-full border border-[#d6ccb8] bg-white px-5 py-3 text-sm font-bold text-[#101c2d] transition hover:bg-[#faf8f3]"
+                  className="mt-4 rounded-full border border-[#d6ccb8] bg-white px-5 py-3 text-sm font-bold text-[#101c2d] transition hover:bg-[#faf8f3]"
                 >
                   Leave Current Draft
                 </button>
               ) : null}
-            </div>
-          </StaffCardSection>
+            </StaffCardSection>
+          </div>
 
-          {showPreviewPanel && (
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,0.4fr)_minmax(0,0.6fr)]">
-              <StaffCardSection
-                title="Preview Recipient"
-                description="Choose a sample recipient to check how the personalization looks."
-                actions={campaignsLoading ? <StaffInfoPill tone="neutral">Loading samples</StaffInfoPill> : null}
-              >
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-gray-700">Recipient sample</span>
-                  <select
-                    value={selectedPreviewRecipientId}
-                    onChange={(event) => setSelectedPreviewRecipientId(event.target.value)}
-                    className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
-                  >
-                    {previewRecipients.map((recipient) => (
-                      <option key={recipient.id} value={recipient.id}>
-                        {(recipient.name || recipient.email)} - {recipient.sourceLabel}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </StaffCardSection>
+          <div className="space-y-6">
+            <StaffCardSection
+              title="Preview Recipient"
+              description="The preview updates as you type."
+              actions={campaignsLoading ? <StaffInfoPill tone="neutral">Loading samples</StaffInfoPill> : null}
+            >
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-gray-700">Recipient sample</span>
+                <select
+                  value={selectedPreviewRecipientId}
+                  onChange={(event) => setSelectedPreviewRecipientId(event.target.value)}
+                  className="w-full rounded-2xl border border-gray-300 bg-[#fcfbf8] px-4 py-3 text-sm text-[#101c2d] outline-none transition focus:border-[#7f6a3d] focus:bg-white"
+                >
+                  {previewRecipients.map((recipient) => (
+                    <option key={recipient.id} value={recipient.id}>
+                      {(recipient.name || recipient.email)} - {recipient.sourceLabel}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </StaffCardSection>
 
-              <NewsletterCampaignPreview
-                previewData={previewData}
-                previewLoading={previewLoading}
-                previewError={previewError}
-                selectedRecipientLabel={`${selectedPreviewRecipient.name || selectedPreviewRecipient.email} (${selectedPreviewRecipient.email}) - ${selectedPreviewRecipient.sourceLabel}`}
-                isReady={campaignReadyForPreview}
-              />
-            </div>
-          )}
+            <NewsletterCampaignPreview
+              previewData={previewData}
+              previewLoading={previewLoading}
+              previewError={previewError}
+              selectedRecipientLabel={`${selectedPreviewRecipient.name || selectedPreviewRecipient.email} (${selectedPreviewRecipient.email}) - ${selectedPreviewRecipient.sourceLabel}`}
+              isReady={campaignReadyForPreview}
+            />
+          </div>
         </div>
       )}
 

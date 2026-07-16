@@ -27,6 +27,9 @@ const DELIVERY_STATUS = {
     FAILED: 'Failed',
 };
 
+const CAMPAIGN_SEND_BATCH_SIZE = 5;
+const RECIPIENT_LOG_BATCH_SIZE = 100;
+
 function normalizeEmail(email) {
     return toTrimmedString(email).toLowerCase();
 }
@@ -378,6 +381,31 @@ function requireDraftCampaign(campaign, actionLabel) {
 
     if (campaign.status !== CAMPAIGN_STATUS.DRAFT) {
         throw new AppError(`Only draft campaigns can be ${actionLabel}.`, 409);
+    }
+}
+
+async function persistRecipientLogs(logEntries) {
+    if (!Array.isArray(logEntries) || logEntries.length === 0) {
+        return;
+    }
+
+    if (
+        logEntries.length <= CAMPAIGN_SEND_BATCH_SIZE
+        || typeof prisma.emailCampaignRecipient.createMany !== 'function'
+    ) {
+        for (const logEntry of logEntries) {
+            await prisma.emailCampaignRecipient.create({
+                data: logEntry,
+            });
+        }
+        return;
+    }
+
+    for (let index = 0; index < logEntries.length; index += RECIPIENT_LOG_BATCH_SIZE) {
+        const batch = logEntries.slice(index, index + RECIPIENT_LOG_BATCH_SIZE);
+        await prisma.emailCampaignRecipient.createMany({
+            data: batch,
+        });
     }
 }
 
@@ -937,6 +965,7 @@ exports.sendCampaign = async (req, res, next) => {
     let recipientCount = 0;
     let sentCount = 0;
     let failedCount = 0;
+    const recipientLogs = [];
 
     try {
         const campaign = await prisma.emailCampaign.findUnique({
@@ -966,35 +995,44 @@ exports.sendCampaign = async (req, res, next) => {
             },
         });
 
-        for (const recipient of recipients) {
-            try {
-                await sendCampaignMessage(campaign, recipient);
-                const sentAt = new Date();
-                sentCount += 1;
+        for (let index = 0; index < recipients.length; index += CAMPAIGN_SEND_BATCH_SIZE) {
+            const recipientBatch = recipients.slice(index, index + CAMPAIGN_SEND_BATCH_SIZE);
+            const batchResults = await Promise.allSettled(
+                recipientBatch.map((recipient) => sendCampaignMessage(campaign, recipient))
+            );
 
-                await prisma.emailCampaignRecipient.create({
-                    data: buildRecipientLog(
-                        campaign.id,
-                        recipient,
-                        DELIVERY_TYPES.LIVE,
-                        DELIVERY_STATUS.SENT,
-                        { sentAt }
-                    ),
-                });
-            } catch (sendError) {
+            batchResults.forEach((result, batchIndex) => {
+                const recipient = recipientBatch[batchIndex];
+
+                if (result.status === 'fulfilled') {
+                    const sentAt = new Date();
+                    sentCount += 1;
+                    recipientLogs.push(
+                        buildRecipientLog(
+                            campaign.id,
+                            recipient,
+                            DELIVERY_TYPES.LIVE,
+                            DELIVERY_STATUS.SENT,
+                            { sentAt }
+                        )
+                    );
+                    return;
+                }
+
                 failedCount += 1;
-
-                await prisma.emailCampaignRecipient.create({
-                    data: buildRecipientLog(
+                recipientLogs.push(
+                    buildRecipientLog(
                         campaign.id,
                         recipient,
                         DELIVERY_TYPES.LIVE,
                         DELIVERY_STATUS.FAILED,
-                        { errorMessage: normalizeDeliveryError(sendError) }
-                    ),
-                });
-            }
+                        { errorMessage: normalizeDeliveryError(result.reason) }
+                    )
+                );
+            });
         }
+
+        await persistRecipientLogs(recipientLogs);
 
         const finalStatus = failedCount > 0 ? CAMPAIGN_STATUS.FAILED : CAMPAIGN_STATUS.SENT;
         const lastSentAt = new Date();

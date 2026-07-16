@@ -6,6 +6,9 @@ const {
     sanitizeEmailHeaderValue,
 } = require('./security');
 
+let cachedTransporter = null;
+let cachedTransporterKey = '';
+
 function normalizeEmailOptions(optionsOrTo, legacySubject, legacyHtml, legacyAttachments) {
     if (typeof optionsOrTo === 'string') {
         return {
@@ -94,6 +97,9 @@ function getEmailServiceAvailability() {
 
 function createTransporter(config) {
     return nodemailer.createTransport({
+        pool: true,
+        maxConnections: 5,
+        maxMessages: 100,
         host: config.host,
         port: config.port,
         secure: config.port === 465,
@@ -102,6 +108,26 @@ function createTransporter(config) {
             pass: config.pass,
         },
     });
+}
+
+function buildTransporterKey(config) {
+    return [
+        config.host,
+        config.port,
+        config.user,
+        config.from,
+    ].join('|');
+}
+
+function getTransporter(config) {
+    const nextTransporterKey = buildTransporterKey(config);
+
+    if (!cachedTransporter || cachedTransporterKey !== nextTransporterKey) {
+        cachedTransporter = createTransporter(config);
+        cachedTransporterKey = nextTransporterKey;
+    }
+
+    return cachedTransporter;
 }
 
 function requireNonEmptyString(value, fieldName) {
@@ -165,7 +191,7 @@ async function sendEmail(optionsOrTo, legacySubject, legacyHtml, legacyAttachmen
     }
 
     try {
-        const info = await createTransporter(config).sendMail(mailOptions);
+        const info = await getTransporter(config).sendMail(mailOptions);
         console.log(`[EmailService] Email sent to ${to}`);
         return info;
     } catch (error) {
